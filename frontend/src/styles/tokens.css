@@ -1,0 +1,240 @@
+/* ============================================================================
+   다울림 디자인 토큰 — 진실원본(single source of truth)
+   frontend/DESIGN.md YAML frontmatter와 1:1 대응한다.
+   규칙:
+   - [1] Primitive 계층(--daul-*)은 이 파일 내부에서만 참조한다.
+     컴포넌트·화면 코드는 절대 --daul-* 또는 hex를 직접 쓰지 않는다.
+   - [2] Semantic 계층(--color-* 등)이 컴포넌트가 참조하는 유일한 표면이다.
+   - [3] shadcn/ui 변수(--background, --primary…)는 semantic 토큰의 별칭이다.
+   - 값 변경은 DESIGN.md 갱신 → 이 파일 반영 순서로만 한다.
+   ========================================================================== */
+
+:root {
+  /* ------------------------------------------------------------------
+     [1] Primitive — 실제 hex는 여기에만 존재한다 (tokens.css 내부 전용)
+     ------------------------------------------------------------------ */
+  /* 쿨 뉴트럴 그레이 */
+  --daul-gray-0: #ffffff;
+  --daul-gray-50: #f7f8fa;
+  --daul-gray-100: #eff1f4;
+  --daul-gray-200: #e2e5ea;
+  --daul-gray-300: #cbd1d9;
+  --daul-gray-400: #9aa3af;
+  --daul-gray-500: #6b7280;
+  --daul-gray-600: #4b5563;
+  --daul-gray-700: #374151;
+  --daul-gray-800: #1f2937;
+  --daul-gray-900: #111827;
+
+  /* 악센트 — "관제 블루" (흰 배경 대비 6.54:1 / 흰 글자 대비 6.54:1) */
+  --daul-blue-50: #eef4fc;
+  --daul-blue-100: #d9e6f8;
+  --daul-blue-200: #b3cdf1;
+  --daul-blue-600: #1e5ab8;
+  --daul-blue-700: #17488f;
+
+  /* 위험 3계열 — 저채도(무광톤), 전부 흰 배경 WCAG AA 통과 */
+  --daul-red-50: #fceeec;
+  --daul-red-200: #f0c4c0;
+  --daul-red-600: #b3261e; /* 6.54:1 on white */
+  --daul-red-700: #8f1e18;
+  --daul-amber-50: #fbf3e1;
+  --daul-amber-200: #ebd5a8;
+  --daul-amber-600: #8a5a00; /* 5.93:1 on white */
+  --daul-amber-700: #6e4800;
+  --daul-green-50: #eaf5ee;
+  --daul-green-200: #bfe0ca;
+  --daul-green-600: #1b7339; /* 5.90:1 on white */
+  --daul-green-700: #155c2e;
+
+  /* ------------------------------------------------------------------
+     [2] Semantic — 컴포넌트·화면이 참조하는 유일한 계층
+     ------------------------------------------------------------------ */
+  /* 배경 */
+  --color-bg-canvas: var(--daul-gray-50);       /* 페이지 바닥 */
+  --color-bg-surface: var(--daul-gray-0);       /* 카드·테이블·패널 */
+  --color-bg-muted: var(--daul-gray-100);       /* 구분 영역·비활성 표면 */
+  --color-bg-dark: var(--daul-gray-900);        /* 유일한 다크 서피스: 관제 요약 바 */
+
+  /* 보더 */
+  --color-border-hairline: var(--daul-gray-200); /* 1차 구분 수단 */
+  --color-border-strong: var(--daul-gray-300);   /* 입력·강조 구분 */
+
+  /* 텍스트 */
+  --color-text-ink: var(--daul-gray-900);
+  --color-text-body: var(--daul-gray-700);
+  --color-text-muted: var(--daul-gray-500);      /* 4.83:1 on white */
+  --color-text-on-accent: var(--daul-gray-0);
+  --color-text-on-dark: var(--daul-gray-50);
+  --color-text-on-dark-soft: var(--daul-gray-400);
+
+  /* 악센트 */
+  --color-accent: var(--daul-blue-600);
+  --color-accent-hover: var(--daul-blue-700);
+  --color-accent-tint: var(--daul-blue-50);
+  --color-accent-line: var(--daul-blue-200);
+
+  /* 위험 3구간 — 시스템의 유일한 색 서사 */
+  --color-risk-danger: var(--daul-red-600);
+  --color-risk-danger-tint: var(--daul-red-50);
+  --color-risk-danger-line: var(--daul-red-200);
+  --color-risk-warn: var(--daul-amber-600);
+  --color-risk-warn-tint: var(--daul-amber-50);
+  --color-risk-warn-line: var(--daul-amber-200);
+  --color-risk-ok: var(--daul-green-600);
+  --color-risk-ok-tint: var(--daul-green-50);
+  --color-risk-ok-line: var(--daul-green-200);
+
+  /* 상태 톤 슬롯 — 점검 상태 모델 미합의(§Known Gaps).
+     상태명 → 톤 매핑은 src/config/domain.ts에서만 주입한다. */
+  --color-status-neutral: var(--daul-gray-500);
+  --color-status-neutral-tint: var(--daul-gray-100);
+  --color-status-positive: var(--color-risk-ok);
+  --color-status-positive-tint: var(--color-risk-ok-tint);
+  --color-status-negative: var(--color-risk-danger);
+  --color-status-negative-tint: var(--color-risk-danger-tint);
+  --color-status-caution: var(--color-risk-warn);
+  --color-status-caution-tint: var(--color-risk-warn-tint);
+  --color-status-info: var(--color-accent);
+  --color-status-info-tint: var(--color-accent-tint);
+
+  /* 인터랙션 공통 */
+  --color-focus-ring: var(--daul-blue-600);
+  --color-hover-tint: var(--daul-gray-100);
+  --color-offline-bar: var(--daul-amber-600);
+  --color-offline-bar-bg: var(--daul-amber-50);
+
+  /* 엘리베이션 — 2단계뿐 */
+  --elevation-1: 0 1px 2px rgb(17 24 39 / 0.06);
+  --elevation-2: 0 4px 12px rgb(17 24 39 / 0.1);
+
+  /* ------------------------------------------------------------------
+     [3] shadcn/ui 별칭 — Radix 프리미티브가 semantic 토큰을 그대로 입는다
+     ------------------------------------------------------------------ */
+  --background: var(--color-bg-canvas);
+  --foreground: var(--color-text-ink);
+  --card: var(--color-bg-surface);
+  --card-foreground: var(--color-text-ink);
+  --popover: var(--color-bg-surface);
+  --popover-foreground: var(--color-text-ink);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-text-on-accent);
+  --secondary: var(--color-bg-muted);
+  --secondary-foreground: var(--color-text-ink);
+  --muted: var(--color-bg-muted);
+  --muted-foreground: var(--color-text-muted);
+  --accent: var(--color-accent-tint);
+  --accent-foreground: var(--color-accent-hover);
+  --destructive: var(--color-risk-danger);
+  --border: var(--color-border-hairline);
+  --input: var(--color-border-strong);
+  --ring: var(--color-focus-ring);
+  --radius: 8px;
+}
+
+@theme inline {
+  /* ------------------------------------------------------------------
+     Tailwind 유틸리티 매핑 — semantic 이름만 노출
+     (예: bg-canvas, bg-surface, text-ink, border-hairline, bg-brand)
+     주의: 브랜드 악센트의 유틸리티 이름은 `brand-*`다.
+     `accent`는 shadcn 호버-틴트 슬롯이 선점하고 있어 충돌을 피한다.
+     ------------------------------------------------------------------ */
+  --color-canvas: var(--color-bg-canvas);
+  --color-surface: var(--color-bg-surface);
+  --color-surface-muted: var(--color-bg-muted);
+  --color-surface-dark: var(--color-bg-dark);
+  --color-hairline: var(--color-border-hairline);
+  --color-hairline-strong: var(--color-border-strong);
+  --color-ink: var(--color-text-ink);
+  --color-body: var(--color-text-body);
+  --color-subtle: var(--color-text-muted);
+  --color-on-accent: var(--color-text-on-accent);
+  --color-on-dark: var(--color-text-on-dark);
+  --color-on-dark-soft: var(--color-text-on-dark-soft);
+  --color-brand: var(--color-accent);
+  --color-brand-hover: var(--color-accent-hover);
+  --color-brand-tint: var(--color-accent-tint);
+  --color-brand-line: var(--color-accent-line);
+  --color-risk-danger: var(--color-risk-danger);
+  --color-risk-danger-tint: var(--color-risk-danger-tint);
+  --color-risk-danger-line: var(--color-risk-danger-line);
+  --color-risk-warn: var(--color-risk-warn);
+  --color-risk-warn-tint: var(--color-risk-warn-tint);
+  --color-risk-warn-line: var(--color-risk-warn-line);
+  --color-risk-ok: var(--color-risk-ok);
+  --color-risk-ok-tint: var(--color-risk-ok-tint);
+  --color-risk-ok-line: var(--color-risk-ok-line);
+  --color-status-neutral: var(--color-status-neutral);
+  --color-status-neutral-tint: var(--color-status-neutral-tint);
+  --color-status-positive: var(--color-status-positive);
+  --color-status-positive-tint: var(--color-status-positive-tint);
+  --color-status-negative: var(--color-status-negative);
+  --color-status-negative-tint: var(--color-status-negative-tint);
+  --color-status-caution: var(--color-status-caution);
+  --color-status-caution-tint: var(--color-status-caution-tint);
+  --color-status-info: var(--color-status-info);
+  --color-status-info-tint: var(--color-status-info-tint);
+  --color-focus: var(--color-focus-ring);
+  --color-hover-tint: var(--color-hover-tint);
+  --color-offline: var(--color-offline-bar);
+  --color-offline-bg: var(--color-offline-bar-bg);
+
+  /* 타이포 — 라벨 sans / 값 mono 경계는 불변 */
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system,
+    BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-display: 28px;
+  --text-display--line-height: 1.25;
+  --text-display--font-weight: 600;
+  --text-title: 18px;
+  --text-title--line-height: 1.4;
+  --text-title--font-weight: 600;
+  --text-title-sm: 16px;
+  --text-title-sm--line-height: 1.4;
+  --text-title-sm--font-weight: 600;
+  --text-body-md: 16px;
+  --text-body-md--line-height: 1.5;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 1.5;
+  --text-caption: 13px;
+  --text-caption--line-height: 1.4;
+  --text-caption--font-weight: 500;
+  --text-data-lg: 24px;
+  --text-data-lg--line-height: 1.2;
+  --text-data-lg--font-weight: 600;
+  --text-btn: 15px;
+  --text-btn--line-height: 1;
+  --text-btn--font-weight: 600;
+
+  /* 라운드 — 16px 초과 금지, pill은 상태 태그·모드 토글 전용 */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* 8px 그리드 스페이싱 별칭 */
+  --spacing-xxs: 4px;
+  --spacing-2xs: 8px;
+  --spacing-s: 12px;
+  --spacing-m: 16px;
+  --spacing-l: 24px;
+  --spacing-2xl: 32px;
+  --spacing-3xl: 48px;
+  --spacing-section: 64px;
+
+  /* 엘리베이션 */
+  --shadow-e1: var(--elevation-1);
+  --shadow-e2: var(--elevation-2);
+}
+
+/* ----------------------------------------------------------------------
+   전역 포커스 링 — 전 컴포넌트 공통 문법 (§Interaction States)
+   -------------------------------------------------------------------- */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-focus-ring);
+    outline-offset: 2px;
+  }
+}
