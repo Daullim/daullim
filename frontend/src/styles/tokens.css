@@ -179,10 +179,9 @@
   --color-offline: var(--color-offline-bar);
   --color-offline-bg: var(--color-offline-bar-bg);
 
-  /* 타이포 — 라벨 sans / 값 mono 경계는 불변 */
+  /* 타이포 — 전 텍스트 단일 서체(Pretendard). 데이터 값도 동일 서체 + tabular 숫자. */
   --font-sans: "Pretendard Variable", Pretendard, -apple-system,
     BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --text-display: 28px;
   --text-display--line-height: 1.25;

@@ -4,10 +4,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* 본문 = Pretendard(가변), 데이터 = JetBrains Mono 400/600 */
+/* 전 텍스트 단일 서체 = Pretendard(가변) */
 @import "pretendard/dist/web/variable/pretendardvariable.css";
-@import "@fontsource/jetbrains-mono/400.css";
-@import "@fontsource/jetbrains-mono/600.css";
 
 @import "./styles/tokens.css";
 
