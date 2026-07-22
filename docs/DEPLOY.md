@@ -30,4 +30,4 @@
 
 ## 시연 URL
 
-- Production: _(배포 후 기입)_
+- Production: https://daullim.vercel.app
