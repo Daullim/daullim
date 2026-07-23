@@ -9,7 +9,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Navigate to="/demo" replace />} />
+        <Route path="/" element={<Navigate to="/control" replace />} />
         <Route path="/demo" element={<DemoPage />} />
         <Route path="/control" element={<ControlPage />} />
         <Route path="/field" element={<FieldDongPage />} />
