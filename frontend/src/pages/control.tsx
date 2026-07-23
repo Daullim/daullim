@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { RotateCw } from "lucide-react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
 import { MapPlaceholder } from "@/components/layout/map-placeholder";
@@ -23,6 +25,7 @@ function Counter({ label, value }: { label: string; value: number }) {
 
 /** 아키타입 A — /control 관제 (데스크톱 ≥1280 전용) */
 export default function ControlPage() {
+  const navigate = useNavigate();
   const [region, setRegion] = useState<RegionValue>({
     sido: "seoul",
     sigungu: "gwanak",
@@ -38,7 +41,9 @@ export default function ControlPage() {
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-hairline bg-surface px-4 py-2">
         <RegionSelector value={region} onChange={setRegion} density="control" />
         <Legend className="ml-auto" />
-        <Button variant="primary">2026 3분기 발행</Button>
+        <Button variant="primary" onClick={() => navigate("/field")}>
+          현장모드로 전환
+        </Button>
       </div>
 
       {/* 좌 지도 + 우 큐 테이블 — 지도 영역 크기 고정 (CLS 0) */}
@@ -47,7 +52,16 @@ export default function ControlPage() {
         <aside className="flex w-120 shrink-0 flex-col overflow-hidden rounded-md border border-hairline bg-surface">
           <div className="flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
             <h2 className="text-title-sm text-ink">우선순위 큐</h2>
-            <LastUpdated seconds={SUMMARY.updatedSecondsAgo} />
+            <span className="flex items-center gap-1">
+              <button
+                type="button"
+                aria-label="새로고침"
+                className="flex size-10 items-center justify-center rounded-md text-body hover:bg-surface-muted"
+              >
+                <RotateCw aria-hidden className="size-4" />
+              </button>
+              <LastUpdated seconds={SUMMARY.updatedSecondsAgo} />
+            </span>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {HOUSEHOLDS.map((item) => (
