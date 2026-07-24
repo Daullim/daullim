@@ -99,7 +99,7 @@ function InspectionForm({
       </DialogHeader>
 
       {/* 본문 — 세로 스크롤, 섹션 간 24px */}
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5 sm:px-20">
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5 sm:px-40">
         <HonestyLabel>
           실선 = 실측 · 점선 = 추정 — 자가신고·연차 구간은 추정으로 기록되어 실측과 분리됩니다
         </HonestyLabel>
