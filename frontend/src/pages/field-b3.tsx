@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
@@ -22,6 +22,8 @@ import { HOUSEHOLDS, type HouseholdItem } from "@/mock/sample";
 export default function FieldUnitsPage() {
   const [params] = useSearchParams();
   const rural = params.get("rural") === "1";
+  /** 행 선택(핀 포커스·액션 행)과 점검 폼 오픈은 분리된 상태 */
+  const [selectedRank, setSelectedRank] = useState<number | null>(null);
   const [inspecting, setInspecting] = useState<HouseholdItem | null>(null);
   const [doneRanks, setDoneRanks] = useState<Set<number>>(new Set([4]));
 
@@ -45,6 +47,7 @@ export default function FieldUnitsPage() {
               ? "임실읍 — 가구 3구간 색핀 (2단계 진입)"
               : "격자 GA-0412 확대 — 주택 3구간 색핀 · 완료 체크"
           }
+          focusedRank={selectedRank}
           className="h-full rounded-none border-none"
         >
           <Legend className="absolute bottom-3 left-3" />
@@ -68,14 +71,38 @@ export default function FieldUnitsPage() {
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             {HOUSEHOLDS.map((item) => (
-              <QueueRow
-                key={item.rank}
-                item={item}
-                density="field"
-                dimmed={doneRanks.has(item.rank)}
-                selected={inspecting?.rank === item.rank}
-                onSelect={() => setInspecting(item)}
-              />
+              <Fragment key={item.rank}>
+                <QueueRow
+                  item={item}
+                  density="field"
+                  dimmed={doneRanks.has(item.rank)}
+                  selected={selectedRank === item.rank}
+                  onSelect={() =>
+                    setSelectedRank((prev) => (prev === item.rank ? null : item.rank))
+                  }
+                />
+                {/* 액션 행 — QueueRow가 <button>이라 버튼 중첩 불가 → 형제로 렌더 (queue-row 수정 금지) */}
+                {selectedRank === item.rank && (
+                  <div
+                    role="group"
+                    aria-label={`${item.address} 이동·점검`}
+                    className="flex gap-2 overflow-hidden border-b border-hairline bg-surface p-3 duration-150 animate-in fade-in-0 slide-in-from-top-2"
+                  >
+                    {/* 길찾기 — 카카오맵/티맵 딥링크 자리 (ADR-004 §3 보류) — 연동 전까지 동작 없음 */}
+                    <Button variant="secondary" size="field-xl" className="w-32">
+                      길찾기
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="field-xl"
+                      className="flex-1"
+                      onClick={() => setInspecting(item)}
+                    >
+                      점검 시작
+                    </Button>
+                  </div>
+                )}
+              </Fragment>
             ))}
           </div>
           <div className="shrink-0 space-y-3 border-t border-hairline p-3">
@@ -101,6 +128,7 @@ export default function FieldUnitsPage() {
             setDoneRanks((prev) => new Set(prev).add(inspecting.rank));
           }
           setInspecting(null);
+          setSelectedRank(null); // 완료 행에 액션 행 잔존 방지
         }}
       />
     </div>

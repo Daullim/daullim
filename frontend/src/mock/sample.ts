@@ -2,7 +2,7 @@
  * 시연용 목데이터 — 샘플 월드는 서울 관악구(도시) + 전북 임실군(농촌)으로 통일.
  * 레이아웃 뼈대 검증용 3~4행 수준만 유지한다.
  */
-import type { RiskLevel, RxCode, VisitStatus } from "@/config/domain";
+import type { HouseType, RiskLevel, RxCode, VisitStatus } from "@/config/domain";
 
 export interface RegionOption {
   value: string;
@@ -99,6 +99,10 @@ export interface HouseholdItem {
   estimated: boolean; // 추정값 여부 → 점선 규칙
   installYear: number;
   model: string;
+  /** 건축물대장 표제부 배치 프리필 (mainPurpsCd·grndFlrCnt·hhldCnt) — 점검 폼 Step 1 읽기전용 */
+  houseType: HouseType;
+  floorCount: number;
+  unitCount: number;
 }
 
 /** B3·SCR-02 — 격자 GA-0412 내 방문 큐 (위험순) */
@@ -114,6 +118,9 @@ export const HOUSEHOLDS: HouseholdItem[] = [
     estimated: false,
     installYear: 2016,
     model: "SD-100",
+    houseType: "multi-unit",
+    floorCount: 3,
+    unitCount: 8,
   },
   {
     rank: 2,
@@ -126,6 +133,9 @@ export const HOUSEHOLDS: HouseholdItem[] = [
     estimated: true,
     installYear: 2017,
     model: "SD-100",
+    houseType: "multi-family",
+    floorCount: 2,
+    unitCount: 5,
   },
   {
     rank: 3,
@@ -138,6 +148,9 @@ export const HOUSEHOLDS: HouseholdItem[] = [
     estimated: true,
     installYear: 2018,
     model: "SD-200",
+    houseType: "multi-unit",
+    floorCount: 3,
+    unitCount: 6,
   },
   {
     rank: 4,
@@ -150,6 +163,9 @@ export const HOUSEHOLDS: HouseholdItem[] = [
     estimated: false,
     installYear: 2019,
     model: "SD-200",
+    houseType: "detached",
+    floorCount: 1,
+    unitCount: 1,
   },
 ];
 
