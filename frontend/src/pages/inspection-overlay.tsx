@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useReducer } from "react";
+import { XIcon } from "lucide-react";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -8,31 +10,26 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/core/button";
 import { DataText } from "@/components/core/data-text";
-import { EstimateBorder } from "@/components/core/estimate-border";
-import {
-  ALARM_CHECK,
-  RX,
-  VISIT_OUTCOME,
-  type AlarmCheck,
-  type VisitOutcome,
-} from "@/config/domain";
+import { HonestyLabel } from "@/components/core/honesty-label";
+import { GateSection } from "@/components/inspection/gate-section";
+import { TargetSection } from "@/components/inspection/target-section";
+import { ChecklistSection } from "@/components/inspection/checklist-section";
+import { PostSection, ResultSection } from "@/components/inspection/result-section";
+import { canSave, createInitialState, inspectionReducer } from "@/lib/inspection";
 import type { HouseholdItem } from "@/mock/sample";
-import { cn } from "@/lib/utils";
-
-/* 선택형 버튼 공통 — Active·Selected = 악센트 틴트 + 악센트 보더 (공통 문법) */
-function choiceClass(selected: boolean) {
-  return cn(
-    "rounded-md border text-title-sm text-ink hover:bg-surface-muted",
-    selected
-      ? "border-brand bg-brand-tint text-brand-hover hover:bg-brand-tint"
-      : "border-hairline-strong bg-surface",
-  );
-}
 
 /**
- * 아키타입 C — /field 점검 오버레이.
+ * 풀스크린 오버라이드 — base DialogContent의 중앙 카드 클래스를 twMerge로 소거.
+ * inset-0이 top/left-1/2를, translate-x/y-0이 -translate-1/2를 덮는다.
+ * sm:max-w-sm은 modifier별로 별도 소거 필요.
+ */
+const FULLSCREEN_CLASS =
+  "inset-0 flex h-dvh w-screen max-w-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none bg-surface p-0 ring-0 sm:max-w-none";
+
+/**
+ * 아키타입 C — /field 점검보고서 작성 (풀스크린).
  * focus trap·ESC 닫기·포커스 복귀는 Radix Dialog에 위임 (직접 구현 금지).
- * Tab 순서 = 시각 순서: 방문상태 → 작동여부 → 비고 → 저장.
+ * 폼 정본: 일반주택-현장점검-폼설계.md Step 0~4 — Step 0 게이트 분기 필수.
  */
 export function InspectionOverlay({
   item,
@@ -45,18 +42,37 @@ export function InspectionOverlay({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [outcome, setOutcome] = useState<VisitOutcome | null>(null);
-  const [check, setCheck] = useState<AlarmCheck | null>(null);
-  const rx = check ? ALARM_CHECK[check].rx : null;
-
   if (!item) return null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex max-h-[90dvh] flex-col gap-0 overflow-hidden rounded-lg p-0 shadow-e2 sm:max-w-xl">
-        {/* 가구정보 헤더 */}
-        <DialogHeader className="shrink-0 space-y-1 border-b border-hairline px-6 py-4 text-left">
-          <DialogTitle className="text-title text-ink">{item.address}</DialogTitle>
+      <DialogContent showCloseButton={false} className={FULLSCREEN_CLASS}>
+        {/* key = 가구 전환 시 폼 상태 리셋 (닫힘 언마운트의 이중 안전장치) */}
+        <InspectionForm key={item.rank} item={item} onClose={onClose} onSaved={onSaved} />
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function InspectionForm({
+  item,
+  onClose,
+  onSaved,
+}: {
+  item: HouseholdItem;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [form, dispatch] = useReducer(inspectionReducer, item, createInitialState);
+  const accepted = form.consent === "accepted";
+  const sectionProps = { form, dispatch };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {/* 상단 고정 헤더 — 좌: 가구 정보 / 우: 닫기 (≥44px 터치타깃) */}
+      <DialogHeader className="shrink-0 flex-row items-start justify-between gap-3 border-b border-hairline px-6 py-4 text-left sm:px-10">
+        <div className="min-w-0 space-y-1">
+          <DialogTitle className="truncate text-title text-ink">{item.address}</DialogTitle>
           <DialogDescription asChild>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-body">
               <span>
@@ -70,99 +86,53 @@ export function InspectionOverlay({
               </span>
             </div>
           </DialogDescription>
-        </DialogHeader>
-
-        <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5">
-          {/* 방문상태 — 열거값은 config 주입 */}
-          <fieldset>
-            <legend className="mb-2 text-title-sm text-ink">방문 상태</legend>
-            <div className="grid grid-cols-3 gap-2">
-              {(Object.keys(VISIT_OUTCOME) as VisitOutcome[]).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  aria-pressed={outcome === k}
-                  onClick={() => setOutcome(k)}
-                  className={cn("h-11", choiceClass(outcome === k))}
-                >
-                  {VISIT_OUTCOME[k].label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          {/* 작동여부 3-way — 최소 64px (장갑 착용) */}
-          <fieldset disabled={outcome !== "met"} className="disabled:opacity-50">
-            <legend className="mb-2 text-title-sm text-ink">경보기 작동 여부</legend>
-            <div className="grid grid-cols-3 gap-2">
-              {(Object.keys(ALARM_CHECK) as AlarmCheck[]).map((k) => (
-                <button
-                  key={k}
-                  type="button"
-                  aria-pressed={check === k}
-                  aria-label={`작동 여부: ${ALARM_CHECK[k].label}`}
-                  onClick={() => setCheck(k)}
-                  className={cn("h-16", choiceClass(check === k))}
-                >
-                  {ALARM_CHECK[k].label}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          {/* 동적 처방 — 작동여부에 따라 도출 */}
-          <section aria-live="polite">
-            <h3 className="mb-2 text-title-sm text-ink">처방</h3>
-            {rx ? (
-              <p className="rounded-sm border-l-4 border-l-brand bg-brand-tint px-3 py-2 text-body-md text-ink">
-                <DataText>{rx}</DataText> {RX[rx].label}
-              </p>
-            ) : (
-              <p className="rounded-sm bg-surface-muted px-3 py-2 text-body-md text-subtle">
-                {check === "normal" ? "처방 없음 — 정상 작동" : "작동 여부를 선택하면 처방이 표시됩니다"}
-              </p>
-            )}
-          </section>
-
-          {/* 비고 */}
-          <div>
-            <label htmlFor="insp-note" className="mb-2 block text-title-sm text-ink">
-              비고
-            </label>
-            <textarea
-              id="insp-note"
-              rows={3}
-              placeholder="특이사항을 입력하세요"
-              className="w-full rounded-sm border border-hairline-strong bg-surface px-3 py-2 text-body-md text-ink placeholder:text-subtle"
-            />
-          </div>
-
-          {/* 추정값 예시 — 실측/추정은 형태로 구분 */}
-          {item.estimated && (
-            <EstimateBorder kind="estimated">
-              <span className="text-body-sm text-body">
-                보급연차는 보급 대장 기반 추정치입니다
-              </span>
-            </EstimateBorder>
-          )}
         </div>
-
-        {/* 하단 고정 저장 바 */}
-        <div className="flex shrink-0 gap-2 border-t border-hairline bg-surface px-6 py-4">
-          <Button variant="secondary" size="field-xl" className="w-32" onClick={onClose}>
-            취소
-          </Button>
-          <Button
-            variant="primary"
-            size="field-xl"
-            className="flex-1"
-            disabled={!outcome || (outcome === "met" && !check)}
-            onClick={onSaved}
+        <DialogClose asChild>
+          <button
+            type="button"
+            aria-label="점검 폼 닫기"
+            className="flex size-12 shrink-0 items-center justify-center rounded-md text-ink hover:bg-surface-muted"
           >
-            저장
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+            <XIcon className="size-6" />
+          </button>
+        </DialogClose>
+      </DialogHeader>
+
+      {/* 본문 — 세로 스크롤, 섹션 간 24px */}
+      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5 sm:px-20">
+        <HonestyLabel>
+          실선 = 실측 · 점선 = 추정 — 자가신고·연차 구간은 추정으로 기록되어 실측과 분리됩니다
+        </HonestyLabel>
+
+        <GateSection {...sectionProps} />
+
+        {/* 게이트 분기 — 승낙일 때만 Step 1~3 (비승낙은 물리적으로 수행 불가) */}
+        {accepted && (
+          <>
+            <TargetSection item={item} {...sectionProps} />
+            <ChecklistSection item={item} {...sectionProps} />
+            <ResultSection form={form} />
+          </>
+        )}
+
+        {form.consent !== null && <PostSection {...sectionProps} />}
+      </div>
+
+      {/* 하단 고정 액션 바 */}
+      <div className="flex shrink-0 gap-2 border-t border-hairline bg-surface px-6 py-4 sm:px-10">
+        <Button variant="secondary" size="field-xl" className="w-32" onClick={onClose}>
+          취소
+        </Button>
+        <Button
+          variant="primary"
+          size="field-xl"
+          className="flex-1"
+          disabled={!canSave(form)}
+          onClick={onSaved}
+        >
+          저장
+        </Button>
+      </div>
+    </div>
   );
 }

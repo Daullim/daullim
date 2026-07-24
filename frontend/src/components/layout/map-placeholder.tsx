@@ -7,10 +7,13 @@ import { cn } from "@/lib/utils";
  */
 export function MapPlaceholder({
   label,
+  focusedRank,
   children,
   className,
 }: {
   label: string;
+  /** 선택 항목 지도 핀 포커스 훅 — Naver Maps 연동 전 no-op (ADR-004 보류) */
+  focusedRank?: number | null;
   children?: React.ReactNode;
   className?: string;
 }) {
@@ -18,6 +21,7 @@ export function MapPlaceholder({
     <div
       role="img"
       aria-label={label}
+      data-focused-rank={focusedRank ?? undefined}
       className={cn(
         "relative flex min-h-0 flex-1 flex-col items-center justify-center gap-1 overflow-hidden rounded-md border border-hairline bg-surface",
         className,
