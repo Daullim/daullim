@@ -36,7 +36,7 @@ function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
 /** 우측 계정 표기 — `소속 | 이름 직급` (양 모드 공통) */
 function Account({ className }: { className?: string }) {
   return (
-    <span className={cn("ml-auto flex shrink-0 items-center gap-2", className)}>
+    <span className={cn("ml-auto flex shrink-0 items-center gap-2 pr-3", className)}>
       <span className="text-subtle">{INSPECTOR.org}</span>
       <span aria-hidden className="text-hairline-strong">
         |

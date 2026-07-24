@@ -34,7 +34,7 @@ export default function ControlPage() {
   const [selectedRank, setSelectedRank] = useState<number | null>(1);
 
   return (
-    <div className="flex h-dvh min-w-320 flex-col">
+    <div className="flex h-dvh flex-col">
       <TopBar mode="control" />
 
       {/* 지역 셀렉터 + 툴바 */}
@@ -49,7 +49,7 @@ export default function ControlPage() {
       {/* 좌 지도 + 우 큐 테이블 — 지도 영역 크기 고정 (CLS 0) */}
       <main className="flex min-h-0 flex-1 gap-3 p-3">
         <MapPlaceholder label="관악구 은천동 — 취약가구 위험지도" />
-        <aside className="flex w-120 shrink-0 flex-col overflow-hidden rounded-md border border-hairline bg-surface">
+        <aside className="flex w-100 shrink-0 flex-col overflow-hidden rounded-md border border-hairline bg-surface xl:w-120">
           <div className="flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
             <h2 className="text-title-sm text-ink">우선순위 큐</h2>
             <span className="flex items-center gap-1">
@@ -78,7 +78,7 @@ export default function ControlPage() {
       </main>
 
       {/* 하단 요약 카운터 — 시스템의 유일한 다크 서피스 */}
-      <footer className="flex h-16 shrink-0 items-center gap-10 bg-surface-dark px-6">
+      <footer className="flex h-16 shrink-0 items-center gap-6 bg-surface-dark px-6 xl:gap-10">
         <Counter label="대상 가구" value={SUMMARY.target} />
         <Counter label="점검 완료" value={SUMMARY.done} />
         <Counter label="위험 등급" value={SUMMARY.danger} />
