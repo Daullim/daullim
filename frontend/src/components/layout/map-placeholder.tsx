@@ -28,7 +28,7 @@ export function MapPlaceholder({
       )}
     >
       <span className="text-body-sm text-subtle">{label}</span>
-      <span className="text-caption text-subtle">지도 영역 (react-leaflet + OSM 예정)</span>
+      <span className="text-caption text-subtle">지도 영역 (Naver Maps 예정)</span>
       {children}
     </div>
   );
