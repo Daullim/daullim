@@ -26,20 +26,32 @@ export default function FieldDongPage() {
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const stripRef = useRef<HTMLDivElement>(null);
 
-  /* 드롭다운·카드 탭 어느 쪽이든 선택된 동 카드가 가운데 오도록 스크롤.
-     브라우저는 새 스크롤(예: Select 닫힘 시 포커스 복원)이 시작되면 진행 중인
-     스무스 스크롤을 취소하므로, 복원이 끝난 뒤로 지연시킨다. */
+  /* 드롭다운·카드 탭 어느 쪽이든 선택된 동 카드가 좌/우 이동 모션과 함께
+     가운데로 오도록 스크롤. 네이티브 smooth는 포커스 복원 스크롤에 취소되거나
+     비활성 환경이 있어, rAF 트윈으로 직접 구동한다(카드 snap-center와 종착점 일치). */
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const strip = stripRef.current;
-      const card = region.dong ? cardRefs.current.get(region.dong) : undefined;
-      if (!strip || !card) return;
-      /* smooth 스크롤이 비활성인 환경(reduced-motion 등)에서도 확실히
-         도달하도록 즉시 이동으로 고정 */
-      strip.scrollLeft =
-        card.offsetLeft - (strip.clientWidth - card.offsetWidth) / 2;
-    }, 300);
-    return () => clearTimeout(timer);
+    const strip = stripRef.current;
+    const card = region.dong ? cardRefs.current.get(region.dong) : undefined;
+    if (!strip || !card) return;
+    const target = Math.max(
+      0,
+      Math.min(
+        card.offsetLeft - (strip.clientWidth - card.offsetWidth) / 2,
+        strip.scrollWidth - strip.clientWidth,
+      ),
+    );
+    const start = strip.scrollLeft;
+    if (Math.abs(target - start) < 1) return;
+    const DURATION = 400;
+    const easeInOutCubic = (t: number) =>
+      t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+    const t0 = performance.now();
+    let rafId = requestAnimationFrame(function step(now) {
+      const p = Math.min(1, (now - t0) / DURATION);
+      strip.scrollLeft = start + (target - start) * easeInOutCubic(p);
+      if (p < 1) rafId = requestAnimationFrame(step);
+    });
+    return () => cancelAnimationFrame(rafId);
   }, [region.dong]);
 
   const sigunguLabel = region.sido
@@ -81,7 +93,7 @@ export default function FieldDongPage() {
         {/* 하단 — 구 내 동 카드 가로 스크롤 (평균 위험도 내림차순) */}
         <div
           ref={stripRef}
-          className="absolute inset-x-0 bottom-0 flex snap-x gap-3 overflow-x-auto p-3"
+          className="absolute inset-x-0 bottom-0 flex snap-x gap-3 overflow-x-auto px-5 py-3 scroll-px-5"
         >
           {dongCards.map((d) => {
             const selected = region.dong === d.value;
@@ -93,7 +105,7 @@ export default function FieldDongPage() {
                   else cardRefs.current.delete(d.value);
                 }}
                 className={cn(
-                  "flex w-80 shrink-0 snap-start flex-col gap-3 rounded-md border bg-surface p-4 shadow-e2",
+                  "flex w-68 shrink-0 snap-center flex-col gap-3 rounded-md border bg-surface p-3 shadow-e2",
                   selected ? "border-brand bg-brand-tint" : "border-hairline",
                 )}
               >
