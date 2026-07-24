@@ -3,7 +3,7 @@ import { Button as UIButton } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type Variant = "primary" | "secondary" | "danger";
-type Size = "md" | "field-xl";
+type Size = "md" | "field-lg" | "field-xl";
 
 const VARIANT_CLASS: Record<Variant, string> = {
   primary: "bg-brand text-on-accent hover:bg-brand-hover",
@@ -14,6 +14,8 @@ const VARIANT_CLASS: Record<Variant, string> = {
 
 const SIZE_CLASS: Record<Size, string> = {
   md: "h-10 gap-2 rounded-md px-4 text-btn",
+  /* /field 보조 액션 — 터치 타깃 44px 이상 유지하면서 field-xl보다 낮은 위계 */
+  "field-lg": "h-12 gap-2 rounded-md px-4 text-btn",
   "field-xl": "h-16 gap-2 rounded-md px-6 text-title-sm",
 };
 

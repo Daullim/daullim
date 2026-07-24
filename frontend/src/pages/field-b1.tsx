@@ -27,8 +27,10 @@ export default function FieldDongPage() {
   const stripRef = useRef<HTMLDivElement>(null);
 
   /* 드롭다운·카드 탭 어느 쪽이든 선택된 동 카드가 좌/우 이동 모션과 함께
-     가운데로 오도록 스크롤. 네이티브 smooth는 포커스 복원 스크롤에 취소되거나
-     비활성 환경이 있어, rAF 트윈으로 직접 구동한다(카드 snap-center와 종착점 일치). */
+     가운데로 오도록 스크롤. 네이티브 smooth(컴포지터 구동 — JS 부하와 무관하게
+     부드러움, snap-center와 종착점 일치)를 쓰되:
+     - 300ms 지연: Select 닫힘 시 포커스 복원 스크롤이 진행 중 smooth를 취소하는 문제 회피
+     - 워치독: smooth 비활성 환경(reduced-motion 등)에서는 즉시 이동으로 도달 보장 */
   useEffect(() => {
     const strip = stripRef.current;
     const card = region.dong ? cardRefs.current.get(region.dong) : undefined;
@@ -40,18 +42,17 @@ export default function FieldDongPage() {
         strip.scrollWidth - strip.clientWidth,
       ),
     );
-    const start = strip.scrollLeft;
-    if (Math.abs(target - start) < 1) return;
-    const DURATION = 400;
-    const easeInOutCubic = (t: number) =>
-      t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
-    const t0 = performance.now();
-    let rafId = requestAnimationFrame(function step(now) {
-      const p = Math.min(1, (now - t0) / DURATION);
-      strip.scrollLeft = start + (target - start) * easeInOutCubic(p);
-      if (p < 1) rafId = requestAnimationFrame(step);
-    });
-    return () => cancelAnimationFrame(rafId);
+    if (Math.abs(target - strip.scrollLeft) < 1) return;
+    const startTimer = setTimeout(() => {
+      strip.scrollTo({ left: target, behavior: "smooth" });
+    }, 300);
+    const watchdog = setTimeout(() => {
+      if (Math.abs(strip.scrollLeft - target) > 1) strip.scrollLeft = target;
+    }, 1100);
+    return () => {
+      clearTimeout(startTimer);
+      clearTimeout(watchdog);
+    };
   }, [region.dong]);
 
   const sigunguLabel = region.sido
@@ -105,7 +106,7 @@ export default function FieldDongPage() {
                   else cardRefs.current.delete(d.value);
                 }}
                 className={cn(
-                  "flex w-68 shrink-0 snap-center flex-col gap-3 rounded-md border bg-surface p-3 shadow-e2",
+                  "flex w-64 shrink-0 snap-center flex-col gap-3 rounded-md border bg-surface p-3 shadow-e2",
                   selected ? "border-brand bg-brand-tint" : "border-hairline",
                 )}
               >
@@ -138,7 +139,7 @@ export default function FieldDongPage() {
                 </button>
                 <Button
                   variant="primary"
-                  size="field-xl"
+                  size="field-lg"
                   className="w-full"
                   onClick={() => enterDong(d.value)}
                 >

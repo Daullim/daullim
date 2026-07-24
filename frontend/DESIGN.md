@@ -155,6 +155,7 @@ components: # 코어 8종 — 토큰 조합 정의 (구현: src/components/core/
     typography: "{typography.button}"
     rounded: "{rounded.md}"
     height-md: 40px
+    height-field-lg: 48px  # /field 보조 액션 (터치 타깃 44px 이상, field-xl보다 낮은 위계)
     height-field-xl: 64px  # /field 3-way·주요 액션 (장갑 착용)
   button-secondary:
     backgroundColor: "{colors.bg-surface}"
@@ -278,7 +279,7 @@ components: # 코어 8종 — 토큰 조합 정의 (구현: src/components/core/
 
 - **8px 그리드.** 스페이싱 토큰(`{spacing.*}`)만 사용, 12px은 절반 단계로 허용.
 - **`/control` (태블릿 1024×768 가로 = 검증 기준, ≥1280은 여유 폭 활용):** 상단바(56px, 로고+소속+계정) → 지역 셀렉터+툴바(범례·`[현장모드로 전환]` primary) → 본문 2열 = 좌 지도(flex-1) + 우 큐 테이블(400px, ≥1280에서 480px) → 하단 다크 요약 바(64px). 큐 패널 헤더에 새로고침 아이콘 버튼+갱신 타임스탬프. 지도 영역 크기는 폴링과 무관하게 고정.
-- **`/field` (태블릿 1024×768 가로 = 검증 기준):** **단일 상단바 하나만**(64px) — 좌측 햄버거(드로어 오픈) + 브레드크럼('동 선택', '관악구 은천동 › 격자 선택' …, `{typography.title}`) + 우측 `소속 | 이름 직급`. 전 단계 본문 = 전면 지도 + 플로팅 오버레이. B1 하단 = 구 내 동 카드 가로 스크롤 리스트(평균 위험도 내림차순, 카드 탭=선택·버튼=진입, 카드 폭 272px·스트립 좌우 여백 20px, 선택 시 rAF 트윈으로 중앙 정렬 모션). B2·B3 = 우측 플로팅 패널(기본 400px, 너비 320~560px 드래그 조절 — 조절값은 화면 이동 간 유지, 접기 버튼으로 완전 수납 — 수납 시 화면 우측 끝에 펼침 버튼만. 접기/펼침 탭은 시각 폭 24px·투명 히트영역 44px). B2 격자 행 = '동 n구역' 표시명 + 참고용 `grid_id`·가구 수·방문율(방문/전체), 헤더 아래 정렬 필터 3종(위험순·미방문 가구 많은 순·거리순). 지도 하단 중앙 = '현재 위치로 이동' 플로팅 버튼(지도 연동 전 비활성). 진행 카운트(N/M)는 패널 헤더에. 모바일 375는 깨지지-않음 수준.
+- **`/field` (태블릿 1024×768 가로 = 검증 기준):** **단일 상단바 하나만**(64px) — 좌측 햄버거(드로어 오픈) + 브레드크럼('동 선택', '관악구 은천동 › 격자 선택' …, `{typography.title}`) + 우측 `소속 | 이름 직급`. 전 단계 본문 = 전면 지도 + 플로팅 오버레이. B1 하단 = 구 내 동 카드 가로 스크롤 리스트(평균 위험도 내림차순, 카드 탭=선택·버튼=진입(field-lg 48px), 카드 폭 256px·스트립 좌우 여백 20px, 선택 시 중앙 정렬 모션). B2·B3 = 우측 플로팅 패널(기본 400px, 너비 320~560px 드래그 조절 — 조절값은 화면 이동 간 유지, 접기 버튼으로 완전 수납 — 수납 시 화면 우측 끝에 펼침 버튼만. 접기/펼침 탭은 시각 폭 24px·투명 히트영역 44px). B2 격자 행 = '동 n구역' 표시명 + 참고용 `grid_id`·가구 수·방문율(방문/전체), 헤더 아래 정렬 필터 3종(위험순·미방문 가구 많은 순·거리순). 지도 하단 중앙 = '현재 위치로 이동' 플로팅 버튼(지도 연동 전 비활성). 진행 카운트(N/M)는 패널 헤더에. 모바일 375는 깨지지-않음 수준.
 - **지도 위 플로팅 오버레이:** `{colors.bg-surface}` 카드 + `{rounded.md}`, 칩·셀렉터는 `--shadow-e1`, 액션 카드·사이드 패널은 `--shadow-e2`. 지도 가장자리 여백은 spacing 토큰. 인라인 메뉴 줄을 지도 위에 추가로 쌓지 않는다.
 - **드로어(/field·/control 공용):** 좌측 Sheet — 상단 고정 점검관·소속, 메뉴 항목(`{typography.title}`, ≥44px), 하단 고정 danger 버튼(field-xl) — 현장 '현장점검 종료'(`/control` 복귀) / 관제 '로그아웃'(로그인 미구현 — 플레이스홀더). focus trap·ESC는 Radix에 위임.
 - 컨테이너 내부 패딩: 패널 `{spacing.md}`(16px), 카드 `{spacing.lg}`(24px), 폼 섹션 간격 `{spacing.lg}`.
@@ -311,7 +312,7 @@ components: # 코어 8종 — 토큰 조합 정의 (구현: src/components/core/
 
 코어 8종은 전부 **shadcn/ui(Radix) 프리미티브 위의 도메인 래퍼**다. focus trap·키보드 내비게이션·ARIA를 직접 구현하지 않는다. `variant`/`size`는 유니언 타입 열거로 제한하고, 도메인 열거값(상태·처방·위험구간)은 `src/config/domain.ts`에서 주입한다. `className` 관통은 레이아웃 여백 조정용으로만 — 색·폰트 오버라이드 금지.
 
-1. **`Button`** (`{components.button-primary}` 외) — primary(악센트 solid) / secondary(흰 배경+strong 보더) / danger(risk-danger solid). 크기 `md`(40px) / `field-xl`(64px, `/field` 주요 액션·3-way). hover는 배경만 진해진다.
+1. **`Button`** (`{components.button-primary}` 외) — primary(악센트 solid) / secondary(흰 배경+strong 보더) / danger(risk-danger solid). 크기 `md`(40px) / `field-lg`(48px, `/field` 보조 액션) / `field-xl`(64px, `/field` 주요 액션·3-way). hover는 배경만 진해진다.
 2. **`StatusTag`** (`{components.status-tag}`) — pill, 톤 틴트 배경 + 라벨. **variant는 `VisitStatus` 열거형 — 값 목록은 config에서만.** 톤 슬롯(neutral/positive/negative/caution/info)으로 색 결정.
 3. **`RiskBadge`** (`{components.risk-badge}`) — 위험/경고/양호 3구간. 틴트 배경 + line 보더 + **라벨 + 수치 병기 필수형** — 수치 없는 사용은 라벨만이라도 강제.
 4. **`DataText`** (`{components.data-text}`) — 데이터 값 표기 래퍼(Pretendard + tabular 숫자). `<DataText>GA-0412</DataText>`. 값이면 무조건 이걸 통과시킨다.
