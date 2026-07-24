@@ -223,12 +223,15 @@ export const RX_DONE: Record<RxDone, { label: string }> = {
   "owner-refused": { label: "소유자 거부" },
 };
 
-/** Step 4 — 재방문 필요 여부·전략 (visit_result 연동) */
-export type RevisitPlan = "not-needed" | "revisit" | "mail-notice" | "via-agency";
+/**
+ * Step 4 — 재방문 필요 여부 (visit_result). 2택만.
+ * 사유는 consent_status·refusal_reason_cd에서 자동 상속(대원 재입력 없음),
+ * 채널(우편안내·기관경유·직접재방문) 결정은 현장이 아니라 재방문 큐(행정 레이어)가
+ * 사유 기반 자동 제안 — "기록(현장) vs 결정(back-office)" 역할 분리.
+ */
+export type RevisitPlan = "not-needed" | "revisit";
 
 export const REVISIT_PLAN: Record<RevisitPlan, { label: string }> = {
   "not-needed": { label: "재방문 불필요" },
   revisit: { label: "재방문 필요" },
-  "mail-notice": { label: "우편 안내" },
-  "via-agency": { label: "기관 경유" },
 };
