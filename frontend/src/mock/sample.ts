@@ -108,13 +108,59 @@ export interface HouseholdItem {
    * 대장 미등재 시 null (관악 0.2%·임실 2.5% 실측 결측). BE 연동 전 mock.
    */
   useAprDay: string | null;
+  /** 가장 최근 점검일 (YYYYMMDD) — 이력 없으면 null */
+  lastInspectedDay: string | null;
+  /** 화재경보기 보급일 (YYYYMMDD) — 일자 미상이면 null (연차 계산은 installYear가 담당) */
+  installDay: string | null;
 }
+
+/**
+ * 전유부 조회(getBrExposInfo) 응답의 세대 식별 필드만 추린 mock — 필드명은 실제 응답 그대로.
+ * 집합대장(다세대·연립)만 행이 나온다. 다가구는 공부 구조상 전유부 0건이라 여기 없다.
+ */
+export interface ExposUnit {
+  /** 호명칭 */
+  hoNm: string;
+  /** 층번호 */
+  flrNo: number;
+}
+
+/**
+ * 세대별 과거 방문 이력 (visits 테이블 자리) — 건물(rank) → 세대 순서별 마지막 점검일.
+ * 대장이 아니라 우리 점검 기록이라 EXPOS_UNITS와 분리한다. 빈 자리는 미점검.
+ */
+export const PRIOR_UNIT_VISITS: Record<number, (string | null)[]> = {
+  1: ["20240412", "20240412", null, "20220908", null, null, null, null],
+  3: ["20230918", null, null, "20210506", null, null],
+};
+
+/** 건물(rank) → 전유부 호 목록. 다세대인 rank 1·3만 존재 */
+export const EXPOS_UNITS: Record<number, ExposUnit[]> = {
+  1: [
+    { hoNm: "101호", flrNo: 1 },
+    { hoNm: "102호", flrNo: 1 },
+    { hoNm: "201호", flrNo: 2 },
+    { hoNm: "202호", flrNo: 2 },
+    { hoNm: "203호", flrNo: 2 },
+    { hoNm: "301호", flrNo: 3 },
+    { hoNm: "302호", flrNo: 3 },
+    { hoNm: "303호", flrNo: 3 },
+  ],
+  3: [
+    { hoNm: "101호", flrNo: 1 },
+    { hoNm: "102호", flrNo: 1 },
+    { hoNm: "201호", flrNo: 2 },
+    { hoNm: "202호", flrNo: 2 },
+    { hoNm: "301호", flrNo: 3 },
+    { hoNm: "302호", flrNo: 3 },
+  ],
+};
 
 /** B3·SCR-02 — 격자 GA-0412 내 방문 큐 (위험순) */
 export const HOUSEHOLDS: HouseholdItem[] = [
   {
     rank: 1,
-    address: "관악구 은천로 39길 12, 201호",
+    address: "관악구 은천로 39길 12",
     basis: "보급 2016 · 동선 1",
     rx: "RX-BAT",
     status: "pending",
@@ -127,10 +173,12 @@ export const HOUSEHOLDS: HouseholdItem[] = [
     floorCount: 3,
     unitCount: 8,
     useAprDay: "20011019",
+    lastInspectedDay: "20240412",
+    installDay: "20160520",
   },
   {
     rank: 2,
-    address: "관악구 은천로 41, 지하 1호",
+    address: "관악구 은천로 41",
     basis: "보급 2017 · 동선 2",
     rx: "RX-IOT",
     status: "pending",
@@ -143,10 +191,12 @@ export const HOUSEHOLDS: HouseholdItem[] = [
     floorCount: 2,
     unitCount: 5,
     useAprDay: null,
+    lastInspectedDay: null,
+    installDay: null,
   },
   {
     rank: 3,
-    address: "관악구 성현로 8, 302호",
+    address: "관악구 성현로 8",
     basis: "보급 2018 · 동선 3",
     rx: "RX-BAT",
     status: "vacant",
@@ -159,6 +209,8 @@ export const HOUSEHOLDS: HouseholdItem[] = [
     floorCount: 3,
     unitCount: 6,
     useAprDay: "19930715",
+    lastInspectedDay: "20230918",
+    installDay: "20180301",
   },
   {
     rank: 4,
@@ -175,6 +227,8 @@ export const HOUSEHOLDS: HouseholdItem[] = [
     floorCount: 1,
     unitCount: 1,
     useAprDay: "20150822",
+    lastInspectedDay: "20260715",
+    installDay: "20190610",
   },
 ];
 

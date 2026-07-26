@@ -65,6 +65,23 @@ export const CONSENT_STATUS: Record<ConsentStatus, { label: string; tone: Status
   unreachable: { label: "연락두절", tone: "caution" },
 };
 
+/**
+ * 세대(호) 단위 상태 — 건물 큐 5종 중 3종만 노출한다.
+ * VisitStatus의 부분집합이라 StatusTag를 그대로 쓴다(라벨·톤 동일).
+ */
+export type UnitStatus = Extract<VisitStatus, "pending" | "refused" | "done">;
+
+/**
+ * 게이트 4지약 → 세대 상태 3종 축약. 공가·연락두절은 '거부'로 묶는다.
+ * ⚠️ 표시 편의일 뿐 의미 합의가 아니다 (DESIGN.md Known Gaps) — 넓힐 땐 이 상수만 고친다.
+ */
+export const CONSENT_TO_UNIT_STATUS: Record<ConsentStatus, UnitStatus> = {
+  accepted: "done",
+  refused: "refused",
+  vacant: "refused",
+  unreachable: "refused",
+};
+
 /** Step 0 — 거부 사유 (refusal_reason_cd) */
 export type RefusalReason = "self-replaced" | "no-need" | "distrust" | "no-time" | "etc";
 
@@ -165,6 +182,22 @@ export const AGE_BAND: Record<AgeBand, { label: string; minYears: number | null 
  * 소화기 10년은 공식 고시 재확인 필요 (폼설계 §0 "확인 필요").
  */
 export const SERVICE_LIFE_YEARS = { detector: 15, extinguisher: 10 } as const;
+
+/**
+ * Step 1 — 경보기 교체 사유 (세대 단위 집계 입력).
+ * 기존 열거값 3곳에 흩어져 있던 것을 모은 것이라 키 문자열을 의도적으로 재사용한다:
+ * battery-dead·detached = ALARM_CHECK, appearance = DETECTOR_FLAG 묶음, expired = CONDITION_CODE.EXPIRED.
+ * rx는 deriveRx의 1차 소스 — 방전만 BATTERY_TYPE이 오버라이드한다.
+ */
+export type ReplaceReason = "expired" | "battery-dead" | "appearance" | "detached" | "etc";
+
+export const REPLACE_REASON: Record<ReplaceReason, { label: string; rx: RxCode | null }> = {
+  expired: { label: "내용연수 지남", rx: "RX-IOT" },
+  "battery-dead": { label: "방전", rx: "RX-BAT" },
+  appearance: { label: "외관이상", rx: "RX-IOT" },
+  detached: { label: "탈거", rx: "RX-IOT" },
+  etc: { label: "기타", rx: null },
+};
 
 /** Step 2 — 전지 유형 (battery_type, 방전 시에만). 일체형은 전지 교체 불가 → RX-IOT */
 export type BatteryType = "replaceable" | "sealed" | "unknown";
