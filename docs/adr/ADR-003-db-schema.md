@@ -3,6 +3,12 @@
 ## 상태
 승인 (2026-07-20, 결정자: 이윤서) — 단 §5 상태 모델은 **보류** (박지현과 합의 후 확정)
 
+> ⚠️ **2026-07-26: [ADR-012](ADR-012-erd-v1.md)가 이 문서를 amend한다.**
+> §5 "테이블 3개"의 `building_queue`는 `buildings` + `building_queue_entries`로 분해되고,
+> `visits`는 `unit_id` FK로 바뀌며 세대(`units`)·교체(`replacement_items`) 레이어가 추가됐다.
+> PostgreSQL·Flyway·COPY seed·building_queue 읽기전용·GeoJSON DB 미적재·PostGIS 불요는 **유지**.
+> §5 상태 모델 보류도 **유지**(ADR-012는 `visit_status` 컬럼을 채택하지 않았다).
+
 ## 맥락
 - BE = Spring Boot + Java (ADR-002). 핵심 데모 M-12 = 회신이 DB에 쌓여 관제에 반영되는 피드백 루프 — 재배포·재시작에도 데이터 생존 필요.
 - 지도는 사전 생성 정적 GeoJSON(PRD v2 대안④), PostGIS 불요.
