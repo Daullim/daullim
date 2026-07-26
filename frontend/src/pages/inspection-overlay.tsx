@@ -1,4 +1,4 @@
-import { useReducer } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 import { XIcon } from "lucide-react";
 import {
   Dialog,
@@ -10,12 +10,21 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/core/button";
 import { DataText } from "@/components/core/data-text";
-import { HonestyLabel } from "@/components/core/honesty-label";
+import { InfoNote } from "@/components/inspection/form-controls";
 import { GateSection } from "@/components/inspection/gate-section";
-import { TargetSection } from "@/components/inspection/target-section";
-import { ChecklistSection } from "@/components/inspection/checklist-section";
-import { PostSection, ResultSection } from "@/components/inspection/result-section";
-import { canSave, createInitialState, inspectionReducer } from "@/lib/inspection";
+import { AlarmSection } from "@/components/inspection/alarm-section";
+import { ExtinguisherSection } from "@/components/inspection/extinguisher-section";
+import { PostSection } from "@/components/inspection/result-section";
+import { ReviewSection } from "@/components/inspection/review-section";
+import {
+  STEP_LABEL,
+  canAdvance,
+  canSubmit,
+  createInitialState,
+  inspectionReducer,
+  stepsFor,
+} from "@/lib/inspection";
+import type { ConsentStatus } from "@/config/domain";
 import type { HouseholdItem } from "@/mock/sample";
 
 /**
@@ -29,26 +38,37 @@ const FULLSCREEN_CLASS =
 /**
  * 아키타입 C — /field 점검보고서 작성 (풀스크린).
  * focus trap·ESC 닫기·포커스 복귀는 Radix Dialog에 위임 (직접 구현 금지).
- * 폼 정본: 일반주택-현장점검-폼설계.md Step 0~4 — Step 0 게이트 분기 필수.
+ * 폼 정본: 일반주택-현장점검-폼설계.md — Step 0 게이트 분기 필수.
+ * 대상물 분류(구 Step 1)는 B3 세대 패널로 이관 — 여기는 Step 0~3.
  */
 export function InspectionOverlay({
   item,
+  unitLabel,
   open,
   onClose,
   onSaved,
 }: {
   item: HouseholdItem | null;
+  /** 세대 목록에서 고른 호수 — 저장 payload의 세대 식별값 (폼에 입력란 없음) */
+  unitLabel?: string;
   open: boolean;
   onClose: () => void;
-  onSaved: () => void;
+  /** 저장된 게이트 결과 — 호출부가 세대 상태로 환산한다 */
+  onSaved: (consent: ConsentStatus | null) => void;
 }) {
   if (!item) return null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
       <DialogContent showCloseButton={false} className={FULLSCREEN_CLASS}>
-        {/* key = 가구 전환 시 폼 상태 리셋 (닫힘 언마운트의 이중 안전장치) */}
-        <InspectionForm key={item.rank} item={item} onClose={onClose} onSaved={onSaved} />
+        {/* key = 가구·세대 전환 시 폼 상태 리셋 (닫힘 언마운트의 이중 안전장치) */}
+        <InspectionForm
+          key={`${item.rank}-${unitLabel ?? ""}`}
+          item={item}
+          unitLabel={unitLabel}
+          onClose={onClose}
+          onSaved={onSaved}
+        />
       </DialogContent>
     </Dialog>
   );
@@ -56,16 +76,38 @@ export function InspectionOverlay({
 
 function InspectionForm({
   item,
+  unitLabel,
   onClose,
   onSaved,
 }: {
   item: HouseholdItem;
+  unitLabel?: string;
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (consent: ConsentStatus | null) => void;
 }) {
-  const [form, dispatch] = useReducer(inspectionReducer, item, createInitialState);
-  const accepted = form.consent === "accepted";
+  const [form, dispatch] = useReducer(inspectionReducer, undefined, () =>
+    createInitialState(item, unitLabel),
+  );
   const sectionProps = { form, dispatch };
+
+  /* 단계 배열은 승낙 여부에 따라 5개 ↔ 3개로 바뀐다 → 인덱스만 들고 나머지는 파생 */
+  const [stepIndex, setStepIndex] = useState(0);
+  const steps = stepsFor(form);
+  const current = Math.min(stepIndex, steps.length - 1);
+  const step = steps[current];
+  const isLast = current === steps.length - 1;
+  /* 다음 버튼 = 다음 단계의 번호·이름 그대로 (마지막만 제출) */
+  const nextLabel = isLast
+    ? "제출하기"
+    : `Step ${current + 2} - ${STEP_LABEL[steps[current + 1]]} →`;
+
+  /* Radix는 단계 전환을 모른다(트리가 계속 마운트) → 스크롤·포커스를 직접 옮긴다 */
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const headingRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (bodyRef.current) bodyRef.current.scrollTop = 0;
+    headingRef.current?.focus();
+  }, [step]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -98,39 +140,47 @@ function InspectionForm({
         </DialogClose>
       </DialogHeader>
 
-      {/* 본문 — 세로 스크롤, 섹션 간 24px */}
-      <div className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5 sm:px-40">
-        <HonestyLabel>
-          실선 = 실측 · 점선 = 추정 — 자가신고·연차 구간은 추정으로 기록되어 실측과 분리됩니다
-        </HonestyLabel>
+      {/* 본문 — 한 화면에 한 단계만 */}
+      <div ref={bodyRef} className="min-h-0 flex-1 space-y-6 overflow-y-auto px-6 py-5 sm:px-40">
+        {/* 단계 제목 — 단계 전환 시 포커스 착지점 (스크린리더가 새 단계를 읽는다) */}
+        <div ref={headingRef} tabIndex={-1} className="outline-none">
+          <p className="text-caption text-subtle">
+            Step <DataText>{current + 1}</DataText> / <DataText>{steps.length}</DataText>
+          </p>
+          <h2 className="text-display text-ink">{STEP_LABEL[step]}</h2>
+        </div>
 
-        <GateSection {...sectionProps} />
+        {step === "gate" && <GateSection {...sectionProps} />}
+        {step === "alarm" && <AlarmSection {...sectionProps} />}
+        {step === "extinguisher" && <ExtinguisherSection {...sectionProps} />}
+        {step === "post" && <PostSection {...sectionProps} />}
+        {step === "review" && <ReviewSection form={form} />}
 
-        {/* 게이트 분기 — 승낙일 때만 Step 1~3 (비승낙은 물리적으로 수행 불가) */}
-        {accepted && (
-          <>
-            <TargetSection item={item} {...sectionProps} />
-            <ChecklistSection item={item} {...sectionProps} />
-            <ResultSection form={form} />
-          </>
-        )}
-
-        {form.consent !== null && <PostSection {...sectionProps} />}
+        {/* 점검 범위 법적 고지 — 폼 어디에도 중복되지 않는 유일한 문구 */}
+        <InfoNote>
+          본 점검은 소방시설법 제8조에 따른 주택용 소방시설(단독경보형감지기·소화기)에 한정됩니다.
+          승낙 기반 점검이며 강제 사항이 아닙니다.
+        </InfoNote>
       </div>
 
-      {/* 하단 고정 액션 바 */}
-      <div className="flex shrink-0 gap-2 border-t border-hairline bg-surface px-6 py-4 sm:px-10">
-        <Button variant="secondary" size="field-xl" className="w-32" onClick={onClose}>
-          취소
+      {/* 하단 고정 위저드 바 — 좌 보조(field-lg) / 우 주요(field-xl) */}
+      <div className="flex shrink-0 items-center gap-2 border-t border-hairline bg-surface px-6 py-4 sm:px-10">
+        <Button
+          variant="secondary"
+          size="field-xl"
+          className="w-32"
+          onClick={() => (current === 0 ? onClose() : setStepIndex(current - 1))}
+        >
+          {current === 0 ? "취소" : "이전"}
         </Button>
         <Button
           variant="primary"
           size="field-xl"
           className="flex-1"
-          disabled={!canSave(form)}
-          onClick={onSaved}
+          disabled={isLast ? !canSubmit(form) : !canAdvance(form, step)}
+          onClick={() => (isLast ? onSaved(form.consent) : setStepIndex(current + 1))}
         >
-          저장
+          {nextLabel}
         </Button>
       </div>
     </div>

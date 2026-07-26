@@ -15,12 +15,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ChoiceGroup, FormSection } from "@/components/inspection/form-controls";
+import { ChoiceGroup, FormSection, InfoNote } from "@/components/inspection/form-controls";
 import type { InspectionAction, InspectionFormState } from "@/lib/inspection";
 
 /**
- * Step 0 — 방문 게이트 (승낙 확인).
- * 승낙이 성립하지 않으면 Step 1~3은 물리적으로 수행 불가 → 게이트에서 단축 종료.
+ * 1단계 — 방문 게이트 (승낙 확인).
+ * 승낙이 성립하지 않으면 경보기·소화기 단계는 물리적으로 수행 불가 →
+ * stepsFor()가 그 두 단계를 빼고 사후관리로 건너뛴다.
  */
 export function GateSection({
   form,
@@ -30,7 +31,7 @@ export function GateSection({
   dispatch: React.Dispatch<InspectionAction>;
 }) {
   return (
-    <FormSection title="Step 0 — 방문 승낙 확인">
+    <FormSection>
       {/* 4-way 대형 버튼 — 폼 최초 입력, 64px (장갑 착용) */}
       <ChoiceGroup
         options={CONSENT_STATUS}
@@ -52,9 +53,10 @@ export function GateSection({
             ariaPrefix="응대자 유형"
           />
           {form.respondent && form.respondent !== "owner" && (
-            <p className="mt-2 text-caption text-subtle">
-              설치·교체 의무는 소유자에게 있습니다(소방시설법 제8조) — 결과지를 소유자에게 전달 안내
-            </p>
+            <InfoNote className="mt-2">
+              설치·교체 의무는 소유자에게 있습니다(소방시설법 제8조) — 결과지를 소유자에게 전달
+              안내
+            </InfoNote>
           )}
         </fieldset>
       )}
@@ -130,9 +132,9 @@ export function GateSection({
       )}
 
       {(form.consent === "vacant" || form.consent === "unreachable") && (
-        <p className="rounded-sm bg-surface-muted px-3 py-2 text-body-sm text-body">
-          점검 항목 없이 저장할 수 있습니다 — 재방문 계획은 아래 사후관리에서 선택하세요
-        </p>
+        <InfoNote>
+          점검 항목 없이 저장할 수 있습니다 — 재방문 계획은 다음 단계(사후관리)에서 선택하세요
+        </InfoNote>
       )}
     </FormSection>
   );

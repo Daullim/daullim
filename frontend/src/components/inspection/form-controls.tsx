@@ -1,7 +1,43 @@
 import type * as React from "react";
+import { Info } from "lucide-react";
 import { CONDITION_CODE, type ConditionCode, type StatusTone } from "@/config/domain";
 import { DataText } from "@/components/core/data-text";
 import { cn } from "@/lib/utils";
+
+/* 안내문 톤 — status 틴트 슬롯과 1:1 */
+const NOTE_CLASS = {
+  neutral: "bg-surface-muted text-body",
+  caution: "bg-status-caution-tint text-status-caution",
+  positive: "bg-status-positive-tint text-status-positive",
+  negative: "bg-status-negative-tint text-status-negative",
+} as const;
+
+/**
+ * 폼 안내문 — 아이콘 + 16px 본문 (DESIGN.md: `/field` 본문 최소값).
+ * 값 에코(처방 결과·승낙 상태)에는 쓰지 않는다 — 안내문 전용.
+ */
+export function InfoNote({
+  tone = "neutral",
+  children,
+  className,
+}: {
+  tone?: keyof typeof NOTE_CLASS;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <p
+      className={cn(
+        "flex items-start gap-2 rounded-sm px-3 py-2 text-body-md",
+        NOTE_CLASS[tone],
+        className,
+      )}
+    >
+      <Info aria-hidden className="mt-0.5 size-5 shrink-0" />
+      <span>{children}</span>
+    </p>
+  );
+}
 
 /* 선택형 버튼 공통 — Active·Selected = 악센트 틴트 + 악센트 보더 (기존 choiceClass 문법) */
 function choiceClass(selected: boolean) {
@@ -54,19 +90,22 @@ export function ChoiceGroup<K extends string>({
   );
 }
 
-/** 폼 섹션 래퍼 — 섹션 제목 + hairline 구분 (간격은 부모 space-y-6 = 24px) */
+/**
+ * 폼 섹션 래퍼 — hairline 구분 (간격은 부모 space-y-6 = 24px).
+ * 위저드에선 한 단계 = 한 섹션이라 제목은 상단 단계 제목이 대신한다 → title 생략 가능.
+ */
 export function FormSection({
   title,
   children,
   className,
 }: {
-  title: string;
+  title?: string;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <section className={cn("border-b border-hairline pb-6 last:border-b-0 last:pb-0", className)}>
-      <h3 className="mb-3 text-title-sm text-ink">{title}</h3>
+      {title && <h3 className="mb-3 text-title-sm text-ink">{title}</h3>}
       <div className="space-y-4">{children}</div>
     </section>
   );
