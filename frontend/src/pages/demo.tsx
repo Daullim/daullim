@@ -73,6 +73,9 @@ export default function DemoPage() {
             ["/field/grid", "B2 격자 선택"],
             ["/field/units", "B3 주택 선택 (+C 오버레이)"],
             ["/field/units?rural=1", "B3 농촌 분기"],
+            ["/login", "로그인"],
+            ["/signup", "회원가입"],
+            ["/settings", "설정"],
           ].map(([to, label]) => (
             <Link key={to} to={to} className="text-brand underline underline-offset-4">
               {label}

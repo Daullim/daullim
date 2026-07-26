@@ -18,6 +18,15 @@ export const VISIT_STATUS: Record<VisitStatus, { label: string; tone: StatusTone
   unreachable: { label: "두절", tone: "caution" },
 };
 
+/** 설정 — 네이버 지도 유형. 키는 Naver Maps mapTypeId(NORMAL/SATELLITE/TERRAIN)와 1:1 */
+export type MapType = "normal" | "satellite" | "terrain";
+
+export const MAP_TYPE: Record<MapType, { label: string }> = {
+  normal: { label: "일반지도" },
+  satellite: { label: "위성지도" },
+  terrain: { label: "지형지도" },
+};
+
 export type RiskLevel = "danger" | "warn" | "ok";
 
 export const RISK_LEVEL: Record<RiskLevel, { label: string }> = {
