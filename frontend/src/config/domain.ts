@@ -42,15 +42,6 @@ export const ALARM_CHECK: Record<AlarmCheck, { label: string; rx: RxCode | null 
   detached: { label: "탈거", rx: "RX-IOT" },
 };
 
-/** 방문상태 (점검 폼 1단계) — 역시 미합의 모델의 부분집합, config에서만 관리 */
-export type VisitOutcome = "met" | "absent" | "refused";
-
-export const VISIT_OUTCOME: Record<VisitOutcome, { label: string }> = {
-  met: { label: "방문·점검" },
-  absent: { label: "부재" },
-  refused: { label: "거부" },
-};
-
 /* ------------------------------------------------------------------ */
 /* 일반주택 현장점검 폼 (Step 0~4) — 일반주택-현장점검-폼설계.md 확정 코드 */
 /* ------------------------------------------------------------------ */
@@ -146,26 +137,6 @@ export const INSTALLED: Record<Installed, { label: string }> = {
   missing: { label: "미설치" },
 };
 
-/** Step 2 — 감지기 설치 위치(실 이름) */
-export type RoomLabel = "master" | "living" | "kitchen" | "etc";
-
-export const ROOM_LABEL: Record<RoomLabel, { label: string }> = {
-  master: { label: "안방" },
-  living: { label: "거실" },
-  kitchen: { label: "주방" },
-  etc: { label: "기타실" },
-};
-
-/** Step 2 — 소화기 설치 위치 */
-export type ExtLocation = "entrance" | "living" | "floor-hall" | "etc";
-
-export const EXT_LOCATION: Record<ExtLocation, { label: string }> = {
-  entrance: { label: "현관" },
-  living: { label: "거실" },
-  "floor-hall": { label: "층별 복도" },
-  etc: { label: "기타" },
-};
-
 /** Step 2 — 연차 구간 (라벨 판독 불가 시 폴백, estimation_flag=추정) */
 export type AgeBand = "le-5" | "y5-10" | "y10-15" | "gt-15" | "unknown";
 
@@ -178,10 +149,10 @@ export const AGE_BAND: Record<AgeBand, { label: string; minYears: number | null 
 };
 
 /**
- * 권장 내용연수 — 감지기 15년은 배선형 연기감지기 기준 준용치,
- * 소화기 10년은 공식 고시 재확인 필요 (폼설계 §0 "확인 필요").
+ * 권장 내용연수 — 감지기 15년은 배선형 연기감지기 기준 준용치.
+ * (소화기는 설치/미설치만 받으므로 연수 판정을 하지 않는다)
  */
-export const SERVICE_LIFE_YEARS = { detector: 15, extinguisher: 10 } as const;
+export const SERVICE_LIFE_YEARS = { detector: 15 } as const;
 
 /**
  * Step 1 — 경보기 교체 사유 (세대 단위 집계 입력).
@@ -208,16 +179,6 @@ export const BATTERY_TYPE: Record<BatteryType, { label: string; rx: RxCode | nul
   unknown: { label: "모름", rx: null }, // 현장 커버 개방으로 판별 전 — ALARM_CHECK crossref 폴백
 };
 
-/** Step 2 — 소화기 지시압력계 (pressure_status). 압력계 없음=가압식 의심, 무조건 불량 */
-export type PressureStatus = "normal" | "no-pressure" | "over-pressure" | "no-gauge";
-
-export const PRESSURE_STATUS: Record<PressureStatus, { label: string; severe: boolean }> = {
-  normal: { label: "정상(녹색범위)", severe: false },
-  "no-pressure": { label: "압력 없음", severe: true },
-  "over-pressure": { label: "압력 높음", severe: true },
-  "no-gauge": { label: "압력계 없음(가압식 의심)", severe: true },
-};
-
 /** Step 2 — 감지기 외관 체크 (severe=중대결함 → 판정 1순위). ※ 배선형 자탐설비 기준 준용 */
 export type DetectorFlag = "stain" | "cover-damage" | "false-alarm" | "condensation";
 
@@ -226,15 +187,6 @@ export const DETECTOR_FLAG: Record<DetectorFlag, { label: string; severe: boolea
   "cover-damage": { label: "커버 파손·틈새", severe: true },
   "false-alarm": { label: "비화재보(오작동) 이력", severe: false },
   condensation: { label: "결로·이물질 흔적", severe: false },
-};
-
-/** Step 2 — 소화기 외관 체크. severe 분류는 판정표 "파손·부식" 문언 기준 — 실무 검수 대상 */
-export type ExtFlag = "corrosion" | "seal-pin" | "hose-nozzle";
-
-export const EXT_FLAG: Record<ExtFlag, { label: string; severe: boolean }> = {
-  corrosion: { label: "부식·손상·누액", severe: true },
-  "seal-pin": { label: "봉인·안전핀 이상", severe: false },
-  "hose-nozzle": { label: "호스·노즐 파손", severe: true },
 };
 
 /** Step 3 — 자동 판정 4단계 (condition_code). 키=확정 데이터 코드 (RX-BAT 선례) */

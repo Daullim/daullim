@@ -407,7 +407,7 @@ Loading/Empty/Error/Offline은 화면마다 즉흥 처리하지 않고 한 벌�
 3. 컴포넌트 단위로 수정한다. 상태(variant) 추가는 유니언 타입 확장 + config 주입으로.
 4. hover는 배경 틴트만. 포커스 링은 전역 정의를 신뢰하고 개별 컴포넌트에서 재정의하지 않는다.
 5. 폴링 갱신 시 레이아웃 고정 — 행 높이·지도 컨테이너 크기를 바꾸는 코드를 쓰지 않는다.
-6. 접근성 프리미티브(Dialog·Select·Tabs)는 shadcn/ui(Radix)에 위임 — 직접 구현 금지.
+6. 접근성 프리미티브는 shadcn/ui(Radix)에 위임 — 직접 구현 금지. 현재 보유: Dialog·Select·Sheet·Button·Skeleton. 없는 프리미티브(Tabs 등)가 필요해지면 손으로 만들지 말고 shadcn에서 추가한다.
 7. 시연 샘플 데이터는 서울 관악구(도시)·전북 임실군(농촌) 기준으로 통일.
 8. Tailwind에서 브랜드 악센트 유틸리티는 `brand-*`다 (`accent`는 shadcn 호버-틴트 슬롯이 선점).
 
