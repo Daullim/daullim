@@ -79,8 +79,15 @@ export function TopBar({
     return (
       <header className="flex h-14 shrink-0 items-center gap-3 border-b border-hairline bg-surface px-3">
         <HamburgerButton onClick={() => setDrawerOpen(true)} />
-        <Link to="/" className="text-title text-ink">
-          다울림
+        {/* '/'는 로그인으로 리다이렉트되므로 관제 홈으로 직접 보낸다 */}
+        <Link to="/control" className="flex shrink-0 items-center">
+          <img
+            src="/daullim-logo.png"
+            alt="다울림"
+            width={525}
+            height={281}
+            className="h-8 w-auto"
+          />
         </Link>
         <Account className="text-body-sm" />
         <AppDrawer mode="control" open={drawerOpen} onOpenChange={setDrawerOpen} />

@@ -9,8 +9,12 @@ import {
 import { Button } from "@/components/core/button";
 import { INSPECTOR } from "@/mock/sample";
 
-/* 라우트 미정 — 자리만 확보한 플레이스홀더 메뉴 (라우트를 지어내지 않는다) */
-const MENU_ITEMS = ["점검 기록 조회", "현재 진행 상황", "설정"];
+/* to가 없는 항목은 라우트 미정 — 자리만 확보한 플레이스홀더 (라우트를 지어내지 않는다) */
+const MENU_ITEMS: { label: string; to?: string }[] = [
+  { label: "점검 기록 조회" },
+  { label: "현재 진행 상황" },
+  { label: "설정", to: "/settings" },
+];
 
 /**
  * 좌측 드로어 (/field·/control 공용) — focus trap·ESC·오버레이는 Radix Sheet에 위임.
@@ -39,11 +43,13 @@ export function AppDrawer({
         </SheetHeader>
 
         <nav aria-label="메뉴" className="min-h-0 flex-1 overflow-y-auto py-2">
-          {MENU_ITEMS.map((label) => (
+          {MENU_ITEMS.map(({ label, to }) => (
             <button
               key={label}
               type="button"
-              className="flex h-13 w-full items-center px-5 text-left text-title text-body hover:bg-surface-muted"
+              disabled={!to}
+              onClick={to ? () => navigate(to) : undefined}
+              className="flex h-13 w-full items-center px-5 text-left text-title text-body hover:bg-surface-muted disabled:cursor-not-allowed disabled:text-subtle disabled:hover:bg-surface"
             >
               {label}
             </button>
@@ -61,12 +67,11 @@ export function AppDrawer({
               ■ 현장점검 종료
             </Button>
           ) : (
-            /* 로그인(/login) 미구현 — 연결 전까지 드로어 닫기만 한다 */
             <Button
               variant="danger"
               size="field-xl"
               className="w-full"
-              onClick={() => onOpenChange(false)}
+              onClick={() => navigate("/login")}
             >
               로그아웃
             </Button>
