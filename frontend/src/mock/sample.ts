@@ -103,6 +103,11 @@ export interface HouseholdItem {
   houseType: HouseType;
   floorCount: number;
   unitCount: number;
+  /**
+   * 건축물대장 표제부 사용승인일(getBrTitleInfo.useAprDay, YYYYMMDD) — 건축연월/준공연차 산출.
+   * 대장 미등재 시 null (관악 0.2%·임실 2.5% 실측 결측). BE 연동 전 mock.
+   */
+  useAprDay: string | null;
 }
 
 /** B3·SCR-02 — 격자 GA-0412 내 방문 큐 (위험순) */
@@ -121,6 +126,7 @@ export const HOUSEHOLDS: HouseholdItem[] = [
     houseType: "multi-unit",
     floorCount: 3,
     unitCount: 8,
+    useAprDay: "20011019",
   },
   {
     rank: 2,
@@ -136,6 +142,7 @@ export const HOUSEHOLDS: HouseholdItem[] = [
     houseType: "multi-family",
     floorCount: 2,
     unitCount: 5,
+    useAprDay: null,
   },
   {
     rank: 3,
@@ -151,6 +158,7 @@ export const HOUSEHOLDS: HouseholdItem[] = [
     houseType: "multi-unit",
     floorCount: 3,
     unitCount: 6,
+    useAprDay: "19930715",
   },
   {
     rank: 4,
@@ -166,6 +174,7 @@ export const HOUSEHOLDS: HouseholdItem[] = [
     houseType: "detached",
     floorCount: 1,
     unitCount: 1,
+    useAprDay: "20150822",
   },
 ];
 

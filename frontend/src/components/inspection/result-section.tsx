@@ -164,7 +164,7 @@ export function PostSection({
           재방문 사유는 방문 결과에서 자동 기록됩니다. 채널(우편·기관 경유·직접 재방문)은
           재방문 큐에서 사유 기반으로 자동 제안됩니다.
         </p>
-        </fieldset>
+      </fieldset>
 
       <div>
         <label htmlFor="insp-note" className="mb-2 block text-body-md text-ink">

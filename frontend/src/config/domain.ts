@@ -82,7 +82,7 @@ export type RespondentType = "owner" | "tenant" | "family" | "etc";
 export const RESPONDENT_TYPE: Record<RespondentType, { label: string }> = {
   owner: { label: "소유자" },
   tenant: { label: "세입자(임차인)" },
-  family: { label: "가족·동거인" },
+  family: { label: "가족·대리인" },
   etc: { label: "기타" },
 };
 

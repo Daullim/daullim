@@ -4,7 +4,7 @@ import { DataText } from "@/components/core/data-text";
 import { EstimateBorder } from "@/components/core/estimate-border";
 import { FormSection } from "@/components/inspection/form-controls";
 import type { HouseholdItem } from "@/mock/sample";
-import type { InspectionAction, InspectionFormState } from "@/lib/inspection";
+import { parseUseApr, type InspectionAction, type InspectionFormState } from "@/lib/inspection";
 
 /**
  * Step 1 — 주택 기본정보 & 대상물 분류.
@@ -21,36 +21,58 @@ export function TargetSection({
   dispatch: React.Dispatch<InspectionAction>;
 }) {
   const house = HOUSE_TYPE[item.houseType];
+  // 표제부 사용승인일(useAprDay) → 건축연월·준공연차. 대장 미등재면 null.
+  const approval = parseUseApr(item.useAprDay);
 
   return (
     <FormSection title="Step 1 — 대상물 분류">
-      {/* 건축물대장 프리필 — 실측(대장 기준), 실선 보더 */}
-      <EstimateBorder kind="measured">
-        <dl className="grid grid-cols-3 gap-x-4 gap-y-1 text-body-sm">
-          <div>
-            <dt className="text-caption text-subtle">주택 유형</dt>
-            <dd className="text-ink">
-              {house.label}
-              <span className="ml-1.5 text-caption text-subtle">
-                {OWNERSHIP_LABEL[house.ownership]}
-              </span>
-            </dd>
-          </div>
-          <div>
-            <dt className="text-caption text-subtle">층수</dt>
-            <dd className="text-ink">
-              <DataText>{item.floorCount}</DataText>층
-            </dd>
-          </div>
-          <div>
-            <dt className="text-caption text-subtle">세대수</dt>
-            <dd className="text-ink">
-              <DataText>{item.unitCount}</DataText>세대
-            </dd>
-          </div>
-        </dl>
-        <p className="mt-2 text-caption text-subtle">건축물대장 표제부 기준 (배치 사전조회)</p>
-      </EstimateBorder>
+      {/* 건축물대장 프리필 — 실측(대장 기준), 실선 보더. 4개 항목 1개 표로 묶음 */}
+      <div className="space-y-1">
+        <EstimateBorder kind="measured">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="text-body-sm text-subtle">
+                <th className="pb-1 font-normal">주택 유형</th>
+                <th className="pb-1 font-normal">층수</th>
+                <th className="pb-1 font-normal">세대수</th>
+                <th className="pb-1 font-normal">사용승인일 (준공)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-t border-hairline align-top text-body-md text-ink">
+                <td className="pt-2">
+                  {house.label}
+                  <span className="block text-caption text-subtle">
+                    {OWNERSHIP_LABEL[house.ownership]}
+                  </span>
+                </td>
+                <td className="pt-2">
+                  <DataText>{item.floorCount}</DataText>층
+                </td>
+                <td className="pt-2">
+                  <DataText>{item.unitCount}</DataText>세대
+                </td>
+                <td className="pt-2">
+                  {approval ? (
+                    <>
+                      <DataText>{approval.ymLabel}</DataText>
+                      <span className="block text-caption text-subtle">
+                        준공 <DataText>{approval.years}</DataText>년차
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-subtle">미등재</span>
+                  )}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </EstimateBorder>
+        {/* 출처 캡션 — 표 밖 오른쪽 하단 */}
+        <p className="text-right text-caption text-subtle">
+          건축물대장 표제부 기준 (배치 사전조회)
+        </p>
+      </div>
 
       {/* 실물 불일치 정정 — 정정값 입력은 프리필 API 연동 후 (표시 토글만, no-op) */}
       <label className="flex min-h-11 items-center gap-2 text-body-md text-ink">

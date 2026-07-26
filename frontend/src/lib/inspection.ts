@@ -240,6 +240,22 @@ export function yearsSince(mfgYm: string, now: Date = new Date()): number {
   return Math.floor(months / 12);
 }
 
+/**
+ * 건축물대장 표제부 사용승인일(YYYYMMDD) → 건축연월·준공연차.
+ * 대장 미등재(빈값)·형식 불량이면 null (Step 1에서 결측 UI로 분기).
+ */
+export function parseUseApr(
+  useAprDay: string | null | undefined,
+  now: Date = new Date(),
+): { ymLabel: string; years: number } | null {
+  const s = (useAprDay ?? "").trim();
+  if (!/^\d{8}$/.test(s)) return null;
+  const y = Number(s.slice(0, 4));
+  const m = Number(s.slice(4, 6));
+  if (m < 1 || m > 12) return null;
+  return { ymLabel: `${y}.${s.slice(4, 6)}`, years: yearsSince(`${y}-${m}`, now) };
+}
+
 /** 연차 산정: mfgYm(실측) 우선 > ageBand.minYears(추정) 폴백 */
 function elapsedYears(mfgYm: string | null, ageBand: AgeBand | null): number | null {
   if (mfgYm) return yearsSince(mfgYm);
