@@ -41,8 +41,10 @@ function CollapseTab({
 }
 
 /**
- * 전면 지도 위 우측 플로팅 패널 (B2·B3 공용) — 왼쪽 가장자리 드래그로 너비 조절,
- * 접기 버튼으로 완전 수납(수납 시 우측 끝 펼침 버튼만 남음). 새 의존성 없음.
+ * 지도 오른쪽에 나란히 놓이는 사이드 패널 (B2·B3 공용) — 지도와 형제인 2열 구조라
+ * 지도 위에 겹치지 않는다(/control 큐 패널과 동형). 왼쪽 가장자리 드래그로 너비 조절,
+ * 접기 버튼으로 완전 수납(수납 시 본문 우측 끝 펼침 버튼만 남고 지도가 전체 폭).
+ * 새 의존성 없음.
  */
 export function MapSidePanel({
   children,
@@ -73,10 +75,11 @@ export function MapSidePanel({
     );
   }
 
+  /* relative 필수 — 리사이즈 핸들·접기 탭이 이 박스를 기준으로 붙는다 */
   return (
     <aside
       aria-label={ariaLabel}
-      className="absolute top-3 right-3 bottom-3 z-10"
+      className="relative flex shrink-0 flex-col"
       style={{ width: `min(${width}px, calc(100vw - 24px))` }}
     >
       {/* 접기 — 패널 왼쪽 모서리 중앙 부착 */}
@@ -111,7 +114,7 @@ export function MapSidePanel({
         className="absolute inset-y-0 left-0 z-10 w-2 cursor-col-resize rounded-l-md touch-none hover:bg-brand-line/60"
       />
 
-      <div className="flex h-full flex-col overflow-hidden rounded-md border border-hairline bg-surface shadow-e2">
+      <div className="flex h-full flex-col overflow-hidden rounded-md border border-hairline bg-surface">
         {children}
       </div>
     </aside>

@@ -47,16 +47,17 @@ export default function FieldGridPage() {
         crumbs={[{ label: "관악구 은천동", to: "/field" }, { label: "격자 선택" }]}
       />
 
-      {/* 전면 지도 + 우측 리사이즈 패널 (접기 가능) */}
-      <main className="relative min-h-0 flex-1">
+      {/* 좌 지도 + 우 리사이즈 패널 2열 (접기 가능) — relative는 접힘 탭 앵커용 */}
+      <main className="relative flex min-h-0 flex-1 gap-3 p-3">
         <MapPlaceholder
           label="은천동 — 500m 격자 (옅은 실선 경계)"
-          className="h-full rounded-none border-none"
+          className="min-w-0"
         >
-          <Legend className="absolute bottom-3 left-3" />
+          {/* 범례는 우상단 — 하단은 줌(좌)·현재 위치(중앙) 차지 (B1과 동일 배치) */}
+          <Legend className="absolute top-3 right-3" />
+          <MapZoomControls />
+          <LocateButton />
         </MapPlaceholder>
-        <MapZoomControls />
-        <LocateButton />
 
         {/* 격자 우선순위 리스트 — 리스트↔지도 양방향 연동 */}
         <MapSidePanel ariaLabel="격자 우선순위 패널">

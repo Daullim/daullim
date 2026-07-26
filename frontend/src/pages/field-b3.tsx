@@ -39,8 +39,8 @@ export default function FieldUnitsPage() {
     <div className="flex h-dvh flex-col">
       <TopBar mode="field" crumbs={crumbs} />
 
-      {/* 전면 지도 + 우측 리사이즈 패널 (접기 가능) */}
-      <main className="relative min-h-0 flex-1">
+      {/* 좌 지도 + 우 리사이즈 패널 2열 (접기 가능) — relative는 접힘 탭 앵커용 */}
+      <main className="relative flex min-h-0 flex-1 gap-3 p-3">
         <MapPlaceholder
           label={
             rural
@@ -48,12 +48,13 @@ export default function FieldUnitsPage() {
               : "격자 GA-0412 확대 — 주택 3구간 색핀 · 완료 체크"
           }
           focusedRank={selectedRank}
-          className="h-full rounded-none border-none"
+          className="min-w-0"
         >
-          <Legend className="absolute bottom-3 left-3" />
+          {/* 범례는 우상단 — 하단은 줌(좌)·현재 위치(중앙) 차지 (B1과 동일 배치) */}
+          <Legend className="absolute top-3 right-3" />
+          <MapZoomControls />
+          <LocateButton />
         </MapPlaceholder>
-        <MapZoomControls />
-        <LocateButton />
 
         {/* 방문 큐 (위험순, 완료 흐리게) */}
         <MapSidePanel ariaLabel="방문 큐 패널">
