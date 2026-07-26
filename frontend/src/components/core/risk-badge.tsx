@@ -12,7 +12,7 @@ export interface RiskBadgeProps {
   level: RiskLevel;
   /** risk_score — 색 단독 금지 원칙상 라벨과 함께 수치 병기를 권장 */
   score?: number;
-  /** 추정값이면 점선 보더 + (추정) 라벨 (색이 아닌 형태로 구분) */
+  /** 추정값이면 점선 보더 (색이 아닌 형태로 구분 — 의미는 상시 범례가 설명) */
   estimated?: boolean;
   className?: string;
 }
@@ -32,7 +32,6 @@ export function RiskBadge({ level, score, estimated, className }: RiskBadgeProps
       <span aria-hidden className="size-1.5 rounded-full bg-current" />
       {label}
       {score != null && <DataText>{score.toFixed(1)}</DataText>}
-      {estimated && <span className="font-normal">(추정)</span>}
     </span>
   );
 }
