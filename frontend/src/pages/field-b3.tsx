@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { RotateCw, Search } from "lucide-react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
 import { LocateButton } from "@/components/layout/locate-button";
@@ -8,9 +9,8 @@ import { MapZoomControls } from "@/components/layout/map-zoom-controls";
 import { MapSidePanel } from "@/components/layout/map-side-panel";
 import { Button } from "@/components/core/button";
 import { DataText } from "@/components/core/data-text";
-import { HonestyLabel } from "@/components/core/honesty-label";
 import { QueueRow } from "@/components/core/queue-row";
-import { LastUpdated } from "@/components/core/system-states";
+import { EmptyState, LastUpdated } from "@/components/core/system-states";
 import { InspectionOverlay } from "@/pages/inspection-overlay";
 import { HOUSEHOLDS, type HouseholdItem } from "@/mock/sample";
 
@@ -26,6 +26,15 @@ export default function FieldUnitsPage() {
   const [selectedRank, setSelectedRank] = useState<number | null>(null);
   const [inspecting, setInspecting] = useState<HouseholdItem | null>(null);
   const [doneRanks, setDoneRanks] = useState<Set<number>>(new Set([4]));
+  const [query, setQuery] = useState("");
+  /* 큐는 고정 목록 — 재조회는 백엔드 연동 시. 지금은 갱신 시각만 되돌린다. */
+  const [updatedSeconds, setUpdatedSeconds] = useState(7);
+
+  /* 공백 무시 매칭 — "은천로39길"처럼 붙여 치는 입력도 잡는다 */
+  const q = query.trim().replace(/\s/g, "");
+  const visible = q
+    ? HOUSEHOLDS.filter((h) => h.address.replace(/\s/g, "").includes(q))
+    : HOUSEHOLDS;
 
   const crumbs = rural
     ? [{ label: "임실군 임실읍", to: "/field" }, { label: "가구 선택" }]
@@ -61,17 +70,54 @@ export default function FieldUnitsPage() {
           <div className="flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
             <h2 className="text-title-sm text-ink">방문 큐 (위험순)</h2>
             <span className="flex items-center gap-3">
+              {/* 진행률은 검색 필터와 무관하게 전체 기준 */}
               <span className="text-caption text-subtle">
                 진행{" "}
                 <DataText>
                   {doneRanks.size}/{HOUSEHOLDS.length}
                 </DataText>
               </span>
-              <LastUpdated seconds={7} />
+              <span className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="새로고침"
+                  onClick={() => setUpdatedSeconds(0)}
+                  className="flex size-11 items-center justify-center rounded-md text-body hover:bg-surface-muted"
+                >
+                  <RotateCw aria-hidden className="size-4" />
+                </button>
+                <LastUpdated seconds={updatedSeconds} />
+              </span>
             </span>
           </div>
+
+          {/* 주소 검색 — 방문 큐 실시간 필터 (shrink-0: 리스트 높이 고정) */}
+          <div className="shrink-0 border-b border-hairline p-3">
+            <div className="relative">
+              <Search
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle"
+              />
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                aria-label="주소 검색"
+                placeholder="주소 검색"
+                className="h-11 w-full rounded-sm border border-hairline-strong bg-surface pr-3 pl-9 text-body-md text-ink placeholder:text-subtle"
+              />
+            </div>
+          </div>
+
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {HOUSEHOLDS.map((item) => (
+            {visible.length === 0 && (
+              <EmptyState
+                message="검색과 일치하는 주택이 없습니다"
+                actionLabel="검색어 지우기"
+                onAction={() => setQuery("")}
+              />
+            )}
+            {visible.map((item) => (
               <Fragment key={item.rank}>
                 <QueueRow
                   item={item}
@@ -105,16 +151,6 @@ export default function FieldUnitsPage() {
                 )}
               </Fragment>
             ))}
-          </div>
-          <div className="shrink-0 space-y-3 border-t border-hairline p-3">
-            {!rural && (
-              <HonestyLabel>
-                주택 순서 = 보급연차·동선 기준 · 현재 위치는 지도 연동 후 활성
-              </HonestyLabel>
-            )}
-            <Button variant="secondary" size="field-xl" className="w-full">
-              다음 우선순위 3건
-            </Button>
           </div>
         </MapSidePanel>
       </main>
