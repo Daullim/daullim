@@ -1,9 +1,15 @@
 services:
   postgres:
-    image: 'postgres:latest'
+    image: 'postgres:15-alpine'
     environment:
-      - 'POSTGRES_DB=mydatabase'
-      - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      - 'POSTGRES_DB=daullim'
+      - 'POSTGRES_USER=daullim'
+      # 로컬 개발 전용
+      - 'POSTGRES_PASSWORD=daullim'
     ports:
-      - '5432'
+      - '5432:5432'
+    volumes:
+      - 'daullim-pgdata:/var/lib/postgresql/data'
+
+volumes:
+  daullim-pgdata:
