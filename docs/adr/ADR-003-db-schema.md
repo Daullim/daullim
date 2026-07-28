@@ -3,10 +3,13 @@
 ## 상태
 승인 (2026-07-20, 결정자: 이윤서) — 단 §5 상태 모델은 **보류** (박지현과 합의 후 확정)
 
-> ⚠️ **2026-07-26: [ADR-012](ADR-012-erd-v1.md)가 이 문서를 amend한다.**
-> §5 "테이블 3개"의 `building_queue`는 `buildings` + `building_queue_entries`로 분해되고,
+> ⚠️ **[ADR-012](ADR-012-erd-v1.md)가 이 문서를 amend한다** (2026-07-26 v1 · 2026-07-28 v1.2 반영 상태):
+> §5 "테이블 3개"는 **ERD v1 12테이블(핵심 6 + lookup 6)**로 대체됐다.
+> `building_queue`는 `buildings`로 흡수 — **발행 회차(publish_round) 개념 자체가 폐지**됐고(큐 = 조회 시 파생),
 > `visits`는 `unit_id` FK로 바뀌며 세대(`units`)·교체(`replacement_items`) 레이어가 추가됐다.
-> PostgreSQL·Flyway·COPY seed·building_queue 읽기전용·GeoJSON DB 미적재·PostGIS 불요는 **유지**.
+> §5의 `visits` 컬럼 중 `publish_round`는 삭제, `actuation`·`iot_recommended`·`revisit_reason`은 대체됐다.
+> seed 적재는 라운드 물리 교체가 아니라 **월 1회 전량 UPSERT**다(units·visits FK 보존 전제).
+> PostgreSQL·Flyway·pipeline 적재·buildings BE 읽기전용·GeoJSON DB 미적재·PostGIS 불요는 **유지**.
 > §5 상태 모델 보류도 **유지**(ADR-012는 `visit_status` 컬럼을 채택하지 않았다).
 
 ## 맥락
