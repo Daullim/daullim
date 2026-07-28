@@ -1,0 +1,13 @@
+# 배포(Railway) — 값은 전부 환경변수 주입. 실값 커밋 금지(ADR-006 운영 1 / ADR-007 §7).
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  docker:
+    compose:
+      # developmentOnly라 bootJar에는 애초에 포함되지 않지만, bootRun -Dspring.profiles.active=prod
+      # 같은 경로를 위해 명시적으로 끈다.
+      enabled: false
+  jpa:
+    show-sql: false

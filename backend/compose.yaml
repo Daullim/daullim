@@ -1,9 +1,17 @@
 services:
   postgres:
-    image: 'postgres:latest'
+    # ADR-003 §1 "PostgreSQL 15+" — latest는 어느 날 조용히 메이저가 올라 재현성을 깬다.
+    image: 'postgres:15-alpine'
     environment:
-      - 'POSTGRES_DB=mydatabase'
-      - 'POSTGRES_PASSWORD=secret'
-      - 'POSTGRES_USER=myuser'
+      - 'POSTGRES_DB=daullim'
+      - 'POSTGRES_USER=daullim'
+      # 로컬 개발 전용 값. 배포 비밀번호는 Railway 환경변수로만 주입한다(ADR-006 운영 1).
+      - 'POSTGRES_PASSWORD=daullim'
     ports:
-      - '5432'
+      - '5432:5432'
+    # 재기동에도 데이터 생존 — M-12 데모 전제(ADR-003 맥락).
+    volumes:
+      - 'daullim-pgdata:/var/lib/postgresql/data'
+
+volumes:
+  daullim-pgdata:

@@ -1,0 +1,10 @@
+# 시크릿 — 실값 커밋 금지 (ADR-006 운영 1 / ADR-007 §7)
+.env
+.env.*
+!.env.example
+
+# 원본 데이터 — 전량 제외 (ADR-001). 산출물만 seed/ 로 커밋한다.
+data/
+
+# OS
+.DS_Store
