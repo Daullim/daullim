@@ -6,8 +6,6 @@ spring:
 
   jpa:
     hibernate:
-      # ADR-003 §2 — 스키마 정본은 Flyway. Flyway가 있으면 Boot 기본값이 none이라 명시가 필요하다.
-      # 이 한 줄이 엔티티↔V1__erd_v1.sql 드리프트 탐지기 역할을 한다.
       ddl-auto: validate
     open-in-view: false
     properties:
@@ -22,14 +20,12 @@ spring:
 
 app:
   jwt:
-    # 실값은 환경변수로만. HS256이라 32바이트(256bit) 미만이면 기동 시점에 거부한다.
+    # HS256 - 32바이트(256bit) 이상으로 생성
     secret: ${JWT_SECRET:}
     access-token-ttl: PT1H
   cors:
-    # 콤마 구분 다중 오리진 허용 (Vercel preview + prod 동시 대응)
     allowed-origins: ${ALLOWED_ORIGIN:http://localhost:5173}
   scheduling:
-    # 연차 재산입 스캔(ADR-012 결정 21). 프로파일이 아니라 속성으로 끈다 — 프로파일은 조합 시 조용히 깨진다.
     enabled: true
 
 management:

@@ -42,11 +42,9 @@ dependencies {
   testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
-// ADR-007 §1 — spotlessCheck는 spotless 플러그인이 check에 자동 연결한다(dependsOn 추가 불필요).
 spotless {
   java {
     target 'src/*/java/**/*.java'
-    // 1.29.0부터 실행에 JDK 21이 필요하다. Gradle 데몬은 현재 JDK 17이라 1.28.0으로 고정한다.
     googleJavaFormat('1.28.0')
     removeUnusedImports()
     formatAnnotations()
