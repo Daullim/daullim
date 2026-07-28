@@ -2,6 +2,8 @@
 
 ## 상태
 제안 (2026-07-26, 제안자: 이윤서) — ADR-003을 **amend**. 상태 모델(ADR-003 §5)은 **여전히 보류**.
+개정 v1.1 (2026-07-27, 결정자: 이윤서) — 계정 화면 3종(ADR-004 §1 v1.3) 반영: `users` 확장·회원탈퇴 soft-delete 확정.
+**핵심 점검 레이어(`buildings`·`units`·`visits`·`replacement_items`)는 변경 없음.**
 
 전체 명세(테이블 6열 컬럼표·인덱스·제약·Mermaid ERD)는 볼트
 `Output/contest/design/다울림-ERD-v1.md`가 정본. 이 ADR은 **결정과 근거만** 담는다.
@@ -56,6 +58,23 @@ ADR-003의 `visits.building_id`·`actuation` 단일 컬럼 모델은 이 구조�
 12. ADR-003 확정사항 **유지**: PostgreSQL 15+ / Flyway `V*__*.sql` / `ddl-auto=validate` /
     seed = `pipeline/load_seed.py` COPY / GeoJSON DB 미적재 / PostGIS 불요(공간 인덱스 없음).
 
+### v1.1 추가 결정 (2026-07-27 — 계정 화면 반영)
+
+13. **`users` 확장.** `/signup`이 수집하는 5개 필드에 맞춰 `phone` varchar(20)(`formatPhone()` 정규형 그대로),
+    `birth_on` date를 추가. 직급·직위·소속은 **가입 폼에 없으므로 nullable 유지**하고 부여 경로는 미결정으로 남긴다.
+14. **회원탈퇴 = soft-delete.** `is_active=false` + `withdrawn_at` 기록. 물리 삭제하지 않는다.
+    `/settings` 확인 다이얼로그가 "계정과 점검 이력 **접근 권한**이 사라진다"이지 이력 삭제가 아니고,
+    점검 이력은 서비스의 산출물이다. `visits.officer_id`의 **ON DELETE RESTRICT**가 이를 DB에서 강제하며,
+    `withdrawn_at`은 비활성 사유가 탈퇴인지 전보·휴직인지를 구분한다(`CHECK: withdrawn_at IS NULL OR is_active = false`).
+15. **사용자 설정은 DB에 두지 않는다.** 지도 유형(`MAP_TYPE`)은 `lib/prefs.ts`가 LocalStorage에만 저장하고
+    서버로 보내지 않는다(ADR-004 v1.3). `domain.ts`에 열거값이 늘어도 **DB가 저장하지 않으면 스키마는 그대로**라는
+    원칙의 첫 적용 사례 — 테이블도 lookup도 만들지 않았다.
+16. **날짜 타입 정책을 3분류로 확장.** ①대장 유래·대장 규약 자체기록일 = `char(8)` YYYYMMDD /
+    ②**대장 규약과 무관한 자체 수집 날짜 = `date`**(`birth_on` — 가입 폼이 이미 ISO를 준다) /
+    ③시각 = `timestamptz`.
+17. **인증은 여전히 미결정.** ADR-004 v1.3이 "로그인·회원가입은 전부 목업, 비밀번호는 어떤 형태로도 저장하지 않으며,
+    실제 인증 계약은 BE 착수 시 ADR-005에 추가"로 명시했다. `users.password_hash`는 계속 자리만 확보한다.
+
 ## 근거
 - 세대 레이어를 1급 엔티티로 두면 단독주택도 "세대 1행"으로 통일되어 **주택유형 특수분기가 스키마에서 사라진다.**
   전유부 유무(다세대 有 / 다가구 無) 차이는 `ho_nm_source_cd` 한 컬럼으로만 나타난다.
@@ -78,5 +97,6 @@ ADR-003의 `visits.building_id`·`actuation` 단일 컬럼 모델은 이 구조�
 
 ## 후속
 - `V2__erd_v1.sql`(Flyway) 작성 시 볼트 명세의 컬럼표·CHECK·인덱스를 그대로 옮긴다.
-- 미결정 10건은 볼트 명세 §10. 그중 **착수 차단 항목은 §10-1(상태 모델)과 §10-2(API 계약)** 뿐이며,
+- 미결정 **12건**은 볼트 명세 §10(v1.1에서 §10-11 소속 부여 경로, §10-12 설정 서버 동기화 추가).
+  그중 **착수 차단 항목은 §10-1(상태 모델)과 §10-2(API 계약)** 뿐이며,
   나머지 스키마는 착수 가능(ADR-003의 동일 규율 승계).

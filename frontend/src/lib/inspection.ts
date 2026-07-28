@@ -273,7 +273,10 @@ export function effectiveReplaceCount(state: InspectionFormState): number | null
 function judgeItem(item: ReplacementItem): ConditionCode | null {
   if (!item.reason) return null;
   if (item.reason === "expired") return "EXPIRED";
-  if (item.reason === "battery-dead" || item.reason === "detached") return "DEFECTIVE";
+  // 미표기는 연차를 논할 자격이 없는 건이라 EXPIRED가 아니라 DEFECTIVE로 간다
+  if (item.reason === "battery-dead" || item.reason === "detached" || item.reason === "unmarked") {
+    return "DEFECTIVE";
+  }
   if (item.reason === "appearance") {
     return item.flags.some((f) => DETECTOR_FLAG[f].severe) ? "DEFECTIVE" : "REPLACE_ADVISED";
   }

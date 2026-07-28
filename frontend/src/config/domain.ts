@@ -167,15 +167,23 @@ export const SERVICE_LIFE_YEARS = { detector: 15 } as const;
  * Step 1 — 경보기 교체 사유 (세대 단위 집계 입력).
  * 기존 열거값 3곳에 흩어져 있던 것을 모은 것이라 키 문자열을 의도적으로 재사용한다:
  * battery-dead·detached = ALARM_CHECK, appearance = DETECTOR_FLAG 묶음, expired = CONDITION_CODE.EXPIRED.
+ * unmarked만 재사용처가 없는 신규 코드다 — 형식승인 표시(제조년월) 누락은 연차 축이 아니라 사유 축이다.
  * rx는 deriveRx의 1차 소스 — 방전만 BATTERY_TYPE이 오버라이드한다.
  */
-export type ReplaceReason = "expired" | "battery-dead" | "appearance" | "detached" | "etc";
+export type ReplaceReason =
+  | "expired"
+  | "battery-dead"
+  | "appearance"
+  | "detached"
+  | "unmarked"
+  | "etc";
 
 export const REPLACE_REASON: Record<ReplaceReason, { label: string; rx: RxCode | null }> = {
   expired: { label: "내용연수 지남", rx: "RX-IOT" },
   "battery-dead": { label: "방전", rx: "RX-BAT" },
   appearance: { label: "외관이상", rx: "RX-IOT" },
   detached: { label: "탈거", rx: "RX-IOT" },
+  unmarked: { label: "제조년월 미표기", rx: "RX-IOT" },
   etc: { label: "기타", rx: null },
 };
 
