@@ -9,3 +9,10 @@ spring:
       enabled: false
   jpa:
     show-sql: false
+
+# 배포 URL에 springdoc 노출 X.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false

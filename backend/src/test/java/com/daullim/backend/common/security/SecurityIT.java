@@ -80,6 +80,24 @@ class SecurityIT {
   }
 
   @Test
+  @DisplayName("API 문서는 토큰 없이 열려 있고 JWT 인증 스킴을 노출한다")
+  void apiDocsArePublic() throws Exception {
+    HttpResponse<String> res = send(request("/v3/api-docs").GET());
+
+    assertThat(res.statusCode()).isEqualTo(200);
+    assertThat(res.body())
+        .contains("\"title\":\"다울림 API\"", "bearerAuth", "\"bearerFormat\":\"JWT\"");
+  }
+
+  @Test
+  @DisplayName("Swagger UI도 토큰 없이 열려 있다")
+  void swaggerUiIsPublic() throws Exception {
+    HttpResponse<String> res = send(request("/swagger-ui/index.html").GET());
+
+    assertThat(res.statusCode()).isEqualTo(200);
+  }
+
+  @Test
   @DisplayName("허용 오리진의 프리플라이트가 통과한다")
   void corsPreflightPasses() throws Exception {
     HttpResponse<String> res = preflight("http://localhost:5173");

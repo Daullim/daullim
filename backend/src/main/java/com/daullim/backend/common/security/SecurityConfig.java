@@ -20,6 +20,10 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableWebSecurity
 public class SecurityConfig {
 
+  private static final String[] SWAGGER_PATHS = {
+    "/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs", "/v3/api-docs/**"
+  };
+
   @Bean
   SecurityFilterChain securityFilterChain(
       HttpSecurity http,
@@ -35,13 +39,15 @@ public class SecurityConfig {
         .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             auth ->
-                auth
-                    .dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD)
+                auth.dispatcherTypeMatchers(DispatcherType.ERROR, DispatcherType.FORWARD)
                     .permitAll()
                     .requestMatchers(EndpointRequest.to(HealthEndpoint.class))
                     .permitAll()
                     .requestMatchers(EndpointRequest.toAnyEndpoint())
                     .denyAll()
+                    // prod에서는 springdoc을 꺼서 이 경로가 404가 된다.
+                    .requestMatchers(SWAGGER_PATHS)
+                    .permitAll()
                     .anyRequest()
                     .authenticated())
         // 토큰이 붙은 요청은 resource server가, 토큰 없는 요청은 exceptionHandling이 처리.
