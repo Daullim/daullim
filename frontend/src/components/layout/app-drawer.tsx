@@ -11,7 +11,7 @@ import { INSPECTOR } from "@/mock/sample";
 
 /* to가 없는 항목은 라우트 미정 — 자리만 확보한 플레이스홀더 (라우트를 지어내지 않는다) */
 const MENU_ITEMS: { label: string; to?: string }[] = [
-  { label: "점검 기록 조회" },
+  { label: "점검 기록 조회", to: "/records" },
   { label: "현재 진행 상황" },
   { label: "설정", to: "/settings" },
 ];

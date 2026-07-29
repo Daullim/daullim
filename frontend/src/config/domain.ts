@@ -39,7 +39,7 @@ export type RxCode = "RX-BAT" | "RX-IOT";
 
 export const RX: Record<RxCode, { label: string }> = {
   "RX-BAT": { label: "전지 교체" },
-  "RX-IOT": { label: "재부착" },
+  "RX-IOT": { label: "기기 교체" },
 };
 
 /** 작동여부 3-way — 점검 폼 */

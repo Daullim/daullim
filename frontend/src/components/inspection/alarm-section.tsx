@@ -4,6 +4,7 @@ import {
   BATTERY_TYPE,
   DETECTOR_FLAG,
   REPLACE_REASON,
+  RX,
   SERVICE_LIFE_YEARS,
   type AgeBand,
   type DetectorFlag,
@@ -76,7 +77,7 @@ function ReplacementCard({
       {item.reason === "battery-dead" && (
         <fieldset>
           <legend className="mb-2 text-body-sm text-body">
-            전지 유형 (필수) — 일체형은 기기 교체(RX-IOT)로 분기
+            전지 유형 (필수) — 일체형은 {RX["RX-IOT"].label}(RX-IOT)로 분기
           </legend>
           <ChoiceGroup
             options={BATTERY_TYPE}
