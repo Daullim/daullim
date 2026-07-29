@@ -11,10 +11,7 @@ import com.daullim.backend.domain.code.entity.ReplaceReason;
 import com.daullim.backend.domain.code.entity.UnitStatus;
 import java.util.Map;
 
-/**
- * lookup 7종의 읽기 전용 스냅샷.
- * 판정 규칙이 참조하는 속성(중대결함 여부·심각도 서열·처방 코드·연차 하한·상태 전이).
- */
+/** lookup 7종의 읽기 전용 스냅샷. 판정 규칙이 참조하는 속성(중대결함 여부·심각도 서열·처방 코드·연차 하한·상태 전이). */
 public record CodeBook(
     Map<String, ReplaceReason> replaceReasons,
     Map<String, BatteryType> batteryTypes,
