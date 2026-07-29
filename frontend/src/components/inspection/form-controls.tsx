@@ -1,7 +1,6 @@
 import type * as React from "react";
 import { Info } from "lucide-react";
 import { CONDITION_CODE, type ConditionCode, type StatusTone } from "@/config/domain";
-import { DataText } from "@/components/core/data-text";
 import { cn } from "@/lib/utils";
 
 /* 안내문 톤 — status 틴트 슬롯과 1:1 */
@@ -122,6 +121,7 @@ const TONE_CLASS: Record<StatusTone, string> = {
 /**
  * 판정 뱃지 — CONDITION_CODE 전용 (StatusTag는 VisitStatus 전용이라 자매 렌더).
  * estimated면 "(추정)" 동반 표기 (색이 아니라 라벨로 구분 — NFR-04).
+ * 코드값(OK_GOOD 등)은 내부 표현이라 노출하지 않는다.
  */
 export function ConditionBadge({
   code,
@@ -141,7 +141,7 @@ export function ConditionBadge({
         className,
       )}
     >
-      <DataText>{code}</DataText> {label}
+      {label}
       {estimated && <span>(추정)</span>}
     </span>
   );
