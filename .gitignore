@@ -6,5 +6,8 @@
 # 원본 데이터 — 전량 제외 (ADR-001). 산출물만 seed/ 로 커밋한다.
 data/
 
+# IDE
+.idea/
+
 # OS
 .DS_Store

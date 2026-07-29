@@ -6,8 +6,13 @@ spring:
     password: ${DB_PASSWORD}
   docker:
     compose:
-      # developmentOnly라 bootJar에는 애초에 포함되지 않지만, bootRun -Dspring.profiles.active=prod
-      # 같은 경로를 위해 명시적으로 끈다.
       enabled: false
   jpa:
     show-sql: false
+
+# 배포 URL에 springdoc 노출 X.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
