@@ -13,6 +13,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -60,6 +61,13 @@ public class GlobalExceptionHandler {
   @ExceptionHandler(EntityNotFoundException.class)
   public ResponseEntity<ApiResponse<Void>> handleNotFound(EntityNotFoundException e) {
     log.warn("entity not found - {}", e.getMessage());
+    return toResponse(ErrorCode.NOT_FOUND, ErrorCode.NOT_FOUND.getMessage());
+  }
+
+  /** 매핑되지 않은 URL 처리. */
+  @ExceptionHandler(NoResourceFoundException.class)
+  public ResponseEntity<ApiResponse<Void>> handleNoResource(NoResourceFoundException e) {
+    log.warn("no handler for {}", e.getResourcePath());
     return toResponse(ErrorCode.NOT_FOUND, ErrorCode.NOT_FOUND.getMessage());
   }
 
