@@ -1,13 +1,6 @@
 import type * as React from "react";
-import {
-  CONSENT_STATUS,
-  REFUSAL_REASON,
-  RESPONDENT_TYPE,
-  SELF_REPORT_PERIOD,
-  TRI_ANSWER,
-  type RefusalReason,
-} from "@/config/domain";
-import { EstimateBorder } from "@/components/core/estimate-border";
+import { CONSENT_STATUS, REFUSAL_REASON, RESPONDENT_TYPE, type RefusalReason } from "@/config/domain";
+import { RecordTable } from "@/components/records/record-table";
 import {
   Select,
   SelectContent,
@@ -17,6 +10,10 @@ import {
 } from "@/components/ui/select";
 import { ChoiceGroup, FormSection, InfoNote } from "@/components/inspection/form-controls";
 import type { InspectionAction, InspectionFormState } from "@/lib/inspection";
+import type { InspectionRecord } from "@/mock/records";
+
+/** 이력 표는 세대가 이미 헤더에 있어 주소·세대를 빼고 언제 방문했는지를 앞에 둔다 */
+const HISTORY_COLUMNS = ["day", "time", "consent", "condition", "rxDone"] as const;
 
 /**
  * 1단계 — 방문 게이트 (승낙 확인).
@@ -26,9 +23,12 @@ import type { InspectionAction, InspectionFormState } from "@/lib/inspection";
 export function GateSection({
   form,
   dispatch,
+  history = [],
 }: {
   form: InspectionFormState;
   dispatch: React.Dispatch<InspectionAction>;
+  /** 이 세대의 지난 방문 — 없으면 표를 띄우지 않는다 */
+  history?: InspectionRecord[];
 }) {
   return (
     <FormSection>
@@ -84,35 +84,6 @@ export function GateSection({
             </Select>
           </div>
 
-          {/* 자가신고 미니폼 — 문앞 30초, 실측이 아니므로 추정 고정 (판정 미생성) */}
-          {form.refusalReason === "self-replaced" && (
-            <EstimateBorder kind="estimated">
-              <div className="space-y-3">
-                <p className="text-body-sm text-body">자가신고 (전 필드 선택 입력)</p>
-                <fieldset>
-                  <legend className="mb-2 text-body-sm text-body">언제 교체하셨나요?</legend>
-                  <ChoiceGroup
-                    options={SELF_REPORT_PERIOD}
-                    value={form.selfReport.period}
-                    onChange={(v) => dispatch({ type: "SET_SELF_REPORT", patch: { period: v } })}
-                    columns={4}
-                    ariaPrefix="교체 시기"
-                  />
-                </fieldset>
-                <fieldset>
-                  <legend className="mb-2 text-body-sm text-body">작동 확인해보셨나요?</legend>
-                  <ChoiceGroup
-                    options={TRI_ANSWER}
-                    value={form.selfReport.tested}
-                    onChange={(v) => dispatch({ type: "SET_SELF_REPORT", patch: { tested: v } })}
-                    columns={3}
-                    ariaPrefix="작동 확인"
-                  />
-                </fieldset>
-              </div>
-            </EstimateBorder>
-          )}
-
           {form.refusalReason === "etc" && (
             <div>
               <label className="mb-2 block text-body-md text-ink" htmlFor="refusal-note">
@@ -135,6 +106,15 @@ export function GateSection({
         <InfoNote>
           점검 항목 없이 저장할 수 있습니다 — 재방문 계획은 다음 단계(사후관리)에서 선택하세요
         </InfoNote>
+      )}
+
+      {history.length > 0 && (
+        <section>
+          <h3 className="mb-2 text-title-sm text-ink">이 세대의 지난 방문</h3>
+          <div className="overflow-hidden rounded-md border border-hairline">
+            <RecordTable records={history} columns={HISTORY_COLUMNS} />
+          </div>
+        </section>
       )}
     </FormSection>
   );

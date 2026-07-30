@@ -83,10 +83,9 @@ export const CONSENT_TO_UNIT_STATUS: Record<ConsentStatus, UnitStatus> = {
 };
 
 /** Step 0 — 거부 사유 (refusal_reason_cd) */
-export type RefusalReason = "self-replaced" | "no-need" | "distrust" | "no-time" | "etc";
+export type RefusalReason = "no-need" | "distrust" | "no-time" | "etc";
 
 export const REFUSAL_REASON: Record<RefusalReason, { label: string }> = {
-  "self-replaced": { label: "자체교체(최근 교체했음)" },
   "no-need": { label: "필요 없다" },
   distrust: { label: "외부인 불신" },
   "no-time": { label: "시간 없음" },
@@ -103,7 +102,10 @@ export const RESPONDENT_TYPE: Record<RespondentType, { label: string }> = {
   etc: { label: "기타" },
 };
 
-/** Step 0 — 자가신고 미니폼: 교체 시기 구간 (estimation_flag=추정 고정) */
+/**
+ * 자가신고 교체 시기 구간. 현재 폼에서 쓰지 않는다(거부 사유에서 자체교체를 뺐다).
+ * DB의 self_report_period_cd 컬럼과 CHECK가 살아 있어 코드값 정본으로 남긴다.
+ */
 export type SelfReportPeriod = "within-6m" | "within-1y" | "over-1y" | "unknown";
 
 export const SELF_REPORT_PERIOD: Record<SelfReportPeriod, { label: string }> = {
@@ -146,7 +148,11 @@ export const INSTALLED: Record<Installed, { label: string }> = {
   missing: { label: "미설치" },
 };
 
-/** Step 2 — 연차 구간 (라벨 판독 불가 시 폴백, estimation_flag=추정) */
+/**
+ * 연차 구간. 점검 폼에서는 쓰지 않는다 — 승낙하고 들어간 이상 제조년월을 실측하고,
+ * 라벨을 못 읽으면 추정하는 게 아니라 '표기 없음'으로 교체 대상이 된다.
+ * DB의 age_bands 테이블과 visits.age_band_cd가 살아 있어 코드값 정본으로 남긴다.
+ */
 export type AgeBand = "le-5" | "y5-10" | "y10-15" | "gt-15" | "unknown";
 
 export const AGE_BAND: Record<AgeBand, { label: string; minYears: number | null }> = {

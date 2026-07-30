@@ -1,26 +1,12 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import { CONSENT_STATUS, RX_DONE } from "@/config/domain";
 import { TopBar } from "@/components/layout/top-bar";
 import { DataText } from "@/components/core/data-text";
 import { MonthCalendar } from "@/components/core/month-calendar";
-import { ConditionBadge } from "@/components/inspection/form-controls";
 import { RecordDetailDialog } from "@/components/records/record-detail-dialog";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  formatDay,
-  isAgeEstimated,
-  judgeAlarms,
-  type InspectionFormState,
-} from "@/lib/inspection";
+import { RecordTable } from "@/components/records/record-table";
+import { formatDay } from "@/lib/inspection";
 import {
   RECORD_DAYS,
   recordCountOfMonth,
@@ -31,18 +17,8 @@ import {
 const DEFAULT_MONTH = "202607";
 const DEFAULT_DAY = "20260715";
 
-/** 판정 셀 — 비승낙은 경보기를 물리적으로 못 봐서 판정 자체가 없다 */
-function JudgementCell({ form }: { form: InspectionFormState }) {
-  const code = judgeAlarms(form);
-  if (!code) return <span className="text-subtle">—</span>;
-  return <ConditionBadge code={code} estimated={code === "EXPIRED" && isAgeEstimated(form)} />;
-}
-
-/** 현장 교체 완료 여부 — 비승낙 방문은 교체 자체가 발생하지 않는다 */
-function RxDoneCell({ form }: { form: InspectionFormState }) {
-  if (!form.rxDone) return <span className="text-subtle">—</span>;
-  return <span className="text-body-md text-ink">{RX_DONE[form.rxDone].label}</span>;
-}
+/** 날짜는 패널 헤더에 있어 컬럼에서 뺀다 */
+const LIST_COLUMNS = ["time", "address", "unit", "consent", "condition", "rxDone"] as const;
 
 /** 점검 기록 조회 — 좌 캘린더로 날짜를 고르고 우 표에서 그 날의 기록을 본다 */
 export default function RecordsPage() {
@@ -107,55 +83,11 @@ export default function RecordsPage() {
             {rows.length === 0 ? (
               <p className="py-10 text-center text-body-md text-subtle">점검 기록 없음</p>
             ) : (
-              <Table>
-                <TableHeader className="sticky top-0 z-10 bg-surface">
-                  <TableRow className="border-hairline hover:bg-surface">
-                    {/* 폭은 브라우저의 auto 레이아웃에 맡긴다. 주소만 w-full로 남는 폭을 받고,
-                        셀의 max-w-0과 짝이 되어야 잘린다 */}
-                    <TableHead className="h-11 px-3 text-body-sm text-subtle">시각</TableHead>
-                    <TableHead className="h-11 w-full px-3 text-body-sm text-subtle">주소</TableHead>
-                    <TableHead className="h-11 px-3 text-body-sm text-subtle">세대</TableHead>
-                    <TableHead className="h-11 px-3 text-body-sm text-subtle">승낙</TableHead>
-                    <TableHead className="h-11 px-3 text-body-sm text-subtle">판정</TableHead>
-                    <TableHead className="h-11 px-3 text-body-sm text-subtle">교체 완료</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {rows.map((record) => (
-                    <TableRow
-                      key={record.id}
-                      onClick={() => setViewing(record)}
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setViewing(record);
-                        }
-                      }}
-                      className="h-12 cursor-pointer border-hairline hover:bg-surface-muted"
-                    >
-                      <TableCell className="px-3 text-body-md text-body">
-                        <DataText>{record.time}</DataText>
-                      </TableCell>
-                      <TableCell className="max-w-0 truncate px-3 text-body-md text-ink">
-                        {record.address}
-                      </TableCell>
-                      <TableCell className="px-3 text-body-md text-ink">
-                        {record.unitLabel}
-                      </TableCell>
-                      <TableCell className="px-3 text-body-md text-body">
-                        {record.form.consent ? CONSENT_STATUS[record.form.consent].label : "—"}
-                      </TableCell>
-                      <TableCell className="px-3">
-                        <JudgementCell form={record.form} />
-                      </TableCell>
-                      <TableCell className="px-3">
-                        <RxDoneCell form={record.form} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <RecordTable
+                records={rows}
+                columns={LIST_COLUMNS}
+                onSelect={setViewing}
+              />
             )}
           </div>
         </section>

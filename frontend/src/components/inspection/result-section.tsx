@@ -67,11 +67,6 @@ export function PostSection({
       <fieldset>
         <legend className="mb-2 text-body-md text-ink">
           재방문 필요 여부
-          {form.refusalReason === "self-replaced" && (
-            <span className="ml-1.5 text-caption text-subtle">
-              (자체조치 신고 접수 — 재방문 불필요 기본값)
-            </span>
-          )}
         </legend>
         <ChoiceGroup
           options={REVISIT_PLAN}

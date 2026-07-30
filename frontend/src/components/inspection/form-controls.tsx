@@ -120,16 +120,13 @@ const TONE_CLASS: Record<StatusTone, string> = {
 
 /**
  * 판정 뱃지 — CONDITION_CODE 전용 (StatusTag는 VisitStatus 전용이라 자매 렌더).
- * estimated면 "(추정)" 동반 표기 (색이 아니라 라벨로 구분 — NFR-04).
  * 코드값(OK_GOOD 등)은 내부 표현이라 노출하지 않는다.
  */
 export function ConditionBadge({
   code,
-  estimated = false,
   className,
 }: {
   code: ConditionCode;
-  estimated?: boolean;
   className?: string;
 }) {
   const { label, tone } = CONDITION_CODE[code];
@@ -142,7 +139,6 @@ export function ConditionBadge({
       )}
     >
       {label}
-      {estimated && <span>(추정)</span>}
     </span>
   );
 }

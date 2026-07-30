@@ -12,7 +12,6 @@ import { ConditionBadge, FormSection, InfoNote } from "@/components/inspection/f
 import {
   deriveRxList,
   effectiveReplaceCount,
-  isAgeEstimated,
   judgeAlarms,
   missingItems,
   reasonSummary,
@@ -31,7 +30,6 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 /**
  * 최종 확인 — 제출 직전 누락 점검 + 자동 판정 요약(읽기전용).
- * 판정 우선순위·법적 각주는 폼설계 정본 — 추정 폴백 기반 판정은 "(추정)" 동반 (NFR-04).
  */
 export function ReviewSection({
   form,
@@ -74,8 +72,8 @@ export function ReviewSection({
             <Row label="제조연차">
               {form.mfgYm ? (
                 <DataText>{form.mfgYm.replace("-", ".")}</DataText>
-              ) : form.ageBand ? (
-                <span>구간 추정</span>
+              ) : form.mfgUnmarked ? (
+                <span>표기 없음</span>
               ) : (
                 "—"
               )}
@@ -93,7 +91,7 @@ export function ReviewSection({
             </Row>
             <Row label="경보기 판정">
               {code ? (
-                <ConditionBadge code={code} estimated={code === "EXPIRED" && isAgeEstimated(form)} />
+                <ConditionBadge code={code} />
               ) : (
                 <span className="text-subtle">입력 대기</span>
               )}
