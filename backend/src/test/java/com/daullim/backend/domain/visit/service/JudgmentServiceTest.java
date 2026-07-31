@@ -42,7 +42,7 @@ class JudgmentServiceTest {
   @Test
   @DisplayName("제조 15년째 되는 달에 경과로 넘어간다")
   void expiryBoundary() {
-    VisitSubmission fifteenYearsOld = accepted(3, "2011-07", null, 0, List.of());
+    VisitSubmission fifteenYearsOld = accepted(3, "2011-07", 0, List.of());
 
     assertThat(on("2026-07-15T00:00:00Z").judge(fifteenYearsOld).expired()).isTrue();
     assertThat(on("2026-06-15T00:00:00Z").judge(fifteenYearsOld).expired()).isFalse();
@@ -51,8 +51,7 @@ class JudgmentServiceTest {
   @Test
   @DisplayName("경과면 작동 여부와 무관하게 실 개수만큼 전량 교체가 된다")
   void expiredReplacesEveryRoom() {
-    AlarmJudgment j =
-        on("2026-07-15T00:00:00Z").judge(accepted(3, "2005-01", null, null, List.of()));
+    AlarmJudgment j = on("2026-07-15T00:00:00Z").judge(accepted(3, "2005-01", null, List.of()));
 
     assertThat(j.expired()).isTrue();
     assertThat(j.effectiveReplaceCount()).isEqualTo((short) 3);
@@ -71,35 +70,9 @@ class JudgmentServiceTest {
   }
 
   @Test
-  @DisplayName("연차 구간 '모름'은 경과가 아니다 — 근거 없이 판정하지 않는다")
-  void unknownAgeBandIsNotExpired() {
-    AlarmJudgment j = on("2026-07-15T00:00:00Z").judge(accepted(2, null, "unknown", 0, List.of()));
-
-    assertThat(j.expired()).isFalse();
-    assertThat(j.conditionCode()).isEqualTo("OK_GOOD");
-  }
-
-  @Test
-  @DisplayName("'10~15년' 구간도 하한이 10년이라 경과가 아니다")
-  void tenToFifteenIsNotExpired() {
-    assertThat(
-            on("2026-07-15T00:00:00Z").judge(accepted(2, null, "y10-15", 0, List.of())).expired())
-        .isFalse();
-  }
-
-  @Test
-  @DisplayName("'15년 초과' 구간은 경과다")
-  void gtFifteenIsExpired() {
-    assertThat(
-            on("2026-07-15T00:00:00Z").judge(accepted(2, null, "gt-15", null, List.of())).expired())
-        .isTrue();
-  }
-
-  @Test
   @DisplayName("미래 제조년월은 거부한다")
   void futureManufactureDateIsRejected() {
-    assertThatThrownBy(
-            () -> on("2026-07-15T00:00:00Z").judge(accepted(1, "2027-01", null, 0, List.of())))
+    assertThatThrownBy(() -> on("2026-07-15T00:00:00Z").judge(accepted(1, "2027-01", 0, List.of())))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("미래");
   }
@@ -110,8 +83,7 @@ class JudgmentServiceTest {
   @DisplayName("일체형 방전은 전지 교체가 불가해 기기 교체로 뒤집힌다")
   void sealedBatteryFlipsPrescription() {
     AlarmJudgment j =
-        on("2026-07-15T00:00:00Z")
-            .judge(accepted(2, "2020-01", null, 1, List.of(battery("sealed"))));
+        on("2026-07-15T00:00:00Z").judge(accepted(2, "2020-01", 1, List.of(battery("sealed"))));
 
     assertThat(j.items()).singleElement().extracting(ItemJudgment::rxCode).isEqualTo("RX-IOT");
   }
@@ -121,7 +93,7 @@ class JudgmentServiceTest {
   void replaceableBatteryKeepsPrescription() {
     AlarmJudgment j =
         on("2026-07-15T00:00:00Z")
-            .judge(accepted(2, "2020-01", null, 1, List.of(battery("replaceable"))));
+            .judge(accepted(2, "2020-01", 1, List.of(battery("replaceable"))));
 
     assertThat(j.items()).singleElement().extracting(ItemJudgment::rxCode).isEqualTo("RX-BAT");
   }
@@ -130,8 +102,7 @@ class JudgmentServiceTest {
   @DisplayName("전지 유형 '모름'은 판별 전이라 사유 기준값으로 폴백한다")
   void unknownBatteryFallsBackToReasonPrescription() {
     AlarmJudgment j =
-        on("2026-07-15T00:00:00Z")
-            .judge(accepted(2, "2020-01", null, 1, List.of(battery("unknown"))));
+        on("2026-07-15T00:00:00Z").judge(accepted(2, "2020-01", 1, List.of(battery("unknown"))));
 
     assertThat(j.items()).singleElement().extracting(ItemJudgment::rxCode).isEqualTo("RX-BAT");
   }
@@ -143,7 +114,7 @@ class JudgmentServiceTest {
   void severeFlagMakesItDefective() {
     AlarmJudgment j =
         on("2026-07-15T00:00:00Z")
-            .judge(accepted(2, "2020-01", null, 1, List.of(appearance("cover-damage"))));
+            .judge(accepted(2, "2020-01", 1, List.of(appearance("cover-damage"))));
 
     assertThat(j.conditionCode()).isEqualTo("DEFECTIVE");
   }
@@ -152,8 +123,7 @@ class JudgmentServiceTest {
   @DisplayName("오염만 있으면 교체권고에 그친다")
   void nonSevereFlagIsAdvisoryOnly() {
     AlarmJudgment j =
-        on("2026-07-15T00:00:00Z")
-            .judge(accepted(2, "2020-01", null, 1, List.of(appearance("stain"))));
+        on("2026-07-15T00:00:00Z").judge(accepted(2, "2020-01", 1, List.of(appearance("stain"))));
 
     assertThat(j.conditionCode()).isEqualTo("REPLACE_ADVISED");
   }
@@ -162,8 +132,7 @@ class JudgmentServiceTest {
   @DisplayName("제조년월 미표기는 연차를 논할 자격이 없어 경과가 아니라 불량이다")
   void unmarkedIsDefectiveNotExpired() {
     AlarmJudgment j =
-        on("2026-07-15T00:00:00Z")
-            .judge(accepted(2, "2020-01", null, 1, List.of(reason("unmarked"))));
+        on("2026-07-15T00:00:00Z").judge(accepted(2, "2020-01", 1, List.of(reason("unmarked"))));
 
     assertThat(j.expired()).isFalse();
     assertThat(j.conditionCode()).isEqualTo("DEFECTIVE");
@@ -176,11 +145,7 @@ class JudgmentServiceTest {
         on("2026-07-15T00:00:00Z")
             .judge(
                 accepted(
-                    3,
-                    "2020-01",
-                    null,
-                    2,
-                    List.of(appearance("stain"), appearance("cover-damage"))));
+                    3, "2020-01", 2, List.of(appearance("stain"), appearance("cover-damage"))));
 
     assertThat(j.items())
         .extracting(ItemJudgment::conditionCode)
@@ -191,7 +156,7 @@ class JudgmentServiceTest {
   @Test
   @DisplayName("교체 0건이면 양호다")
   void noReplacementIsGood() {
-    AlarmJudgment j = on("2026-07-15T00:00:00Z").judge(accepted(3, "2022-05", null, 0, List.of()));
+    AlarmJudgment j = on("2026-07-15T00:00:00Z").judge(accepted(3, "2022-05", 0, List.of()));
 
     assertThat(j.conditionCode()).isEqualTo("OK_GOOD");
     assertThat(j.items()).isEmpty();
@@ -261,12 +226,7 @@ class JudgmentServiceTest {
             () ->
                 on("2026-07-15T00:00:00Z")
                     .judge(
-                        accepted(
-                            2,
-                            "2020-01",
-                            null,
-                            1,
-                            List.of(new ReplacementInput(null, null, null)))))
+                        accepted(2, "2020-01", 1, List.of(new ReplacementInput(null, null, null)))))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("replacements[0].replaceReasonCode")
         .extracting(e -> ((BusinessException) e).getErrorCode())
@@ -278,8 +238,7 @@ class JudgmentServiceTest {
   void countMismatchIsValidationError() {
     assertThatThrownBy(
             () ->
-                on("2026-07-15T00:00:00Z")
-                    .judge(accepted(3, "2020-01", null, 2, List.of(reason("etc")))))
+                on("2026-07-15T00:00:00Z").judge(accepted(3, "2020-01", 2, List.of(reason("etc")))))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("교체 개수");
   }
@@ -290,7 +249,7 @@ class JudgmentServiceTest {
     ReplacementInput bad = new ReplacementInput("detached", null, Set.of("stain"));
 
     assertThatThrownBy(
-            () -> on("2026-07-15T00:00:00Z").judge(accepted(2, "2020-01", null, 1, List.of(bad))))
+            () -> on("2026-07-15T00:00:00Z").judge(accepted(2, "2020-01", 1, List.of(bad))))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("detectorFlagCodes");
   }
@@ -301,7 +260,7 @@ class JudgmentServiceTest {
     ReplacementInput bad = new ReplacementInput("detached", "sealed", null);
 
     assertThatThrownBy(
-            () -> on("2026-07-15T00:00:00Z").judge(accepted(2, "2020-01", null, 1, List.of(bad))))
+            () -> on("2026-07-15T00:00:00Z").judge(accepted(2, "2020-01", 1, List.of(bad))))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("batteryTypeCode");
   }
@@ -312,7 +271,7 @@ class JudgmentServiceTest {
     assertThatThrownBy(
             () ->
                 on("2026-07-15T00:00:00Z")
-                    .judge(accepted(2, "2020-01", null, 1, List.of(reason("no-such-reason")))))
+                    .judge(accepted(2, "2020-01", 1, List.of(reason("no-such-reason")))))
         .isInstanceOf(BusinessException.class)
         .extracting(e -> ((BusinessException) e).getErrorCode())
         .isEqualTo(ErrorCode.DOMAIN_CODE_INVALID);
@@ -355,11 +314,7 @@ class JudgmentServiceTest {
   /* ------------------------------ 픽스처 ------------------------------ */
 
   private static VisitSubmission accepted(
-      int roomCount,
-      String mfgYm,
-      String ageBandCode,
-      Integer replaceCount,
-      List<ReplacementInput> items) {
+      int roomCount, String mfgYm, Integer replaceCount, List<ReplacementInput> items) {
     return new VisitSubmission(
         1L,
         1L,
@@ -372,7 +327,7 @@ class JudgmentServiceTest {
         null,
         roomCount,
         mfgYm,
-        ageBandCode,
+        null,
         replaceCount,
         items,
         "installed",

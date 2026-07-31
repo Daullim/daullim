@@ -184,7 +184,7 @@ public class Visit {
     this.ruleVersion = ruleVersion;
   }
 
-  /** 자가신고 2필드는 거부 사유가 self-replaced일 때만 채워진다. */
+  /** 자가신고 2필드는 폼에서 자체교체 사유가 빠져 늘 null */
   public void applyGate(
       String respondentTypeCode,
       String refusalReasonCode,

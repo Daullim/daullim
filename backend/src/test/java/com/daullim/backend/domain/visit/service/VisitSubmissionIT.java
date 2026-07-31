@@ -103,7 +103,7 @@ class VisitSubmissionIT {
   @Test
   @DisplayName("내용연수 경과 방문: 방문·자동 생성 항목·세대 캐시가 한 번에 저장된다")
   void expiredVisitSavesEverything() {
-    VisitSaveResult result = service.submit(accepted(3, null, "gt-15", null, List.of(), "done"));
+    VisitSaveResult result = service.submit(accepted(3, "2005-01", null, List.of(), "done"));
     em.flush();
     em.clear();
 
@@ -116,7 +116,7 @@ class VisitSubmissionIT {
     assertThat(saved.getEffectiveReplaceCount()).isEqualTo((short) 3);
     assertThat(saved.getConditionCode()).isEqualTo("EXPIRED");
     assertThat(saved.getRuleVersion()).isEqualTo("v1");
-    assertThat(saved.getAgeEstimated()).isTrue();
+    assertThat(saved.getAgeEstimated()).isFalse();
 
     assertThat(saved.getReplacementItems()).hasSize(3);
     assertThat(saved.getReplacementItems())
@@ -141,7 +141,6 @@ class VisitSubmissionIT {
             accepted(
                 2,
                 "2020-01",
-                null,
                 1,
                 List.of(new ReplacementInput("appearance", null, Set.of("cover-damage", "stain"))),
                 "advised-only"));
@@ -163,7 +162,7 @@ class VisitSubmissionIT {
   @Test
   @DisplayName("권고만 전달했으면 재산입 기준일을 찍지 않는다")
   void advisoryOnlyLeavesBaselineEmpty() {
-    service.submit(accepted(2, "2020-01", null, 0, List.of(), "advised-only"));
+    service.submit(accepted(2, "2020-01", 0, List.of(), "advised-only"));
     em.flush();
     em.clear();
 
@@ -218,41 +217,10 @@ class VisitSubmissionIT {
   }
 
   @Test
-  @DisplayName("자가교체 신고는 신고 구간만큼 기준일을 소급한다")
-  void selfReplacedBackdatesBaseline() {
-    service.submit(selfReplaced("within-6m"));
-    em.flush();
-    em.clear();
-
-    assertThat(units.findById(unitId).orElseThrow().getRxBaselineDay()).isEqualTo("20260115");
-  }
-
-  @Test
-  @DisplayName("'그 이상'은 알 수 있는 하한인 1년만 소급한다")
-  void overOneYearBackdatesOneYear() {
-    service.submit(selfReplaced("over-1y"));
-    em.flush();
-    em.clear();
-
-    assertThat(units.findById(unitId).orElseThrow().getRxBaselineDay()).isEqualTo("20250715");
-  }
-
-  @Test
-  @DisplayName("'모름'은 소급할 근거가 없어 방문일 그대로다")
-  void unknownPeriodDoesNotBackdate() {
-    service.submit(selfReplaced("unknown"));
-    em.flush();
-    em.clear();
-
-    assertThat(units.findById(unitId).orElseThrow().getRxBaselineDay()).isEqualTo(TODAY);
-  }
-
-  @Test
   @DisplayName("같은 멱등 키로 다시 보내면 새로 저장하지 않고 기존 건을 돌려준다")
   void resubmitWithSameKeyIsReplay() {
     UUID key = UUID.randomUUID();
-    VisitSubmission first =
-        withKey(accepted(2, "2020-01", null, 0, List.of(), "advised-only"), key);
+    VisitSubmission first = withKey(accepted(2, "2020-01", 0, List.of(), "advised-only"), key);
 
     VisitSaveResult saved = service.submit(first);
     em.flush();
@@ -282,7 +250,6 @@ class VisitSubmissionIT {
   private VisitSubmission accepted(
       int roomCount,
       String mfgYm,
-      String ageBandCode,
       Integer replaceCount,
       List<ReplacementInput> items,
       String rxDoneCode) {
@@ -298,39 +265,11 @@ class VisitSubmissionIT {
         null,
         roomCount,
         mfgYm,
-        ageBandCode,
+        null,
         replaceCount,
         items,
         "installed",
         rxDoneCode,
-        "not-needed",
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null);
-  }
-
-  private VisitSubmission selfReplaced(String period) {
-    return new VisitSubmission(
-        unitId,
-        officerId,
-        null,
-        "refused",
-        null,
-        "self-replaced",
-        period,
-        "yes",
-        null,
-        null,
-        null,
-        null,
-        null,
-        List.of(),
-        null,
-        null,
         "not-needed",
         null,
         null,

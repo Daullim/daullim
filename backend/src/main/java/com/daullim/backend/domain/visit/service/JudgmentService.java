@@ -39,7 +39,7 @@ public class JudgmentService {
 
     validateAlarm(s, cb);
 
-    Integer elapsed = elapsedYears(s, cb);
+    Integer elapsed = elapsedYears(s);
     boolean expired = elapsed != null && elapsed >= DetectorPolicy.SERVICE_LIFE_YEARS;
     int effective = expired ? s.roomCount() : s.replaceCount();
 
@@ -79,18 +79,15 @@ public class JudgmentService {
     if (s.roomCount() == null || s.roomCount() < 1) {
       throw invalid("roomCount: 구획된 실 개수는 1 이상이어야 합니다.");
     }
-    if (s.mfgYm() == null && s.ageBandCode() == null) {
-      throw invalid("mfgYm/ageBandCode: 제조년월 실측이나 연차 구간 중 하나는 필요합니다.");
-    }
-    if (s.mfgYm() != null && s.ageBandCode() != null) {
-      throw invalid("mfgYm/ageBandCode: 실측과 추정은 함께 저장할 수 없습니다.");
+    if (s.mfgYm() == null) {
+      throw invalid("mfgYm: 제조년월은 필수입니다.");
     }
     if (s.extinguisherInstalledCode() == null) {
       throw invalid("extinguisherInstalledCode: 소화기 설치 여부는 필수입니다.");
     }
 
     // 경과면 전량 교체로 자동 확정이라 개수·사유를 입력받지 않는다.
-    if (elapsedIsExpired(s, cb)) {
+    if (elapsedIsExpired(s)) {
       return;
     }
     if (s.replaceCount() == null) {
@@ -142,20 +139,13 @@ public class JudgmentService {
 
   /* ------------------------------- 판정 ------------------------------- */
 
-  /** 실측 우선, 없으면 추정 구간의 하한. 둘 다 없거나 '모름'이면 연차를 논할 수 없다. */
-  private Integer elapsedYears(VisitSubmission s, CodeBook cb) {
-    if (s.mfgYm() != null) {
-      return yearsSince(s.mfgYm());
-    }
-    if (s.ageBandCode() != null) {
-      Short min = cb.ageBand(s.ageBandCode()).getMinYears();
-      return min == null ? null : min.intValue();
-    }
-    return null;
+  /** 제조년월 실측이 유일한 근거다 — 승낙하고 들어간 이상 라벨을 읽는다. */
+  private Integer elapsedYears(VisitSubmission s) {
+    return s.mfgYm() == null ? null : yearsSince(s.mfgYm());
   }
 
-  private boolean elapsedIsExpired(VisitSubmission s, CodeBook cb) {
-    Integer years = elapsedYears(s, cb);
+  private boolean elapsedIsExpired(VisitSubmission s) {
+    Integer years = elapsedYears(s);
     return years != null && years >= DetectorPolicy.SERVICE_LIFE_YEARS;
   }
 

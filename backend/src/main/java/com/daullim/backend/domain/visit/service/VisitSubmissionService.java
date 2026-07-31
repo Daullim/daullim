@@ -19,9 +19,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * 점검 1건 저장 — 방문·교체 항목·외관 플래그·세대 캐시를 한 트랜잭션에서 처리.
- */
+/** 점검 1건 저장 — 방문·교체 항목·외관 플래그·세대 캐시를 한 트랜잭션에서 처리. */
 @Service
 public class VisitSubmissionService {
 
@@ -80,7 +78,7 @@ public class VisitSubmissionService {
     visits.save(visit);
 
     unit.recordVisit(cb.consentStatus(s.consentCode()).getUnitStatusCode(), visitedDay);
-    rxBaselineDay(s, visitedDay, rxDone).ifPresent(unit::markRxBaseline);
+    rxBaselineDay(visitedDay, rxDone).ifPresent(unit::markRxBaseline);
 
     return new VisitSaveResult(visit.getId(), visitedDay, false);
   }
@@ -155,30 +153,9 @@ public class VisitSubmissionService {
     return visit;
   }
 
-  /**
-   * 재산입 기준일 — 여기서 15년이 지나면 세대가 다시 큐로 온다.
-   */
-  private Optional<String> rxBaselineDay(VisitSubmission s, String visitedDay, String rxDone) {
-    if ("done".equals(rxDone)) {
-      return Optional.of(visitedDay);
-    }
-    if ("self-replaced".equals(s.refusalReasonCode())) {
-      return Optional.of(backdated(visitedDay, s.selfReportPeriodCode()));
-    }
-    return Optional.empty();
-  }
-
-  /** 자가신고는 주민 진술만큼 소급한다. 다만 '모름'은 소급할 근거가 없으므로 지어내지 않는다. */
-  private String backdated(String visitedDay, String selfReportPeriodCode) {
-    LocalDate day = LocalDate.parse(visitedDay, DAY);
-    LocalDate baseline =
-        switch (selfReportPeriodCode == null ? "" : selfReportPeriodCode) {
-          case "within-6m" -> day.minusMonths(6);
-          // 'over-1y'는 정확한 시점을 모르므로 알 수 있는 하한인 1년만 소급한다.
-          case "within-1y", "over-1y" -> day.minusYears(1);
-          default -> day;
-        };
-    return baseline.format(DAY);
+  /** 재산입 기준일 — 여기서 15년이 지나면 세대가 다시 큐로 온다. */
+  private Optional<String> rxBaselineDay(String visitedDay, String rxDone) {
+    return "done".equals(rxDone) ? Optional.of(visitedDay) : Optional.empty();
   }
 
   private static BusinessException notFound(String message) {

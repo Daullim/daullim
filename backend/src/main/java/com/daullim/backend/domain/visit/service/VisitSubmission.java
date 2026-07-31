@@ -46,7 +46,6 @@ public record VisitSubmission(
   /** 게이트 하위 필드를 상위 선택에 맞춰 지운다. */
   public VisitSubmission normalized() {
     boolean refused = "refused".equals(consentCode);
-    boolean selfReplaced = refused && "self-replaced".equals(refusalReasonCode);
 
     return new VisitSubmission(
         unitId,
@@ -55,8 +54,9 @@ public record VisitSubmission(
         consentCode,
         respondentTypeCode,
         refused ? refusalReasonCode : null,
-        selfReplaced ? selfReportPeriodCode : null,
-        selfReplaced ? selfReportTestedCode : null,
+        // selfReplaced(자가신고) 삭제하였으므로 null로 비움
+        null,
+        null,
         refused ? refusalNote : null,
         roomCount,
         mfgYm,

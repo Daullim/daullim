@@ -130,24 +130,6 @@ class CoreEntityIT {
   }
 
   @Test
-  @DisplayName("추정 연차면 is_age_estimated가 true로 되읽힌다")
-  void estimatedAgeIsFlagged() {
-    Visit visit = new Visit(unit, officer, "20260729", Instant.now(), "accepted", true, "v1");
-    visit.applyGate("tenant", null, null, null, null);
-    visit.applyAlarmJudgment((short) 2, null, "gt-15", null, true, (short) 2, "EXPIRED");
-    visit.applyPostCare("missing", "advised-only", "revisit", null);
-
-    visits.save(visit);
-    em.flush();
-    em.clear();
-
-    Visit found = visits.findById(visit.getId()).orElseThrow();
-    assertThat(found.getAgeEstimated()).isTrue();
-    assertThat(found.getExpired()).isTrue();
-    assertThat(found.getEffectiveReplaceCount()).isEqualTo(found.getRoomCount());
-  }
-
-  @Test
   @DisplayName("교체 항목과 외관 플래그가 방문 저장 한 번에 캐스케이드된다")
   void itemsAndFlagsCascade() {
     Visit visit = new Visit(unit, officer, "20260729", Instant.now(), "accepted", true, "v1");
@@ -179,7 +161,7 @@ class CoreEntityIT {
   @DisplayName("비승낙 방문은 경보기 필드 전량 null로 저장된다")
   void notInspectedVisitKeepsAlarmFieldsNull() {
     Visit visit = new Visit(unit, officer, "20260729", Instant.now(), "refused", false, "v1");
-    visit.applyGate(null, "self-replaced", "within-6m", "yes", "작년에 직접 교체했다고 함");
+    visit.applyGate(null, "no-need", null, null, "필요 없다고 함");
     visit.applyPostCare(null, null, "not-needed", null);
 
     visits.save(visit);
@@ -193,7 +175,6 @@ class CoreEntityIT {
     assertThat(found.getExpired()).isNull();
     assertThat(found.getConditionCode()).isNull();
     assertThat(found.getAgeEstimated()).isFalse();
-    assertThat(found.getSelfReportPeriodCode()).isEqualTo("within-6m");
   }
 
   @Test
