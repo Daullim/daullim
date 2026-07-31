@@ -218,6 +218,38 @@ class JudgmentServiceTest {
   }
 
   @Test
+  @DisplayName("재방문 필요 여부가 비면 승낙·비승낙 가리지 않고 입력 오류다")
+  void revisitPlanIsRequired() {
+    assertThatThrownBy(() -> on("2026-07-15T00:00:00Z").judge(withRevisit(gate("vacant"), null)))
+        .hasMessageContaining("revisitPlanCode");
+  }
+
+  @Test
+  @DisplayName("경과인데 교체도 재방문도 없으면 사유가 있어야 한다")
+  void expiredWithoutActionRequiresReason() {
+    VisitSubmission dropped =
+        withPostCare(accepted(2, "2005-01", null, List.of()), "advised-only", "not-needed", null);
+    assertThatThrownBy(() -> on("2026-07-15T00:00:00Z").judge(dropped))
+        .hasMessageContaining("noRevisitNote");
+
+    VisitSubmission justified =
+        withPostCare(
+            accepted(2, "2005-01", null, List.of()),
+            "advised-only",
+            "not-needed",
+            "소유자가 자비로 교체 예정");
+    assertThat(on("2026-07-15T00:00:00Z").judge(justified).conditionCode()).isEqualTo("EXPIRED");
+  }
+
+  @Test
+  @DisplayName("경과라도 현장에서 교체를 끝냈으면 사유를 묻지 않는다")
+  void expiredWithReplacementNeedsNoReason() {
+    VisitSubmission done =
+        withPostCare(accepted(2, "2005-01", null, List.of()), "done", "not-needed", null);
+    assertThat(on("2026-07-15T00:00:00Z").judge(done).expired()).isTrue();
+  }
+
+  @Test
   @DisplayName("승낙으로 바꿔 놓고 거부 사유가 남아 오면 조용히 지운다")
   void staleGateFieldsAreNormalizedAway() {
     VisitSubmission stale =
@@ -236,6 +268,7 @@ class JudgmentServiceTest {
             List.of(),
             "installed",
             null,
+            "not-needed",
             null,
             null,
             null,
@@ -330,6 +363,7 @@ class JudgmentServiceTest {
             List.of(),
             "installed",
             null,
+            "not-needed",
             null,
             null,
             null,
@@ -371,6 +405,8 @@ class JudgmentServiceTest {
         items,
         "installed",
         null,
+        // 재방문 필요는 ③ 규칙을 건드리지 않는다 — 판정만 보는 픽스처의 중립값
+        "revisit",
         null,
         null,
         null,
@@ -398,6 +434,7 @@ class JudgmentServiceTest {
         List.of(),
         null,
         null,
+        "not-needed",
         null,
         null,
         null,
@@ -406,6 +443,38 @@ class JudgmentServiceTest {
         null,
         null,
         null);
+  }
+
+  private static VisitSubmission withRevisit(VisitSubmission s, String revisitPlanCode) {
+    return withPostCare(s, s.rxDoneCode(), revisitPlanCode, s.noRevisitNote());
+  }
+
+  private static VisitSubmission withPostCare(
+      VisitSubmission s, String rxDoneCode, String revisitPlanCode, String noRevisitNote) {
+    return new VisitSubmission(
+        s.unitId(),
+        s.officerId(),
+        s.clientVisitId(),
+        s.consentCode(),
+        s.respondentTypeCode(),
+        s.refusalReasonCode(),
+        s.refusalNote(),
+        s.roomCount(),
+        s.mfgYm(),
+        s.mfgUnmarked(),
+        s.replaceCount(),
+        s.replacements(),
+        s.extinguisherInstalledCode(),
+        rxDoneCode,
+        revisitPlanCode,
+        noRevisitNote,
+        s.note(),
+        s.routeOrder(),
+        s.dispatchedScore(),
+        s.dispatchedOrderKey(),
+        s.scoreVersion(),
+        s.gpsLat(),
+        s.gpsLng());
   }
 
   private static ReplacementInput reason(String code) {

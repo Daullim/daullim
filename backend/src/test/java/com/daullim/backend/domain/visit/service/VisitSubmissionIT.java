@@ -188,7 +188,7 @@ class VisitSubmissionIT {
   }
 
   @Test
-  @DisplayName("비승낙 방문은 경보기·소화기 필드가 전량 비고, 세대가 거부로 간다")
+  @DisplayName("비승낙 방문은 경보기·소화기가 전량 비고, 재방문이 필요하면 세대가 큐에 남는다")
   void notInspectedVisitLeavesAlarmFieldsNull() {
     VisitSubmission vacant =
         new VisitSubmission(
@@ -208,6 +208,7 @@ class VisitSubmissionIT {
             "installed",
             "done",
             "revisit",
+            null,
             "부재",
             null,
             null,
@@ -225,10 +226,82 @@ class VisitSubmissionIT {
     assertThat(saved.getExtinguisherInstalledCode()).isNull();
     assertThat(saved.getRxDoneCode()).isNull();
     assertThat(saved.getConditionCode()).isNull();
+    // 점검을 못 한 방문의 rxDone='done'은 버려지므로 재방문 판단을 뒤집지 못한다
     assertThat(saved.getRevisitPlanCode()).isEqualTo("revisit");
 
     Unit unit = units.findById(unitId).orElseThrow();
-    assertThat(unit.getStatusCode()).isEqualTo("refused");
+    assertThat(unit.getStatusCode()).isEqualTo("pending");
+    assertThat(unit.getRxBaselineDay()).isNull();
+  }
+
+  @Test
+  @DisplayName("비승낙이라도 재방문이 필요 없으면 세대가 거부로 내려간다")
+  void notInspectedWithoutRevisitLeavesQueue() {
+    service.submit(
+        new VisitSubmission(
+            unitId,
+            officerId,
+            null,
+            "vacant",
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            null,
+            List.of(),
+            null,
+            null,
+            "not-needed",
+            null,
+            "장기 공가",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null));
+    em.flush();
+    em.clear();
+
+    assertThat(units.findById(unitId).orElseThrow().getStatusCode()).isEqualTo("refused");
+  }
+
+  @Test
+  @DisplayName("승낙 + 현장 교체 완료면 재방문 여부를 물어도 불필요로 고정된다")
+  void rxDoneForcesNoRevisit() {
+    VisitSaveResult result =
+        service.submit(accepted(2, "2020-01", false, 0, List.of(), "done", "revisit", null));
+    em.flush();
+    em.clear();
+
+    assertThat(visits.findById(result.visitId()).orElseThrow().getRevisitPlanCode())
+        .isEqualTo("not-needed");
+    Unit unit = units.findById(unitId).orElseThrow();
+    assertThat(unit.getStatusCode()).isEqualTo("done");
+    assertThat(unit.getRxBaselineDay()).isEqualTo(TODAY);
+  }
+
+  @Test
+  @DisplayName("경과 세대를 교체·재방문 없이 종료하려면 사유가 있어야 하고, 있으면 큐에서 빠진다")
+  void expiredWithoutActionNeedsReason() {
+    assertThatThrownBy(
+            () ->
+                service.submit(
+                    accepted(
+                        2, "2005-01", false, null, List.of(), "advised-only", "not-needed", null)))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("noRevisitNote");
+
+    service.submit(
+        accepted(
+            2, "2005-01", false, null, List.of(), "advised-only", "not-needed", "소유자가 자비로 교체 예정"));
+    em.flush();
+    em.clear();
+
+    Unit unit = units.findById(unitId).orElseThrow();
+    assertThat(unit.getStatusCode()).isEqualTo("done");
     assertThat(unit.getRxBaselineDay()).isNull();
   }
 
@@ -253,8 +326,29 @@ class VisitSubmissionIT {
   void unknownUnitIsNotFound() {
     VisitSubmission orphan =
         new VisitSubmission(
-            -1L, officerId, null, "vacant", null, null, null, null, null, false, null, List.of(),
-            null, null, null, null, null, null, null, null, null, null);
+            -1L,
+            officerId,
+            null,
+            "vacant",
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            null,
+            List.of(),
+            null,
+            null,
+            "not-needed",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null);
 
     assertThatThrownBy(() -> service.submit(orphan))
         .isInstanceOf(BusinessException.class)
@@ -279,6 +373,19 @@ class VisitSubmissionIT {
       Integer replaceCount,
       List<ReplacementInput> items,
       String rxDoneCode) {
+    return accepted(
+        roomCount, mfgYm, mfgUnmarked, replaceCount, items, rxDoneCode, "not-needed", null);
+  }
+
+  private VisitSubmission accepted(
+      int roomCount,
+      String mfgYm,
+      boolean mfgUnmarked,
+      Integer replaceCount,
+      List<ReplacementInput> items,
+      String rxDoneCode,
+      String revisitPlanCode,
+      String noRevisitNote) {
     return new VisitSubmission(
         unitId,
         officerId,
@@ -294,7 +401,8 @@ class VisitSubmissionIT {
         items,
         "installed",
         rxDoneCode,
-        "not-needed",
+        revisitPlanCode,
+        noRevisitNote,
         null,
         null,
         null,
@@ -321,6 +429,7 @@ class VisitSubmissionIT {
         s.extinguisherInstalledCode(),
         s.rxDoneCode(),
         s.revisitPlanCode(),
+        s.noRevisitNote(),
         s.note(),
         s.routeOrder(),
         s.dispatchedScore(),

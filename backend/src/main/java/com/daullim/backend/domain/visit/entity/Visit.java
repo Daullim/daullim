@@ -114,8 +114,12 @@ public class Visit {
   @Column(name = "rx_done_cd", length = 20)
   private String rxDoneCode;
 
-  @Column(name = "revisit_plan_cd", length = 20)
+  @Column(name = "revisit_plan_cd", length = 20, nullable = false)
   private String revisitPlanCode;
+
+  /** 경과 세대를 큐에서 뺀 판단의 책임 소재 (ck_v_norev). */
+  @Column(name = "no_revisit_note")
+  private String noRevisitNote;
 
   @Column(name = "note")
   private String note;
@@ -198,10 +202,15 @@ public class Visit {
   }
 
   public void applyPostCare(
-      String extinguisherInstalledCode, String rxDoneCode, String revisitPlanCode, String note) {
+      String extinguisherInstalledCode,
+      String rxDoneCode,
+      String revisitPlanCode,
+      String noRevisitNote,
+      String note) {
     this.extinguisherInstalledCode = extinguisherInstalledCode;
     this.rxDoneCode = rxDoneCode;
     this.revisitPlanCode = revisitPlanCode;
+    this.noRevisitNote = noRevisitNote;
     this.note = note;
   }
 
@@ -338,6 +347,10 @@ public class Visit {
 
   public String getRevisitPlanCode() {
     return revisitPlanCode;
+  }
+
+  public String getNoRevisitNote() {
+    return noRevisitNote;
   }
 
   public String getNote() {

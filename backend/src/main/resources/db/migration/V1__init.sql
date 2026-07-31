@@ -177,7 +177,9 @@ CREATE TABLE visits (
     effective_replace_count   smallint,
     extinguisher_installed_cd varchar(20),
     rx_done_cd                varchar(20),
-    revisit_plan_cd           varchar(20),
+    revisit_plan_cd           varchar(20)  NOT NULL,
+    -- 경과 세대를 큐에서 빼는 판단의 책임 소재. ck_v_norev가 그 경우에만 강제한다.
+    no_revisit_note           text,
     note                      text,
     condition_code_cd         varchar(20)  REFERENCES condition_codes,
     rule_version              varchar(20)  NOT NULL DEFAULT 'v1',
@@ -192,8 +194,8 @@ CREATE TABLE visits (
     CONSTRAINT ck_v_resp CHECK (respondent_type_cd IS NULL OR respondent_type_cd IN ('owner','tenant','family','etc')),
     CONSTRAINT ck_v_refu CHECK (refusal_reason_cd IS NULL OR refusal_reason_cd IN ('no-need','distrust','no-time','etc')),
     CONSTRAINT ck_v_ext  CHECK (extinguisher_installed_cd IS NULL OR extinguisher_installed_cd IN ('installed','missing')),
-    CONSTRAINT ck_v_rxd  CHECK (rx_done_cd IS NULL OR rx_done_cd IN ('done','advised-only','owner-refused')),
-    CONSTRAINT ck_v_rev  CHECK (revisit_plan_cd IS NULL OR revisit_plan_cd IN ('not-needed','revisit')),
+    CONSTRAINT ck_v_rxd  CHECK (rx_done_cd IS NULL OR rx_done_cd IN ('done','advised-only')),
+    CONSTRAINT ck_v_rev  CHECK (revisit_plan_cd IN ('not-needed','revisit')),
     -- ① 미발생(N/A) vs NULL
     CONSTRAINT ck_v_na CHECK (is_inspected OR (
         room_count IS NULL AND mfg_ym IS NULL AND NOT mfg_unmarked
@@ -212,7 +214,15 @@ CREATE TABLE visits (
     CONSTRAINT ck_v_rpc CHECK (replace_count IS NULL OR replace_count BETWEEN 0 AND room_count),
     CONSTRAINT ck_v_erc CHECK (effective_replace_count IS NULL OR effective_replace_count BETWEEN 0 AND room_count),
     CONSTRAINT ck_v_exp CHECK (is_expired IS NOT TRUE OR effective_replace_count = room_count),
-    -- ⑤ 게이트 분기
+    -- ⑤ 사후관리 분기
+    -- 현장에서 교체를 끝냈으면 다시 갈 이유가 없다.
+    CONSTRAINT ck_v_rxrev CHECK (rx_done_cd IS DISTINCT FROM 'done' OR revisit_plan_cd = 'not-needed'),
+    -- 경과인데 교체도 재방문도 없다면 사유를 남겨야 큐에서 뺄 수 있다.
+    CONSTRAINT ck_v_norev CHECK (is_expired IS NOT TRUE
+        OR revisit_plan_cd <> 'not-needed'
+        OR rx_done_cd IS NOT DISTINCT FROM 'done'
+        OR no_revisit_note IS NOT NULL),
+    -- ⑥ 게이트 분기
     CONSTRAINT ck_v_gate1 CHECK (consent_cd = 'refused' OR refusal_reason_cd IS NULL),
     CONSTRAINT ck_v_gate2 CHECK (consent_cd <> 'refused' OR refusal_reason_cd IS NOT NULL)
 );

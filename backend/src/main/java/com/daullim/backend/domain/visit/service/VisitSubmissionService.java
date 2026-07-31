@@ -25,6 +25,9 @@ public class VisitSubmissionService {
 
   private static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
 
+  /** 큐에 올라와 있는 세대 상태. unit_statuses의 시작 상태와 같은 값이다. */
+  private static final String QUEUED_STATUS = "pending";
+
   private final JudgmentService judgment;
   private final CodeBookProvider codeBooks;
   private final VisitRepository visits;
@@ -73,11 +76,13 @@ public class VisitSubmissionService {
     String visitedDay = LocalDate.now(clock).format(DAY);
     // 점검을 못 한 방문에 현장 교체가 있을 수 없다.
     String rxDone = j.inspected() ? s.rxDoneCode() : null;
+    // 현장에서 교체를 끝냈으면 다시 갈 이유가 없다 (ck_v_rxrev).
+    String revisitPlan = "done".equals(rxDone) ? "not-needed" : s.revisitPlanCode();
 
-    Visit visit = assemble(s, j, unit, officer, visitedDay, rxDone);
+    Visit visit = assemble(s, j, unit, officer, visitedDay, rxDone, revisitPlan);
     visits.save(visit);
 
-    unit.recordVisit(cb.consentStatus(s.consentCode()).getUnitStatusCode(), visitedDay);
+    unit.recordVisit(unitStatus(s, revisitPlan, cb), visitedDay);
     rxBaselineDay(visitedDay, rxDone).ifPresent(unit::markRxBaseline);
 
     return new VisitSaveResult(visit.getId(), visitedDay, false);
@@ -95,7 +100,8 @@ public class VisitSubmissionService {
       Unit unit,
       User officer,
       String visitedDay,
-      String rxDone) {
+      String rxDone,
+      String revisitPlan) {
     Visit visit =
         new Visit(
             unit,
@@ -121,7 +127,8 @@ public class VisitSubmissionService {
     visit.applyPostCare(
         j.inspected() ? s.extinguisherInstalledCode() : null,
         rxDone,
-        s.revisitPlanCode(),
+        revisitPlan,
+        s.noRevisitNote(),
         s.note());
 
     visit.applyDispatchSnapshot(
@@ -146,6 +153,19 @@ public class VisitSubmissionService {
       visit.addReplacementItem(row);
     }
     return visit;
+  }
+
+  /**
+   * 세대가 다음에 어떤 상태로 남는가.
+   *
+   * <p>기본 전이는 lookup(consent_statuses.unit_status_cd)이 정한다. 재방문이 필요하다고 기록한 방문만 그 결과를 덮어 세대를 큐에 붙잡아
+   * 둔다 — 승낙·거부·공가·연락두절 어느 쪽이든 같다.
+   */
+  private String unitStatus(VisitSubmission s, String revisitPlan, CodeBook cb) {
+    if ("revisit".equals(revisitPlan)) {
+      return QUEUED_STATUS;
+    }
+    return cb.consentStatus(s.consentCode()).getUnitStatusCode();
   }
 
   /** 재산입 기준일 — 여기서 15년이 지나면 세대가 다시 큐로 온다. */

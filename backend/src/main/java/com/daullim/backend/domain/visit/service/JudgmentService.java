@@ -40,6 +40,7 @@ public class JudgmentService {
     validateAlarm(s, cb);
 
     String auto = autoReason(s);
+    validatePostCare(s, "expired".equals(auto));
     int effective = auto != null ? s.roomCount() : s.replaceCount();
 
     List<ItemJudgment> items = auto != null ? autoItems(auto, effective, cb) : judgedItems(s, cb);
@@ -69,6 +70,26 @@ public class JudgmentService {
     if ("refused".equals(s.consentCode()) && s.refusalReasonCode() == null) {
       throw invalid("refusalReasonCode: 거부 사유는 필수입니다.");
     }
+    // 세대가 큐에 남는지를 이 값 하나가 정한다 — 비승낙 방문에도 필수다.
+    if (s.revisitPlanCode() == null) {
+      throw invalid("revisitPlanCode: 재방문 필요 여부는 필수입니다.");
+    }
+  }
+
+  /** 경과 세대를 큐에서 빼려면 근거를 남겨야 한다 (ck_v_norev). */
+  private void validatePostCare(VisitSubmission s, boolean expired) {
+    boolean droppedFromQueue =
+        expired
+            && "not-needed".equals(s.revisitPlanCode())
+            && !"done".equals(s.rxDoneCode())
+            && isBlank(s.noRevisitNote());
+    if (droppedFromQueue) {
+      throw invalid("noRevisitNote: 내용연수 경과 세대를 교체·재방문 없이 종료하려면 사유가 필요합니다.");
+    }
+  }
+
+  private static boolean isBlank(String value) {
+    return value == null || value.isBlank();
   }
 
   private void validateAlarm(VisitSubmission s, CodeBook cb) {

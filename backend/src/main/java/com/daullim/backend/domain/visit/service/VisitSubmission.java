@@ -27,6 +27,7 @@ public record VisitSubmission(
     String extinguisherInstalledCode,
     String rxDoneCode,
     String revisitPlanCode,
+    String noRevisitNote,
     String note,
 
     // 배차 스냅샷
@@ -62,6 +63,7 @@ public record VisitSubmission(
         extinguisherInstalledCode,
         rxDoneCode,
         revisitPlanCode,
+        "not-needed".equals(revisitPlanCode) ? noRevisitNote : null,
         note,
         routeOrder,
         dispatchedScore,
