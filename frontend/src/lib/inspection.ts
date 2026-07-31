@@ -49,7 +49,6 @@ export interface InspectionFormState {
   unitLabel: string;
   /** 제조년월 라벨 실측 ("YYYY-MM") — 일괄 설치 가정으로 세대 공통 1회 */
   mfgYm: string | null;
-  /** 라벨 판독 불가 폴백 — 추정 */
   /** 라벨 마모·도색으로 제조년월을 읽을 수 없음 — 연식을 보증할 수 없으니 전량 교체 대상 */
   mfgUnmarked: boolean;
   /** 교체 필요 개수 (0 = 전부 정상). 내용연수 경과 시엔 roomCount로 자동 확정 */
@@ -133,8 +132,7 @@ export function inspectionReducer(
       return { ...state, roomCount: n, replaceCount };
     }
     case "SET_MFG_YM":
-      // 실측이 들어오면 추정 폴백은 버린다 (둘이 공존하면 판정 근거가 모호해진다)
-      // 실측이 들어오면 미표기는 성립하지 않는다
+      // 실측이 들어오면 미표기는 성립하지 않는다 (둘이 공존하면 판정 근거가 모호해진다)
       return { ...state, mfgYm: action.value, mfgUnmarked: action.value ? false : state.mfgUnmarked };
     case "SET_MFG_UNMARKED":
       return { ...state, mfgUnmarked: action.value, mfgYm: action.value ? null : state.mfgYm };

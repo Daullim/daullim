@@ -148,7 +148,7 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
     address: "관악구 은천로 39길 12",
     unitLabel: "2층 201호",
     inspectorName: "이영선",
-    /* 라벨 판독 불가 + 15년 초과 → 전량 교체, 판정에 (추정) 동반 */
+    /* 실측 제조년월이 15년 초과 → 개수 입력 없이 전량 교체 */
     form: form("2층 201호", {
       consent: "accepted",
       respondent: "owner",

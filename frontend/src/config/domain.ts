@@ -102,28 +102,6 @@ export const RESPONDENT_TYPE: Record<RespondentType, { label: string }> = {
   etc: { label: "기타" },
 };
 
-/**
- * 자가신고 교체 시기 구간. 현재 폼에서 쓰지 않는다(거부 사유에서 자체교체를 뺐다).
- * DB의 self_report_period_cd 컬럼과 CHECK가 살아 있어 코드값 정본으로 남긴다.
- */
-export type SelfReportPeriod = "within-6m" | "within-1y" | "over-1y" | "unknown";
-
-export const SELF_REPORT_PERIOD: Record<SelfReportPeriod, { label: string }> = {
-  "within-6m": { label: "6개월 이내" },
-  "within-1y": { label: "1년 이내" },
-  "over-1y": { label: "그 이상" },
-  unknown: { label: "모름" },
-};
-
-/** 예/아니오/모름 3답 (자가신고 작동확인 등) */
-export type TriAnswer = "yes" | "no" | "unknown";
-
-export const TRI_ANSWER: Record<TriAnswer, { label: string }> = {
-  yes: { label: "예" },
-  no: { label: "아니오" },
-  unknown: { label: "모름" },
-};
-
 /** Step 1 — 주택 유형 (house_type, 소방시설법 제8조 대상 5분류) + 소유구조 파생 */
 export type HouseType = "detached" | "multi-user" | "multi-family" | "row-house" | "multi-unit";
 
@@ -146,21 +124,6 @@ export type Installed = "installed" | "missing";
 export const INSTALLED: Record<Installed, { label: string }> = {
   installed: { label: "설치됨" },
   missing: { label: "미설치" },
-};
-
-/**
- * 연차 구간. 점검 폼에서는 쓰지 않는다 — 승낙하고 들어간 이상 제조년월을 실측하고,
- * 라벨을 못 읽으면 추정하는 게 아니라 '표기 없음'으로 교체 대상이 된다.
- * DB의 age_bands 테이블과 visits.age_band_cd가 살아 있어 코드값 정본으로 남긴다.
- */
-export type AgeBand = "le-5" | "y5-10" | "y10-15" | "gt-15" | "unknown";
-
-export const AGE_BAND: Record<AgeBand, { label: string; minYears: number | null }> = {
-  "le-5": { label: "5년 이하", minYears: 0 },
-  "y5-10": { label: "5~10년", minYears: 5 },
-  "y10-15": { label: "10~15년", minYears: 10 },
-  "gt-15": { label: "15년 초과", minYears: 15 },
-  unknown: { label: "모름", minYears: null },
 };
 
 /**
