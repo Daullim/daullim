@@ -99,7 +99,7 @@ export function PostSection({
             rows={2}
             value={form.noRevisitNote}
             onChange={(e) => dispatch({ type: "SET_NO_REVISIT_NOTE", value: e.target.value })}
-            placeholder="내용연수가 지난 세대를 교체·재방문 없이 종료하는 이유"
+            placeholder="전량 교체 대상 세대를 교체·재방문 없이 종료하는 이유"
             className="w-full rounded-sm border border-status-caution bg-surface px-3 py-2 text-body-md text-ink placeholder:text-subtle"
           />
         </div>

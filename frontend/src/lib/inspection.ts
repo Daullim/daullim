@@ -249,11 +249,15 @@ export function isExpired(state: InspectionFormState): boolean {
 }
 
 /**
- * 경과 세대를 교체도 재방문도 없이 종료하는 경우 — 큐에서 영영 빠지므로 사유를 받는다.
- * BE의 ck_v_norev와 같은 조건이다.
+ * 전량 교체 대상(경과·미표기) 세대를 교체도 재방문도 없이 종료하는 경우 —
+ * 사유를 받는다. BE의 ck_v_norev와 같은 조건.
  */
 export function needsNoRevisitNote(state: InspectionFormState): boolean {
-  return isExpired(state) && state.revisit === "not-needed" && state.rxDone !== "done";
+  return (
+    autoReplaceReason(state) !== null &&
+    state.revisit === "not-needed" &&
+    state.rxDone !== "done"
+  );
 }
 
 /**
