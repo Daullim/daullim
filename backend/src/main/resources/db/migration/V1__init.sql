@@ -217,8 +217,8 @@ CREATE TABLE visits (
     -- ⑤ 사후관리 분기
     -- 현장에서 교체를 끝냈으면 다시 갈 이유가 없다.
     CONSTRAINT ck_v_rxrev CHECK (rx_done_cd IS DISTINCT FROM 'done' OR revisit_plan_cd = 'not-needed'),
-    -- 경과인데 교체도 재방문도 없다면 사유를 남겨야 큐에서 뺄 수 있다.
-    CONSTRAINT ck_v_norev CHECK (is_expired IS NOT TRUE
+    -- 전량 교체 대상(경과·미표기)인데 교체도 재방문도 없다면 사유를 남겨야 큐에서 뺄 수 있다.
+    CONSTRAINT ck_v_norev CHECK ((is_expired IS NOT TRUE AND NOT mfg_unmarked)
         OR revisit_plan_cd <> 'not-needed'
         OR rx_done_cd IS NOT DISTINCT FROM 'done'
         OR no_revisit_note IS NOT NULL),

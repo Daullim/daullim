@@ -178,13 +178,87 @@ class VisitSubmissionIT {
   }
 
   @Test
-  @DisplayName("권고만 전달했으면 재산입 기준일을 찍지 않는다")
-  void advisoryOnlyLeavesBaselineEmpty() {
+  @DisplayName("교체가 없었으면 기준일이 방문일이 아니라 제조년월로 찍힌다")
+  void noReplacementKeepsManufacturedClock() {
     service.submit(accepted(2, "2020-01", 0, List.of(), "advised-only"));
     em.flush();
     em.clear();
 
+    // 권고만 받고 끝난 세대도 남은 기간 뒤에는 제 발로 큐에 돌아와야 한다
+    assertThat(units.findById(unitId).orElseThrow().getRxBaselineDay()).isEqualTo("20200101");
+  }
+
+  @Test
+  @DisplayName("미표기 세대도 사유 없이는 종료할 수 없고, 사유가 있으면 기준일 없이 큐에서 빠진다")
+  void unmarkedWithoutActionNeedsReason() {
+    assertThatThrownBy(
+            () ->
+                service.submit(
+                    accepted(2, null, true, null, List.of(), "advised-only", "not-needed", null)))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("noRevisitNote");
+
+    service.submit(
+        accepted(2, null, true, null, List.of(), "advised-only", "not-needed", "다음 분기 일괄 교체 대상"));
+    em.flush();
+    em.clear();
+
+    Unit unit = units.findById(unitId).orElseThrow();
+    assertThat(unit.getStatusCode()).isEqualTo("done");
+    assertThat(unit.getRxBaselineDay()).isNull();
+  }
+
+  @Test
+  @DisplayName("경과 세대를 사유와 함께 종료하면 예전 기준일까지 지워 다시 올라오지 않는다")
+  void expiredWithReasonClearsStaleBaseline() {
+    Unit unit = units.findById(unitId).orElseThrow();
+    unit.markRxBaseline("20050101");
+    em.flush();
+
+    service.submit(
+        accepted(
+            2, "2005-01", false, null, List.of(), "advised-only", "not-needed", "소유자가 자비로 교체 예정"));
+    em.flush();
+    em.clear();
+
     assertThat(units.findById(unitId).orElseThrow().getRxBaselineDay()).isNull();
+  }
+
+  @Test
+  @DisplayName("점검을 못 한 방문은 기존 기준일을 건드리지 않는다")
+  void notInspectedVisitKeepsBaseline() {
+    units.findById(unitId).orElseThrow().markRxBaseline("20200101");
+    em.flush();
+
+    service.submit(
+        new VisitSubmission(
+            unitId,
+            officerId,
+            null,
+            "vacant",
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            null,
+            List.of(),
+            null,
+            null,
+            "not-needed",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null));
+    em.flush();
+    em.clear();
+
+    assertThat(units.findById(unitId).orElseThrow().getRxBaselineDay()).isEqualTo("20200101");
   }
 
   @Test

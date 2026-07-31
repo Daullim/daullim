@@ -242,6 +242,23 @@ class JudgmentServiceTest {
   }
 
   @Test
+  @DisplayName("미표기도 교체·재방문 없이 끝내려면 사유가 필요.")
+  void unmarkedWithoutActionRequiresReason() {
+    VisitSubmission dropped =
+        withPostCare(accepted(2, null, true, null, List.of()), "advised-only", "not-needed", null);
+    assertThatThrownBy(() -> on("2026-07-15T00:00:00Z").judge(dropped))
+        .hasMessageContaining("noRevisitNote");
+
+    VisitSubmission justified =
+        withPostCare(
+            accepted(2, null, true, null, List.of()),
+            "advised-only",
+            "not-needed",
+            "다음 분기 일괄 교체 대상");
+    assertThat(on("2026-07-15T00:00:00Z").judge(justified).conditionCode()).isEqualTo("DEFECTIVE");
+  }
+
+  @Test
   @DisplayName("경과라도 현장에서 교체를 끝냈으면 사유를 묻지 않는다")
   void expiredWithReplacementNeedsNoReason() {
     VisitSubmission done =

@@ -83,7 +83,9 @@ public class VisitSubmissionService {
     visits.save(visit);
 
     unit.recordVisit(unitStatus(s, revisitPlan, cb), visitedDay);
-    rxBaselineDay(visitedDay, rxDone).ifPresent(unit::markRxBaseline);
+    if (j.inspected()) {
+      unit.markRxBaseline(rxBaselineDay(j, visitedDay, rxDone).orElse(null));
+    }
 
     return new VisitSaveResult(visit.getId(), visitedDay, false);
   }
@@ -168,9 +170,27 @@ public class VisitSubmissionService {
     return cb.consentStatus(s.consentCode()).getUnitStatusCode();
   }
 
-  /** 재산입 기준일 — 여기서 15년이 지나면 세대가 다시 큐로 온다. */
-  private Optional<String> rxBaselineDay(String visitedDay, String rxDone) {
-    return "done".equals(rxDone) ? Optional.of(visitedDay) : Optional.empty();
+  /**
+   * 재산입 기준일 — 여기서 15년이 지나면 세대가 다시 큐로 온다.
+   *
+   * <p>교체를 했으면 새 기기의 시계가 방문일에 시작한다. 교체가 없었으면 기존 기기의 시계를 그대로 쓴다(제조년월 기준) — 그래야 권고만 받고 끝난 세대도 남은 기간
+   * 뒤에 제 발로 돌아온다.
+   *
+   * <p>이미 경과한 세대는 비운다. 사유까지 받아 큐에서 뺀 판단을 다음 스캔이 하루 만에 뒤집으면 안 되므로, 예전 방문이 남긴 지난 기준일까지 지워야 한다.
+   */
+  private Optional<String> rxBaselineDay(AlarmJudgment j, String visitedDay, String rxDone) {
+    if ("done".equals(rxDone)) {
+      return Optional.of(visitedDay);
+    }
+    if (Boolean.TRUE.equals(j.expired()) || j.mfgYm() == null) {
+      return Optional.empty();
+    }
+    return Optional.of(manufacturedDay(j.mfgYm()));
+  }
+
+  /** "YYYY-MM" → "YYYYMM01". 라벨에 일자가 없으므로 그 달의 시작으로 둔다. */
+  private static String manufacturedDay(String mfgYm) {
+    return mfgYm.replace("-", "") + "01";
   }
 
   private static BusinessException notFound(String message) {

@@ -40,7 +40,7 @@ public class JudgmentService {
     validateAlarm(s, cb);
 
     String auto = autoReason(s);
-    validatePostCare(s, "expired".equals(auto));
+    validatePostCare(s, auto != null);
     int effective = auto != null ? s.roomCount() : s.replaceCount();
 
     List<ItemJudgment> items = auto != null ? autoItems(auto, effective, cb) : judgedItems(s, cb);
@@ -76,15 +76,15 @@ public class JudgmentService {
     }
   }
 
-  /** 경과 세대를 큐에서 빼려면 근거를 남겨야 한다 (ck_v_norev). */
-  private void validatePostCare(VisitSubmission s, boolean expired) {
+  /** 전량 교체 대상 세대를 큐에서 빼려면 근거를 남겨야 한다. */
+  private void validatePostCare(VisitSubmission s, boolean replaceAllConfirmed) {
     boolean droppedFromQueue =
-        expired
+        replaceAllConfirmed
             && "not-needed".equals(s.revisitPlanCode())
             && !"done".equals(s.rxDoneCode())
             && isBlank(s.noRevisitNote());
     if (droppedFromQueue) {
-      throw invalid("noRevisitNote: 내용연수 경과 세대를 교체·재방문 없이 종료하려면 사유가 필요합니다.");
+      throw invalid("noRevisitNote: 전량 교체 대상 세대를 교체·재방문 없이 종료하려면 사유가 필요합니다.");
     }
   }
 
