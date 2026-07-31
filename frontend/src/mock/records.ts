@@ -34,6 +34,7 @@ const BLANK: InspectionFormState = {
   extinguisherInstalled: null,
   rxDone: null,
   revisit: null,
+  noRevisitNote: "",
   note: "",
 };
 
@@ -299,7 +300,7 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
       roomCount: 3,
       mfgYm: "2009-04",
       extinguisherInstalled: "installed",
-      rxDone: "owner-refused",
+      rxDone: "advised-only",
       revisit: "revisit",
       note: "소유자 부재, 관리인 응대 — 교체 결정 보류",
     }),

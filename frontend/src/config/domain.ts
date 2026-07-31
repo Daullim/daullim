@@ -186,19 +186,16 @@ export const CONDITION_CODE: Record<ConditionCode, { label: string; tone: Status
 };
 
 /** Step 4 — 현장 교체 완료 여부 (rx_done) */
-export type RxDone = "done" | "advised-only" | "owner-refused";
+export type RxDone = "done" | "advised-only";
 
 export const RX_DONE: Record<RxDone, { label: string }> = {
   done: { label: "완료" },
   "advised-only": { label: "미완료(권고만 전달)" },
-  "owner-refused": { label: "소유자 거부" },
 };
 
 /**
- * Step 4 — 재방문 필요 여부 (visit_result). 2택만.
- * 사유는 consent_status·refusal_reason_cd에서 자동 상속(대원 재입력 없음),
- * 채널(우편안내·기관경유·직접재방문) 결정은 현장이 아니라 재방문 큐(행정 레이어)가
- * 사유 기반 자동 제안 — "기록(현장) vs 결정(back-office)" 역할 분리.
+ * Step 4 — 재방문 필요 여부 (visit_result). 2택만, 필수 입력.
+ * 세대가 큐에 남는지를 이 값 하나가 정한다 — '필요'면 승낙·거부·공가 어느 쪽이든 큐에 남는다.
  */
 export type RevisitPlan = "not-needed" | "revisit";
 

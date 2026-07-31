@@ -59,7 +59,10 @@ export interface InspectionFormState {
   extinguisherInstalled: Installed | null;
   // Step 3 — 사후관리
   rxDone: RxDone | null;
+  /** 필수 — 세대가 큐에 남는지를 이 값이 정한다. 현장 교체 완료 시엔 '불필요'로 고정된다 */
   revisit: RevisitPlan | null;
+  /** 경과 세대를 교체·재방문 없이 종료할 때의 사유 — 큐에서 빼는 판단의 책임 소재 */
+  noRevisitNote: string;
   note: string;
 }
 
@@ -83,6 +86,7 @@ export function createInitialState(
     extinguisherInstalled: null,
     rxDone: null,
     revisit: null,
+    noRevisitNote: "",
     note: "",
   };
 }
@@ -102,6 +106,7 @@ export type InspectionAction =
   | { type: "SET_EXTINGUISHER_INSTALLED"; value: Installed }
   | { type: "SET_RX_DONE"; value: RxDone }
   | { type: "SET_REVISIT"; value: RevisitPlan }
+  | { type: "SET_NO_REVISIT_NOTE"; value: string }
   | { type: "SET_NOTE"; value: string };
 
 export function inspectionReducer(
@@ -184,9 +189,19 @@ export function inspectionReducer(
     case "SET_EXTINGUISHER_INSTALLED":
       return { ...state, extinguisherInstalled: action.value };
     case "SET_RX_DONE":
-      return { ...state, rxDone: action.value };
+      // 현장에서 교체를 끝냈으면 다시 갈 이유가 없다 — 재방문 여부를 고정한다
+      return action.value === "done"
+        ? { ...state, rxDone: action.value, revisit: "not-needed", noRevisitNote: "" }
+        : { ...state, rxDone: action.value };
     case "SET_REVISIT":
-      return { ...state, revisit: action.value };
+      // 재방문이 필요하면 큐에 남으므로 '빼는 사유'가 성립하지 않는다
+      return {
+        ...state,
+        revisit: action.value,
+        noRevisitNote: action.value === "revisit" ? "" : state.noRevisitNote,
+      };
+    case "SET_NO_REVISIT_NOTE":
+      return { ...state, noRevisitNote: action.value };
     case "SET_NOTE":
       return { ...state, note: action.value };
   }
@@ -231,6 +246,14 @@ export function formatDay(day: string | null | undefined): string | null {
 export function isExpired(state: InspectionFormState): boolean {
   if (!state.mfgYm) return false;
   return yearsSince(state.mfgYm) >= SERVICE_LIFE_YEARS.detector;
+}
+
+/**
+ * 경과 세대를 교체도 재방문도 없이 종료하는 경우 — 큐에서 영영 빠지므로 사유를 받는다.
+ * BE의 ck_v_norev와 같은 조건이다.
+ */
+export function needsNoRevisitNote(state: InspectionFormState): boolean {
+  return isExpired(state) && state.revisit === "not-needed" && state.rxDone !== "done";
 }
 
 /**
@@ -372,7 +395,8 @@ export function canAdvance(state: InspectionFormState, step: StepId): boolean {
     case "extinguisher":
       return state.extinguisherInstalled !== null;
     case "post":
-      return true; // 사후관리는 전 항목 선택 입력
+      if (state.revisit === null) return false;
+      return !needsNoRevisitNote(state) || state.noRevisitNote.trim().length > 0;
     case "review":
       return canSubmit(state);
   }

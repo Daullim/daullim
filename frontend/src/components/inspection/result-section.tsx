@@ -1,8 +1,13 @@
 import type * as React from "react";
 import { CONSENT_STATUS, REVISIT_PLAN, RX, RX_DONE } from "@/config/domain";
 import { DataText } from "@/components/core/data-text";
-import { ChoiceGroup, FormSection, InfoNote } from "@/components/inspection/form-controls";
-import { deriveRxList, type InspectionAction, type InspectionFormState } from "@/lib/inspection";
+import { ChoiceGroup, FormSection } from "@/components/inspection/form-controls";
+import {
+  deriveRxList,
+  needsNoRevisitNote,
+  type InspectionAction,
+  type InspectionFormState,
+} from "@/lib/inspection";
 
 /**
  * 사후관리 및 이행 조치.
@@ -17,6 +22,9 @@ export function PostSection({
 }) {
   const accepted = form.consent === "accepted";
   const rxList = deriveRxList(form);
+  // 현장에서 교체를 끝냈으면 재방문 여부를 물을 것도 없다
+  const revisitLocked = form.rxDone === "done";
+  const needsReason = needsNoRevisitNote(form);
 
   return (
     <FormSection>
@@ -49,7 +57,7 @@ export function PostSection({
               options={RX_DONE}
               value={form.rxDone}
               onChange={(v) => dispatch({ type: "SET_RX_DONE", value: v })}
-              columns={3}
+              columns={2}
               ariaPrefix="교체 완료 여부"
             />
           </fieldset>
@@ -65,21 +73,37 @@ export function PostSection({
       </div>
 
       <fieldset>
-        <legend className="mb-2 text-body-md text-ink">
-          재방문 필요 여부
-        </legend>
-        <ChoiceGroup
-          options={REVISIT_PLAN}
-          value={form.revisit}
-          onChange={(v) => dispatch({ type: "SET_REVISIT", value: v })}
-          columns={2}
-          ariaPrefix="재방문 필요 여부"
-        />
-        <InfoNote className="mt-2">
-          재방문 사유는 방문 결과에서 자동 기록됩니다. 채널(우편·기관 경유·직접 재방문)은 재방문
-          큐에서 사유 기반으로 자동 제안됩니다.
-        </InfoNote>
+        <legend className="mb-2 text-body-md text-ink">재방문 필요 여부</legend>
+        {revisitLocked ? (
+          <p className="rounded-sm bg-surface-muted px-3 py-2 text-body-md text-body">
+            {REVISIT_PLAN["not-needed"].label} — 현장 교체를 완료해 자동 확정
+          </p>
+        ) : (
+          <ChoiceGroup
+            options={REVISIT_PLAN}
+            value={form.revisit}
+            onChange={(v) => dispatch({ type: "SET_REVISIT", value: v })}
+            columns={2}
+            ariaPrefix="재방문 필요 여부"
+          />
+        )}
       </fieldset>
+
+      {needsReason && (
+        <div>
+          <label htmlFor="insp-no-revisit" className="mb-2 block text-body-md text-ink">
+            재방문하지 않는 사유
+          </label>
+          <textarea
+            id="insp-no-revisit"
+            rows={2}
+            value={form.noRevisitNote}
+            onChange={(e) => dispatch({ type: "SET_NO_REVISIT_NOTE", value: e.target.value })}
+            placeholder="내용연수가 지난 세대를 교체·재방문 없이 종료하는 이유"
+            className="w-full rounded-sm border border-status-caution bg-surface px-3 py-2 text-body-md text-ink placeholder:text-subtle"
+          />
+        </div>
+      )}
 
       <div>
         <label htmlFor="insp-note" className="mb-2 block text-body-md text-ink">

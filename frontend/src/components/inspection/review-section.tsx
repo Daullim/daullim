@@ -14,6 +14,7 @@ import {
   effectiveReplaceCount,
   judgeAlarms,
   missingItems,
+  needsNoRevisitNote,
   reasonSummary,
   type InspectionFormState,
 } from "@/lib/inspection";
@@ -45,6 +46,7 @@ export function ReviewSection({
   const rxList = deriveRxList(form);
   const count = effectiveReplaceCount(form);
   const reasons = reasonSummary(form);
+  const needsReason = needsNoRevisitNote(form);
 
   return (
     <FormSection>
@@ -121,6 +123,11 @@ export function ReviewSection({
         <Row label="재방문">
           {form.revisit ? REVISIT_PLAN[form.revisit].label : <span className="text-subtle">미선택</span>}
         </Row>
+        {needsReason && (
+          <Row label="재방문하지 않는 사유">
+            {form.noRevisitNote || <span className="text-subtle">미입력</span>}
+          </Row>
+        )}
       </ul>
 
       {/* 법적 위험도 고정 각주 — 작성 화면의 필수 상설 문구. 저장된 기록 조회에는 띄우지 않는다 */}
