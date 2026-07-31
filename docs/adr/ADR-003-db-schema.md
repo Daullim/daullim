@@ -11,6 +11,11 @@
 > seed 적재는 라운드 물리 교체가 아니라 **월 1회 전량 UPSERT**다(units·visits FK 보존 전제).
 > PostgreSQL·Flyway·pipeline 적재·buildings BE 읽기전용·GeoJSON DB 미적재·PostGIS 불요는 **유지**.
 > §5 상태 모델 보류도 **유지**(ADR-012는 `visit_status` 컬럼을 채택하지 않았다).
+>
+> ⚠️ **[ADR-013](ADR-013-judgment-queue.md)(2026-07-31)이 §5의 절반을 확정한다.**
+> 진행상태 축(`units.status_cd`)은 확정 — 기본 전이는 `consent_statuses` lookup, 재방문이 필요하면
+> `pending`으로 덮어 큐에 남긴다. NEED_REVISIT은 별도 상태가 아니라 **`revisit_plan_cd` + `pending`**의 조합이다.
+> **방문결과 축(`visits.consent_cd`)의 화면 표시 모델만 계속 보류**한다.
 
 ## 맥락
 - BE = Spring Boot + Java (ADR-002). 핵심 데모 M-12 = 회신이 DB에 쌓여 관제에 반영되는 피드백 루프 — 재배포·재시작에도 데이터 생존 필요.
