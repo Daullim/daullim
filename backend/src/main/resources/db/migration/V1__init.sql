@@ -24,12 +24,6 @@ CREATE TABLE condition_codes (
     label         varchar(30) NOT NULL,
     severity_rank smallint    NOT NULL UNIQUE
 );
-CREATE TABLE age_bands (
-    age_band_cd varchar(10) PRIMARY KEY,
-    label       varchar(30) NOT NULL,
-    min_years   smallint,
-    sort_order  smallint    NOT NULL DEFAULT 0
-);
 CREATE TABLE unit_statuses (
     unit_status_cd varchar(20) PRIMARY KEY,
     label       varchar(20) NOT NULL,
@@ -55,9 +49,6 @@ INSERT INTO detector_flags VALUES
   ('false-alarm','비화재보(오작동) 이력',false,3), ('condensation','결로·이물질 흔적',false,4);
 INSERT INTO condition_codes VALUES
   ('OK_GOOD','양호',0), ('REPLACE_ADVISED','교체권고',1), ('EXPIRED','내용연수경과',2), ('DEFECTIVE','불량',3);
-INSERT INTO age_bands VALUES
-  ('le-5','5년 이하',0,1), ('y5-10','5~10년',5,2), ('y10-15','10~15년',10,3),
-  ('gt-15','15년 초과',15,4), ('unknown','모름',NULL,5);
 INSERT INTO unit_statuses VALUES ('pending','대기',false,1), ('refused','거부',false,2), ('done','완료',true,3);
 INSERT INTO consent_statuses VALUES
   ('accepted','승낙',true,'done',1), ('refused','거부',false,'refused',2),
@@ -176,19 +167,19 @@ CREATE TABLE visits (
     is_inspected              boolean      NOT NULL,
     respondent_type_cd        varchar(20),
     refusal_reason_cd         varchar(20),
-    self_report_period_cd     varchar(20),
-    self_report_tested_cd     varchar(10),
     refusal_note              text,
     room_count                smallint,
     mfg_ym                    char(7),
-    age_band_cd               varchar(10)  REFERENCES age_bands,
-    is_age_estimated          boolean GENERATED ALWAYS AS (mfg_ym IS NULL AND age_band_cd IS NOT NULL) STORED,
+    -- 라벨 마모·도색으로 제조년월을 읽을 수 없음. 연식을 보증할 수 없어 전량 교체 대상이 된다.
+    mfg_unmarked              boolean      NOT NULL DEFAULT false,
     replace_count             smallint,
     is_expired                boolean,
     effective_replace_count   smallint,
     extinguisher_installed_cd varchar(20),
     rx_done_cd                varchar(20),
-    revisit_plan_cd           varchar(20),
+    revisit_plan_cd           varchar(20)  NOT NULL,
+    -- 경과 세대를 큐에서 빼는 판단의 책임 소재. ck_v_norev가 그 경우에만 강제한다.
+    no_revisit_note           text,
     note                      text,
     condition_code_cd         varchar(20)  REFERENCES condition_codes,
     rule_version              varchar(20)  NOT NULL DEFAULT 'v1',
@@ -201,36 +192,39 @@ CREATE TABLE visits (
     CONSTRAINT ck_v_day  CHECK (visited_day ~ '^\d{8}$'),
     CONSTRAINT ck_v_mfg  CHECK (mfg_ym IS NULL OR mfg_ym ~ '^\d{4}-(0[1-9]|1[0-2])$'),
     CONSTRAINT ck_v_resp CHECK (respondent_type_cd IS NULL OR respondent_type_cd IN ('owner','tenant','family','etc')),
-    CONSTRAINT ck_v_refu CHECK (refusal_reason_cd IS NULL OR refusal_reason_cd IN ('self-replaced','no-need','distrust','no-time','etc')),
-    CONSTRAINT ck_v_srp  CHECK (self_report_period_cd IS NULL OR self_report_period_cd IN ('within-6m','within-1y','over-1y','unknown')),
-    CONSTRAINT ck_v_srt  CHECK (self_report_tested_cd IS NULL OR self_report_tested_cd IN ('yes','no','unknown')),
+    CONSTRAINT ck_v_refu CHECK (refusal_reason_cd IS NULL OR refusal_reason_cd IN ('no-need','distrust','no-time','etc')),
     CONSTRAINT ck_v_ext  CHECK (extinguisher_installed_cd IS NULL OR extinguisher_installed_cd IN ('installed','missing')),
-    CONSTRAINT ck_v_rxd  CHECK (rx_done_cd IS NULL OR rx_done_cd IN ('done','advised-only','owner-refused')),
-    CONSTRAINT ck_v_rev  CHECK (revisit_plan_cd IS NULL OR revisit_plan_cd IN ('not-needed','revisit')),
+    CONSTRAINT ck_v_rxd  CHECK (rx_done_cd IS NULL OR rx_done_cd IN ('done','advised-only')),
+    CONSTRAINT ck_v_rev  CHECK (revisit_plan_cd IN ('not-needed','revisit')),
     -- ① 미발생(N/A) vs NULL
     CONSTRAINT ck_v_na CHECK (is_inspected OR (
-        room_count IS NULL AND mfg_ym IS NULL AND age_band_cd IS NULL
+        room_count IS NULL AND mfg_ym IS NULL AND NOT mfg_unmarked
         AND replace_count IS NULL AND is_expired IS NULL
         AND effective_replace_count IS NULL
         AND extinguisher_installed_cd IS NULL AND condition_code_cd IS NULL)),
     -- ② 승낙 시 필수값
     CONSTRAINT ck_v_done CHECK (NOT is_inspected OR (
-        room_count IS NOT NULL AND (mfg_ym IS NOT NULL OR age_band_cd IS NOT NULL)
+        room_count IS NOT NULL AND (mfg_ym IS NOT NULL OR mfg_unmarked)
         AND effective_replace_count IS NOT NULL
         AND extinguisher_installed_cd IS NOT NULL AND respondent_type_cd IS NOT NULL)),
-    -- ③ 실측·추정 공존 금지
-    CONSTRAINT ck_v_age_excl CHECK (mfg_ym IS NULL OR age_band_cd IS NULL),
+    -- ③ 실측·미표기 공존 금지
+    CONSTRAINT ck_v_mfg_excl CHECK (mfg_ym IS NULL OR NOT mfg_unmarked),
     -- ④ 수량
     CONSTRAINT ck_v_rc  CHECK (room_count IS NULL OR room_count > 0),
     CONSTRAINT ck_v_rpc CHECK (replace_count IS NULL OR replace_count BETWEEN 0 AND room_count),
     CONSTRAINT ck_v_erc CHECK (effective_replace_count IS NULL OR effective_replace_count BETWEEN 0 AND room_count),
     CONSTRAINT ck_v_exp CHECK (is_expired IS NOT TRUE OR effective_replace_count = room_count),
-    -- ⑤ 게이트 분기
-    CONSTRAINT ck_v_gate1 CHECK (consent_cd = 'refused' OR (refusal_reason_cd IS NULL
-        AND self_report_period_cd IS NULL AND self_report_tested_cd IS NULL)),
-    CONSTRAINT ck_v_gate2 CHECK (consent_cd <> 'refused' OR refusal_reason_cd IS NOT NULL),
-    CONSTRAINT ck_v_gate3 CHECK (refusal_reason_cd = 'self-replaced'
-        OR (self_report_period_cd IS NULL AND self_report_tested_cd IS NULL))
+    -- ⑤ 사후관리 분기
+    -- 현장에서 교체를 끝냈으면 다시 갈 이유가 없다.
+    CONSTRAINT ck_v_rxrev CHECK (rx_done_cd IS DISTINCT FROM 'done' OR revisit_plan_cd = 'not-needed'),
+    -- 전량 교체 대상(경과·미표기)인데 교체도 재방문도 없다면 사유를 남겨야 큐에서 뺄 수 있다.
+    CONSTRAINT ck_v_norev CHECK ((is_expired IS NOT TRUE AND NOT mfg_unmarked)
+        OR revisit_plan_cd <> 'not-needed'
+        OR rx_done_cd IS NOT DISTINCT FROM 'done'
+        OR no_revisit_note IS NOT NULL),
+    -- ⑥ 게이트 분기
+    CONSTRAINT ck_v_gate1 CHECK (consent_cd = 'refused' OR refusal_reason_cd IS NULL),
+    CONSTRAINT ck_v_gate2 CHECK (consent_cd <> 'refused' OR refusal_reason_cd IS NOT NULL)
 );
 CREATE INDEX ix_visits_unit_recent   ON visits (unit_id, visited_at DESC)       WHERE deleted_at IS NULL;
 CREATE INDEX ix_visits_officer_day   ON visits (officer_id, visited_day)        WHERE deleted_at IS NULL;
@@ -253,7 +247,8 @@ CREATE TABLE replacement_items (
     CONSTRAINT ck_ri_seq     CHECK (item_seq > 0),
     CONSTRAINT ck_ri_battery CHECK ((replace_reason_cd = 'battery-dead') = (battery_type_cd IS NOT NULL)),
     CONSTRAINT ck_ri_rx      CHECK (rx_code_cd IS NULL OR rx_code_cd IN ('RX-BAT','RX-IOT')),
-    CONSTRAINT ck_ri_auto    CHECK (is_auto_generated = false OR replace_reason_cd = 'expired')
+    -- 자동 생성은 전량 교체가 확정되는 두 사유뿐이다 (경과=연식 소진, 미표기=연식 미보증)
+    CONSTRAINT ck_ri_auto    CHECK (is_auto_generated = false OR replace_reason_cd IN ('expired','unmarked'))
 );
 CREATE INDEX ix_ri_visit  ON replacement_items (visit_id);
 CREATE INDEX ix_ri_rx     ON replacement_items (rx_code_cd);

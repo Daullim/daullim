@@ -24,17 +24,17 @@ const BLANK: InspectionFormState = {
   consent: null,
   respondent: null,
   refusalReason: null,
-  selfReport: { period: null, tested: null },
   refusalNote: "",
   roomCount: null,
   unitLabel: "",
   mfgYm: null,
-  ageBand: null,
+  mfgUnmarked: false,
   replaceCount: null,
   replacements: [],
   extinguisherInstalled: null,
   rxDone: null,
   revisit: null,
+  noRevisitNote: "",
   note: "",
 };
 
@@ -51,9 +51,9 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
     time: "10:20",
     buildingRank: 3,
     address: "관악구 성현로 8",
-    unitLabel: "101호",
+    unitLabel: "1층 101호",
     inspectorName: "이영선",
-    form: form("101호", {
+    form: form("1층 101호", {
       consent: "accepted",
       respondent: "owner",
       roomCount: 3,
@@ -70,9 +70,9 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
     time: "10:45",
     buildingRank: 3,
     address: "관악구 성현로 8",
-    unitLabel: "102호",
+    unitLabel: "1층 102호",
     inspectorName: "이영선",
-    form: form("102호", {
+    form: form("1층 102호", {
       consent: "unreachable",
       revisit: "revisit",
       note: "주간 부재 추정 — 야간 재방문 필요",
@@ -107,9 +107,9 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
     time: "09:40",
     buildingRank: 1,
     address: "관악구 은천로 39길 12",
-    unitLabel: "101호",
+    unitLabel: "1층 101호",
     inspectorName: "이영선",
-    form: form("101호", {
+    form: form("1층 101호", {
       consent: "accepted",
       respondent: "owner",
       roomCount: 3,
@@ -126,10 +126,10 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
     time: "10:15",
     buildingRank: 1,
     address: "관악구 은천로 39길 12",
-    unitLabel: "102호",
+    unitLabel: "1층 102호",
     inspectorName: "이영선",
     /* 일체형 방전 — 전지 교체가 불가해 처방이 RX-IOT로 뒤집히는 케이스 */
-    form: form("102호", {
+    form: form("1층 102호", {
       consent: "accepted",
       respondent: "family",
       roomCount: 2,
@@ -147,18 +147,18 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
     time: "09:30",
     buildingRank: 1,
     address: "관악구 은천로 39길 12",
-    unitLabel: "201호",
+    unitLabel: "2층 201호",
     inspectorName: "이영선",
-    /* 라벨 판독 불가 + 15년 초과 → 전량 교체, 판정에 (추정) 동반 */
-    form: form("201호", {
+    /* 실측 제조년월이 15년 초과 → 개수 입력 없이 전량 교체 */
+    form: form("2층 201호", {
       consent: "accepted",
       respondent: "owner",
       roomCount: 3,
-      ageBand: "gt-15",
+      mfgYm: "2009-04",
       extinguisherInstalled: "installed",
       rxDone: "done",
       revisit: "not-needed",
-      note: "제조년월 라벨 마모로 판독 불가 — 구간 추정 적용",
+      note: "라벨 확인 — 2009년 4월 제조, 내용연수 경과",
     }),
   },
   {
@@ -167,13 +167,12 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
     time: "10:05",
     buildingRank: 1,
     address: "관악구 은천로 39길 12",
-    unitLabel: "202호",
+    unitLabel: "2층 202호",
     inspectorName: "이영선",
-    form: form("202호", {
+    form: form("2층 202호", {
       consent: "refused",
-      refusalReason: "self-replaced",
-      selfReport: { period: "within-6m", tested: "yes" },
-      revisit: "not-needed",
+      refusalReason: "no-need",
+      revisit: "revisit",
     }),
   },
   {
@@ -182,9 +181,9 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
     time: "10:20",
     buildingRank: 1,
     address: "관악구 은천로 39길 12",
-    unitLabel: "203호",
+    unitLabel: "2층 203호",
     inspectorName: "이영선",
-    form: form("203호", {
+    form: form("2층 203호", {
       consent: "vacant",
       revisit: "revisit",
     }),
@@ -195,10 +194,10 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
     time: "13:50",
     buildingRank: 1,
     address: "관악구 은천로 39길 12",
-    unitLabel: "301호",
+    unitLabel: "3층 301호",
     inspectorName: "이영선",
     /* 커버 파손은 중대결함 → 외관이상이어도 DEFECTIVE */
-    form: form("301호", {
+    form: form("3층 301호", {
       consent: "accepted",
       respondent: "owner",
       roomCount: 4,
@@ -259,13 +258,13 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
     time: "09:55",
     buildingRank: 3,
     address: "관악구 성현로 8",
-    unitLabel: "201호",
+    unitLabel: "2층 201호",
     inspectorName: "이영선",
-    form: form("201호", {
+    form: form("2층 201호", {
       consent: "accepted",
       respondent: "owner",
       roomCount: 3,
-      ageBand: "y10-15",
+      mfgYm: "2013-05",
       replaceCount: 1,
       replacements: [{ reason: "appearance", batteryType: null, flags: ["stain"] }],
       extinguisherInstalled: "missing",
@@ -279,9 +278,9 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
     time: "10:30",
     buildingRank: 3,
     address: "관악구 성현로 8",
-    unitLabel: "202호",
+    unitLabel: "2층 202호",
     inspectorName: "이영선",
-    form: form("202호", {
+    form: form("2층 202호", {
       consent: "refused",
       refusalReason: "no-time",
       revisit: "revisit",
@@ -299,9 +298,9 @@ export const INSPECTION_RECORDS: InspectionRecord[] = [
       consent: "accepted",
       respondent: "etc",
       roomCount: 3,
-      ageBand: "gt-15",
+      mfgYm: "2009-04",
       extinguisherInstalled: "installed",
-      rxDone: "owner-refused",
+      rxDone: "advised-only",
       revisit: "revisit",
       note: "소유자 부재, 관리인 응대 — 교체 결정 보류",
     }),
@@ -323,4 +322,11 @@ export function recordsOf(day: string | null): InspectionRecord[] {
 /** YYYYMM에 속한 기록 수 — 툴바 요약 */
 export function recordCountOfMonth(month: string): number {
   return INSPECTION_RECORDS.filter((r) => r.day.startsWith(month)).length;
+}
+
+/** 한 세대의 지난 방문 이력 — 최신순. 점검 폼이 게이트 단계에서 보여준다. */
+export function recordsOfUnit(buildingRank: number, unitLabel: string): InspectionRecord[] {
+  return INSPECTION_RECORDS.filter(
+    (r) => r.buildingRank === buildingRank && r.unitLabel === unitLabel,
+  ).sort((a, b) => (b.day + b.time).localeCompare(a.day + a.time));
 }

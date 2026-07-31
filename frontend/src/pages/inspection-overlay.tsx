@@ -26,6 +26,7 @@ import {
 } from "@/lib/inspection";
 import type { ConsentStatus } from "@/config/domain";
 import type { HouseholdItem } from "@/mock/sample";
+import { recordsOfUnit } from "@/mock/records";
 
 /**
  * 풀스크린 오버라이드 — base DialogContent의 중앙 카드 클래스를 twMerge로 소거.
@@ -89,6 +90,7 @@ function InspectionForm({
     createInitialState(item, unitLabel),
   );
   const sectionProps = { form, dispatch };
+  const history = recordsOfUnit(item.rank, form.unitLabel);
 
   /* 단계 배열은 승낙 여부에 따라 5개 ↔ 3개로 바뀐다 → 인덱스만 들고 나머지는 파생 */
   const [stepIndex, setStepIndex] = useState(0);
@@ -150,7 +152,7 @@ function InspectionForm({
           <h2 className="text-display text-ink">{STEP_LABEL[step]}</h2>
         </div>
 
-        {step === "gate" && <GateSection {...sectionProps} />}
+        {step === "gate" && <GateSection {...sectionProps} history={history} />}
         {step === "alarm" && <AlarmSection {...sectionProps} />}
         {step === "extinguisher" && <ExtinguisherSection {...sectionProps} />}
         {step === "post" && <PostSection {...sectionProps} />}

@@ -83,10 +83,9 @@ export const CONSENT_TO_UNIT_STATUS: Record<ConsentStatus, UnitStatus> = {
 };
 
 /** Step 0 — 거부 사유 (refusal_reason_cd) */
-export type RefusalReason = "self-replaced" | "no-need" | "distrust" | "no-time" | "etc";
+export type RefusalReason = "no-need" | "distrust" | "no-time" | "etc";
 
 export const REFUSAL_REASON: Record<RefusalReason, { label: string }> = {
-  "self-replaced": { label: "자체교체(최근 교체했음)" },
   "no-need": { label: "필요 없다" },
   distrust: { label: "외부인 불신" },
   "no-time": { label: "시간 없음" },
@@ -101,25 +100,6 @@ export const RESPONDENT_TYPE: Record<RespondentType, { label: string }> = {
   tenant: { label: "세입자(임차인)" },
   family: { label: "가족·대리인" },
   etc: { label: "기타" },
-};
-
-/** Step 0 — 자가신고 미니폼: 교체 시기 구간 (estimation_flag=추정 고정) */
-export type SelfReportPeriod = "within-6m" | "within-1y" | "over-1y" | "unknown";
-
-export const SELF_REPORT_PERIOD: Record<SelfReportPeriod, { label: string }> = {
-  "within-6m": { label: "6개월 이내" },
-  "within-1y": { label: "1년 이내" },
-  "over-1y": { label: "그 이상" },
-  unknown: { label: "모름" },
-};
-
-/** 예/아니오/모름 3답 (자가신고 작동확인 등) */
-export type TriAnswer = "yes" | "no" | "unknown";
-
-export const TRI_ANSWER: Record<TriAnswer, { label: string }> = {
-  yes: { label: "예" },
-  no: { label: "아니오" },
-  unknown: { label: "모름" },
 };
 
 /** Step 1 — 주택 유형 (house_type, 소방시설법 제8조 대상 5분류) + 소유구조 파생 */
@@ -144,17 +124,6 @@ export type Installed = "installed" | "missing";
 export const INSTALLED: Record<Installed, { label: string }> = {
   installed: { label: "설치됨" },
   missing: { label: "미설치" },
-};
-
-/** Step 2 — 연차 구간 (라벨 판독 불가 시 폴백, estimation_flag=추정) */
-export type AgeBand = "le-5" | "y5-10" | "y10-15" | "gt-15" | "unknown";
-
-export const AGE_BAND: Record<AgeBand, { label: string; minYears: number | null }> = {
-  "le-5": { label: "5년 이하", minYears: 0 },
-  "y5-10": { label: "5~10년", minYears: 5 },
-  "y10-15": { label: "10~15년", minYears: 10 },
-  "gt-15": { label: "15년 초과", minYears: 15 },
-  unknown: { label: "모름", minYears: null },
 };
 
 /**
@@ -217,19 +186,16 @@ export const CONDITION_CODE: Record<ConditionCode, { label: string; tone: Status
 };
 
 /** Step 4 — 현장 교체 완료 여부 (rx_done) */
-export type RxDone = "done" | "advised-only" | "owner-refused";
+export type RxDone = "done" | "advised-only";
 
 export const RX_DONE: Record<RxDone, { label: string }> = {
   done: { label: "완료" },
   "advised-only": { label: "미완료(권고만 전달)" },
-  "owner-refused": { label: "소유자 거부" },
 };
 
 /**
- * Step 4 — 재방문 필요 여부 (visit_result). 2택만.
- * 사유는 consent_status·refusal_reason_cd에서 자동 상속(대원 재입력 없음),
- * 채널(우편안내·기관경유·직접재방문) 결정은 현장이 아니라 재방문 큐(행정 레이어)가
- * 사유 기반 자동 제안 — "기록(현장) vs 결정(back-office)" 역할 분리.
+ * Step 4 — 재방문 필요 여부 (visit_result). 2택만, 필수 입력.
+ * 세대가 큐에 남는지를 이 값 하나가 정한다 — '필요'면 승낙·거부·공가 어느 쪽이든 큐에 남는다.
  */
 export type RevisitPlan = "not-needed" | "revisit";
 

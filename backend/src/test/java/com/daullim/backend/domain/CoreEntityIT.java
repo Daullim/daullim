@@ -98,12 +98,12 @@ class CoreEntityIT {
   }
 
   @Test
-  @DisplayName("승낙 방문: 실측 제조년월이면 is_age_estimated가 false로 되읽힌다")
+  @DisplayName("승낙 방문: 실측 제조년월이 미표기 플래그와 함께 되읽힌다")
   void inspectedVisitWithMeasuredMfgYm() {
     Visit visit = new Visit(unit, officer, "20260729", Instant.now(), "accepted", true, "v1");
-    visit.applyGate("owner", null, null, null, null);
-    visit.applyAlarmJudgment((short) 3, "2020-05", null, (short) 1, false, (short) 1, "DEFECTIVE");
-    visit.applyPostCare("installed", "done", "not-needed", "커버 교체 완료");
+    visit.applyGate("owner", null, null);
+    visit.applyAlarmJudgment((short) 3, "2020-05", false, (short) 1, false, (short) 1, "DEFECTIVE");
+    visit.applyPostCare("installed", "done", "not-needed", null, "커버 교체 완료");
     visit.applyDispatchSnapshot(
         UUID.randomUUID(),
         (short) 1,
@@ -123,27 +123,27 @@ class CoreEntityIT {
 
     Visit found = visits.findById(visit.getId()).orElseThrow();
     assertThat(found.getMfgYm()).isEqualTo("2020-05");
-    assertThat(found.getAgeEstimated()).isFalse();
+    assertThat(found.isMfgUnmarked()).isFalse();
     assertThat(found.getEffectiveReplaceCount()).isEqualTo((short) 1);
     assertThat(found.getRuleVersion()).isEqualTo("v1");
     assertThat(found.getClientVisitId()).isNotNull();
   }
 
   @Test
-  @DisplayName("추정 연차면 is_age_estimated가 true로 되읽힌다")
-  void estimatedAgeIsFlagged() {
+  @DisplayName("제조년월 미표기 승낙 방문이 실측 없이 저장된다")
+  void unmarkedVisitSavesWithoutMfgYm() {
     Visit visit = new Visit(unit, officer, "20260729", Instant.now(), "accepted", true, "v1");
-    visit.applyGate("tenant", null, null, null, null);
-    visit.applyAlarmJudgment((short) 2, null, "gt-15", null, true, (short) 2, "EXPIRED");
-    visit.applyPostCare("missing", "advised-only", "revisit", null);
+    visit.applyGate("owner", null, null);
+    visit.applyAlarmJudgment((short) 2, null, true, null, false, (short) 2, "DEFECTIVE");
+    visit.applyPostCare("installed", "advised-only", "revisit", null, null);
 
     visits.save(visit);
     em.flush();
     em.clear();
 
     Visit found = visits.findById(visit.getId()).orElseThrow();
-    assertThat(found.getAgeEstimated()).isTrue();
-    assertThat(found.getExpired()).isTrue();
+    assertThat(found.getMfgYm()).isNull();
+    assertThat(found.isMfgUnmarked()).isTrue();
     assertThat(found.getEffectiveReplaceCount()).isEqualTo(found.getRoomCount());
   }
 
@@ -151,9 +151,9 @@ class CoreEntityIT {
   @DisplayName("교체 항목과 외관 플래그가 방문 저장 한 번에 캐스케이드된다")
   void itemsAndFlagsCascade() {
     Visit visit = new Visit(unit, officer, "20260729", Instant.now(), "accepted", true, "v1");
-    visit.applyGate("owner", null, null, null, null);
-    visit.applyAlarmJudgment((short) 2, "2015-03", null, (short) 1, false, (short) 1, "DEFECTIVE");
-    visit.applyPostCare("installed", "done", "not-needed", null);
+    visit.applyGate("owner", null, null);
+    visit.applyAlarmJudgment((short) 2, "2015-03", false, (short) 1, false, (short) 1, "DEFECTIVE");
+    visit.applyPostCare("installed", "done", "not-needed", null, null);
 
     ReplacementItem item =
         new ReplacementItem((short) 1, "appearance", null, "RX-IOT", "DEFECTIVE", false);
@@ -179,8 +179,8 @@ class CoreEntityIT {
   @DisplayName("비승낙 방문은 경보기 필드 전량 null로 저장된다")
   void notInspectedVisitKeepsAlarmFieldsNull() {
     Visit visit = new Visit(unit, officer, "20260729", Instant.now(), "refused", false, "v1");
-    visit.applyGate(null, "self-replaced", "within-6m", "yes", "작년에 직접 교체했다고 함");
-    visit.applyPostCare(null, null, "not-needed", null);
+    visit.applyGate(null, "no-need", "필요 없다고 함");
+    visit.applyPostCare(null, null, "not-needed", null, null);
 
     visits.save(visit);
     em.flush();
@@ -192,15 +192,15 @@ class CoreEntityIT {
     assertThat(found.getEffectiveReplaceCount()).isNull();
     assertThat(found.getExpired()).isNull();
     assertThat(found.getConditionCode()).isNull();
-    assertThat(found.getAgeEstimated()).isFalse();
-    assertThat(found.getSelfReportPeriodCode()).isEqualTo("within-6m");
+    assertThat(found.isMfgUnmarked()).isFalse();
   }
 
   @Test
   @DisplayName("비승낙인데 경보기 값을 채우면 DB CHECK가 막는다")
   void notInspectedWithAlarmFieldsIsRejected() {
     Visit visit = new Visit(unit, officer, "20260729", Instant.now(), "vacant", false, "v1");
-    visit.applyAlarmJudgment((short) 3, null, null, null, null, null, null);
+    visit.applyAlarmJudgment((short) 3, null, false, null, null, null, null);
+    visit.applyPostCare(null, null, "not-needed", null, null);
 
     // IDENTITY 채번이라 save() 시점에 이미 INSERT가 나간다 — flush를 기다리지 않는다.
     assertThatThrownBy(
@@ -238,6 +238,7 @@ class CoreEntityIT {
   void findByClientVisitId() {
     UUID key = UUID.randomUUID();
     Visit visit = new Visit(unit, officer, "20260729", Instant.now(), "unreachable", false, "v1");
+    visit.applyPostCare(null, null, "revisit", null, null);
     visit.applyDispatchSnapshot(key, null, null, null, null, null, null);
     visits.save(visit);
     em.flush();

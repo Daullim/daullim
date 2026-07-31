@@ -7,6 +7,11 @@
 `building_queue_entries` 병합·lookup 축소·테이블 14→12. 결정 2와 결정 1·9의 일부를 **supersede**(v1.2 절 참조).
 상태 모델 보류는 **그대로 유지**.
 
+개정 v1.3 (2026-07-31, 결정자: 이윤서) — [ADR-013](ADR-013-judgment-queue.md)이 **amend**:
+연차 추정 폐기(`age_bands`·`age_band_cd`·`is_age_estimated` 제거, `mfg_unmarked` 도입)로 **결정 7을 supersede**,
+재방문 여부를 큐 결정 축으로 승격(결정 28~30). lookup이 실제로 6종이 되어 테이블 13→**12**(결정 24와 일치).
+Flyway 파일은 `V2__erd_v1.sql`이 아니라 **`V1__init.sql`**로 작성됐다(적재 데이터 없어 V1 직접 수정).
+
 전체 명세(테이블 6열 컬럼표·인덱스·제약·Mermaid ERD)는 볼트
 `Output/contest/design/다울림-ERD-v1.md`가 정본. 이 ADR은 **결정과 근거만** 담는다.
 (⚠️ 볼트 명세는 v1.1 기준 — v1.2 반영은 후속 항목)
@@ -49,10 +54,14 @@ ADR-003의 `visits.building_id`·`actuation` 단일 컬럼 모델은 이 구조�
    진행상태 = `units.status_cd`, 방문결과 = `visits.consent_cd` 2축으로 분리. **§5 보류는 그대로 유지.**
 6. **미발생(N/A) vs NULL은 `visits.is_inspected`로 판별.** false면 경보기·소화기 필드 전량 NULL을 CHECK로 강제.
    "점검했는데 없음"과 "점검 자체가 없음"이 구분된다.
-7. **실측·추정 분리.** `mfg_ym`(실측)과 `age_band_cd`(추정) 공존 금지 CHECK +
-   `is_age_estimated` GENERATED STORED 컬럼(NFR-04 "(추정)" 표기 근거).
+7. ~~**실측·추정 분리.** `mfg_ym`(실측)과 `age_band_cd`(추정) 공존 금지 CHECK +
+   `is_age_estimated` GENERATED STORED 컬럼.~~
+   **⚠️ ADR-013 결정 26이 supersede** — 승낙하고 들어간 이상 제조년월은 실측 대상이고, 라벨을 못 읽는 것은
+   추정할 상황이 아니라 연식을 보증할 수 없는 상황이다. `mfg_unmarked` boolean으로 대체.
+   NFR-04 "(추정)" 표기는 건물 위험 점수 축에만 남는다.
 8. **내용연수 경과 전량 교체는 행으로 물질화.** BE가 `room_count`만큼 `reason='expired'` 행을 생성하되
    `is_auto_generated=true`로 현장 입력과 구분. 집계 경로가 하나로 통일된다.
+   (ADR-013 결정 27이 `unmarked`까지 확장 — 자동 생성은 이 두 사유뿐이다.)
 9. **코드값은 `config/domain.ts` 키를 표기 변환 없이 저장.** kebab / UPPER_SNAKE / `RX-` 혼재를 그대로 수용하고,
    **신규 열거값만 kebab-case**로 통일. 코드 컬럼 접미사는 `_cd`.
 10. **날짜 타입 정책.** 대장 유래값과 대장 규약을 그대로 쓰는 자체 기록일(`use_apr_day`·`last_inspected_day`)은
@@ -142,8 +151,10 @@ ADR-003의 `visits.building_id`·`actuation` 단일 컬럼 모델은 이 구조�
   다중 테이블 조건이라 CHECK로 못 걸고 **BE 서비스 계층 + 정합성 쿼리**에 의존.
 
 ## 후속
-- **볼트 명세 `다울림-ERD-v1.md`를 v1.2로 갱신** — 현재 v1.1 기준이라 병합·회차 폐지·lookup 축소 미반영.
-- `V2__erd_v1.sql`(Flyway) 작성 시 **v1.2 반영 후의** 볼트 명세 컬럼표·CHECK·인덱스를 그대로 옮긴다.
+- **볼트 명세 `다울림-ERD-v1.md`를 v1.3으로 갱신** — 현재 v1.1 기준이라 병합·회차 폐지·lookup 축소·
+  연차 추정 폐기·재방문 축이 모두 미반영.
+- ~~`V2__erd_v1.sql`(Flyway) 작성 시~~ **`V1__init.sql`로 작성 완료**(2026-07-30). 스키마 변경은
+  시연 데이터 적재 전까지 V1 직접 수정, 이후에는 V2 추가.
 - 미결정은 볼트 명세 §10 기준으로 정리하되 v1.2로 **소멸 2건**(§10-6 회차 관리 테이블·§10-7 구 라운드 보존 —
   회차 개념 자체가 사라짐), **신규 1건**(`visits.client_visit_id` — 오프라인 동기화 멱등 키, UNIQUE.
   API 명세서 v2의 `Idempotency-Key`/`clientVisitId` 영속화 지점).

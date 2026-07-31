@@ -1,25 +1,16 @@
 import type * as React from "react";
 import {
-  AGE_BAND,
   BATTERY_TYPE,
   DETECTOR_FLAG,
   REPLACE_REASON,
   RX,
   SERVICE_LIFE_YEARS,
-  type AgeBand,
   type DetectorFlag,
 } from "@/config/domain";
 import { DataText } from "@/components/core/data-text";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { ChoiceGroup, FormSection, InfoNote } from "@/components/inspection/form-controls";
 import {
-  isExpired,
+  autoReplaceReason,
   type InspectionAction,
   type InspectionFormState,
   type ReplacementItem,
@@ -121,48 +112,36 @@ export function AlarmSection({
   form: InspectionFormState;
   dispatch: React.Dispatch<InspectionAction>;
 }) {
-  const expired = isExpired(form);
+  const autoAll = autoReplaceReason(form);
 
   return (
     <FormSection className="space-y-6">
       {/* ── 제조년월 확인 ── */}
       <SubHeading>제조년월 확인</SubHeading>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="mb-2 block text-body-md text-ink" htmlFor="alarm-mfg">
-            제조년월 (라벨 확인 우선)
-          </label>
+      <div>
+        <label className="mb-2 block text-body-md text-ink" htmlFor="alarm-mfg">
+          제조년월 (라벨 확인)
+        </label>
+        <input
+          id="alarm-mfg"
+          type="month"
+          value={form.mfgYm ?? ""}
+          disabled={form.mfgUnmarked}
+          onChange={(e) =>
+            dispatch({ type: "SET_MFG_YM", value: e.target.value === "" ? null : e.target.value })
+          }
+          className={`${FIELD_CLASS} disabled:cursor-not-allowed disabled:bg-surface-muted`}
+        />
+        {/* 비워두고 넘어가는 것과 구분한다 — 못 읽었다는 판단 자체가 기록으로 남아야 한다 */}
+        <label className="mt-2 flex min-h-11 items-center gap-2 text-body-md text-ink">
           <input
-            id="alarm-mfg"
-            type="month"
-            value={form.mfgYm ?? ""}
-            onChange={(e) =>
-              dispatch({ type: "SET_MFG_YM", value: e.target.value === "" ? null : e.target.value })
-            }
-            className={FIELD_CLASS}
+            type="checkbox"
+            checked={form.mfgUnmarked}
+            onChange={(e) => dispatch({ type: "SET_MFG_UNMARKED", value: e.target.checked })}
+            className="size-5"
           />
-        </div>
-        <div>
-          <label className="mb-2 block text-body-md text-ink" htmlFor="alarm-age">
-            연차 구간 (판독 불가 시)
-          </label>
-          <Select
-            value={form.ageBand ?? undefined}
-            disabled={form.mfgYm !== null}
-            onValueChange={(v) => dispatch({ type: "SET_AGE_BAND", value: v as AgeBand })}
-          >
-            <SelectTrigger id="alarm-age" className="h-11 w-full border-hairline-strong">
-              <SelectValue placeholder="구간 선택" />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(AGE_BAND) as AgeBand[]).map((k) => (
-                <SelectItem key={k} value={k}>
-                  {AGE_BAND[k].label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+          제조년월 표기 없음 (라벨 마모·도색으로 판독 불가)
+        </label>
       </div>
 
       {/* ── 교체 필요 개수 확인 ── */}
@@ -193,15 +172,15 @@ export function AlarmSection({
           <label className="mb-2 block text-body-md text-ink" htmlFor="replace-count">
             교체 필요 개수 (필수)
           </label>
-          {/* 내용연수 경과 시엔 전량 교체가 확정이라 입력을 막고 실 개수를 그대로 보여준다 */}
+          {/* 경과·미표기는 전량 교체가 확정이라 입력을 막고 실 개수를 그대로 보여준다 */}
           <input
             id="replace-count"
             type="number"
             min={0}
             max={form.roomCount ?? 9}
             inputMode="numeric"
-            disabled={expired}
-            value={expired ? (form.roomCount ?? "") : (form.replaceCount ?? "")}
+            disabled={autoAll !== null}
+            value={autoAll ? (form.roomCount ?? "") : (form.replaceCount ?? "")}
             onChange={(e) =>
               dispatch({
                 type: "SET_REPLACE_COUNT",
@@ -214,9 +193,15 @@ export function AlarmSection({
         </div>
       </div>
 
-      {expired ? (
+      {autoAll ? (
         <InfoNote tone="caution">
-          내용연수(<DataText>{SERVICE_LIFE_YEARS.detector}</DataText>년) 경과 —{" "}
+          {autoAll === "expired" ? (
+            <>
+              내용연수(<DataText>{SERVICE_LIFE_YEARS.detector}</DataText>년) 경과 —{" "}
+            </>
+          ) : (
+            <>제조년월을 확인할 수 없어 연식을 보증할 수 없습니다 — </>
+          )}
           <DataText>{form.roomCount ?? 0}</DataText>개 전량 교체 대상으로 자동 기록됩니다. 개수·사유
           입력 없이 다음 단계로 진행하세요.
         </InfoNote>

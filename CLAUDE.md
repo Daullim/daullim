@@ -6,7 +6,8 @@
 ## Project Overview `[DAULLIM]`
 
 다울림 — 소방 취약가구 화재경보기 사후관리 **우선순위 처방 도구**(소방안전 빅데이터 경진대회 출품, 3주 MVP, 1인 개발). 주 사용자는 소방 점검원·예방담당자. 두 모드: `/control` 관제(데스크톱)·`/field` 현장(**태블릿 1024×768 가로 우선, 장갑 조작·명료함**).
-현재 스코프는 **frontend-first**. `backend/` `pipeline/` `data/` `seed/`는 아직 비어 있다 — 지어내 채우지 말 것.
+`frontend/`와 `backend/`가 실물로 서 있다. `pipeline/` `data/` `seed/`는 **아직 비어 있다** — 지어내 채우지 말 것.
+백엔드는 12테이블(핵심 6 + lookup 6) + 판정·저장·재산입까지 구현됐고, **API 계약(Controller·DTO·openapi.yaml)만 미착수**다.
 
 ## Source of Truth — 작업별 먼저 읽을 파일 `[DAULLIM]`
 
@@ -15,15 +16,18 @@
 | 색·타이포·간격·라운드·컴포넌트 스펙 | `frontend/DESIGN.md` + `frontend/src/styles/tokens.css`(상단 3계층 주석) |
 | 디자인 시스템 작업 규칙 | `frontend/DESIGN.md` § Iteration Guide, § Do's and Don'ts |
 | 상태·처방·위험 등 도메인 열거값 | `frontend/src/config/domain.ts` |
-| 스타일링 스택 결정 근거 | `docs/ADR-011-styling.md` |
+| 스타일링 스택 결정 근거 | `docs/adr/ADR-011-styling.md` |
 | 라우팅 | `frontend/src/App.tsx` |
+| **DB 스키마·제약** | `backend/src/main/resources/db/migration/V1__init.sql` (테이블·CHECK·seed 전부 여기) |
+| **판정·처방·큐 규칙** | `docs/adr/ADR-013-judgment-queue.md` → `backend/.../visit/service/JudgmentService.java` |
+| **ERD 결정 이력** | `docs/adr/ADR-012-erd-v1.md` (v1.3까지 amend 누적) |
 | 미해결·미합의 | `frontend/DESIGN.md` § Known Gaps (아래 Known Gaps 참조) |
 
 기획서·기능명세서·PRD는 **리포 외부**(별도 볼트)에 있다 — 리포 안에 없는 경로를 가리키지 마라.
 
 ## Commands `[BASE 형식 / DAULLIM 값]`
 
-작업 디렉토리는 `frontend/`. `package.json`과 정확히 일치:
+`frontend/`에서:
 
 ```bash
 npm run dev      # vite 개발 서버 (기본 5173, 사용 중이면 autoPort)
@@ -32,7 +36,23 @@ npm run lint     # oxlint
 npm run preview  # 빌드 결과 미리보기
 ```
 
-**검증 게이트 — 작업을 마치면 스스로 `npm run lint`와 `npm run build`를 실행해 통과를 확인하고, 실패 시 고친 뒤 보고한다.** (build가 타입체크를 포함한다. `ui/` 벤더 파일의 `only-export-components` warning 2건은 기존값 — 에러 0이면 통과.)
+`backend/`에서 (Docker 필요 — Testcontainers):
+
+```bash
+docker compose up -d              # postgres 15
+./gradlew spotlessApply build     # 포맷 + 타입체크 + 전체 테스트
+./gradlew bootRun                 # 로컬 기동 (Swagger UI: /swagger-ui.html)
+```
+
+**검증 게이트 — 작업을 마치면 스스로 실행해 통과를 확인하고, 실패 시 고친 뒤 보고한다.**
+FE는 `npm run lint` + `npm run build`, BE는 `./gradlew spotlessCheck build`.
+`ui/` 벤더 파일의 `only-export-components` warning은 기존값 — **에러 0이면 통과**.
+
+**`V1__init.sql`을 고쳤으면 DB를 새로 올려야 한다** — Flyway 체크섬이 불일치해 기동이 실패한다:
+
+```bash
+docker compose down -v && docker compose up -d
+```
 
 ## Code Conventions `[혼합]`
 
@@ -50,17 +70,20 @@ npm run preview  # 빌드 결과 미리보기
 
 - **재사용 > 신규 생성.** 새 컴포넌트·추상화·유틸을 만들기 전에 `core/`·`ui/`·`lib/`에서 기존 것을 찾아 재사용·확장한다.
 - **의존성 추가는 근거를 대고 먼저 묻는다.** 상태관리·차트·폼 라이브러리 등을 임의 설치하지 않는다. 미도입 제안 상태인 것(지도=react-leaflet, 서버상태=TanStack Query)을 도입할 땐 `docs/`에 ADR 한 줄로 근거를 남긴다.
-- **테스트 인프라를 임의로 세우지 않는다.** 검증은 `/demo` 페이지 + 수동 QA. 요청 없이 Jest/Vitest/Playwright를 깔지 않는다.
+- **FE 테스트 인프라를 임의로 세우지 않는다.** FE 검증은 `/demo` 페이지 + 수동 QA. 요청 없이 Jest/Vitest/Playwright를 깔지 않는다. BE는 JUnit + Testcontainers가 이미 서 있으니(ADR-009 배너) 로직을 고쳤으면 테스트도 같이 고친다.
 - **요청 1개엔 요청 1개만.** 관련 개선이 보이면 코드에 몰래 넣지 말고 짧게 제안한다.
 - **미합의·미정 사항을 지어내지 않는다**(아래 Known Gaps). 임의 결정 대신 사용자에게 확인한다.
 - **주석·문서는 필요한 것만.** 코드가 말하는 걸 반복하지 말고, 기존 파일의 주석 밀도·톤에 맞춘다.
 - **범위 밖 대규모 리팩터·파일 이동 금지.** 요청받지 않은 구조 변경을 하지 않는다.
-- **조기 구조화 금지.** 지금은 루트 `CLAUDE.md` 하나로 충분하다. `backend/`가 실제로 자라기 전엔 `frontend/CLAUDE.md` 분리를 제안만 하고 만들지 않는다.
+- **조기 구조화 금지.** 지금은 루트 `CLAUDE.md` 하나로 충분하다. 분리가 필요해 보이면 제안만 하고 만들지 않는다.
+- **스키마는 마이그레이션이 정본이다.** 엔티티에 컬럼을 추가하고 `V1__init.sql`을 잊으면 `ddl-auto=validate`가 기동을 막는다. 반대로 `validate`는 길이·nullable·CHECK·인덱스를 보지 않으니, 제약을 바꿨으면 테스트로 확인한다.
+- **`domain.ts`를 고치면 Flyway seed도 같이 고친다.** `CodeLookupIT`가 둘의 일치를 지키지만, 대조는 사람이 시작해야 한다.
 
 ## Known Gaps `[DAULLIM]`
 
 상세는 `frontend/DESIGN.md` § Known Gaps. 아래에 걸리면 **지어내지 말고 사용자에게 물어라**:
 
-- **방문/점검 상태 모델 미합의** — 상태명·목록은 `config/domain.ts`에서만 관리(`StatusTag`는 톤 슬롯만 앎).
+- **방문결과(`consent_cd`)의 화면 표시 모델 미합의** — 상태명·목록은 `config/domain.ts`에서만 관리(`StatusTag`는 톤 슬롯만 앎). 진행상태(`units.status_cd`) 축은 ADR-013으로 확정됐다.
+- **API 계약 미확정** — Controller·DTO·`docs/openapi.yaml` 전부 미착수. 서비스가 응답이 아니라 도메인 객체를 반환하므로, 계약이 오면 컨트롤러가 투영만 하면 된다. 요청 없이 만들지 말 것.
 - **도시 격자 위험 밀집 표시 방식 결정 대기** — 격자는 "옅은 실선 경계"까지만.
 - **동 경계 GeoJSON 미확보** — 지도 경계는 플레이스홀더.

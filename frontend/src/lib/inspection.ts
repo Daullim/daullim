@@ -4,13 +4,11 @@
  * 판정 규칙 정본: 일반주택-현장점검-폼설계.md Step 3 (우선순위 위에서부터 첫 매칭).
  */
 import {
-  AGE_BAND,
   ALARM_CHECK,
   BATTERY_TYPE,
   DETECTOR_FLAG,
   REPLACE_REASON,
   SERVICE_LIFE_YEARS,
-  type AgeBand,
   type BatteryType,
   type ConditionCode,
   type ConsentStatus,
@@ -22,8 +20,6 @@ import {
   type RevisitPlan,
   type RxCode,
   type RxDone,
-  type SelfReportPeriod,
-  type TriAnswer,
 } from "@/config/domain";
 import type { HouseholdItem } from "@/mock/sample";
 
@@ -45,7 +41,6 @@ export interface InspectionFormState {
   consent: ConsentStatus | null;
   respondent: RespondentType | null;
   refusalReason: RefusalReason | null;
-  selfReport: { period: SelfReportPeriod | null; tested: TriAnswer | null };
   refusalNote: string;
   // Step 1 — 경보기 (실별 반복이 아니라 세대 단위 집계)
   /** 구획된 실 개수 = 법상 설치 의무 수량 = 교체 개수의 분모 */
@@ -54,8 +49,8 @@ export interface InspectionFormState {
   unitLabel: string;
   /** 제조년월 라벨 실측 ("YYYY-MM") — 일괄 설치 가정으로 세대 공통 1회 */
   mfgYm: string | null;
-  /** 라벨 판독 불가 폴백 — 추정 */
-  ageBand: AgeBand | null;
+  /** 라벨 마모·도색으로 제조년월을 읽을 수 없음 — 연식을 보증할 수 없으니 전량 교체 대상 */
+  mfgUnmarked: boolean;
   /** 교체 필요 개수 (0 = 전부 정상). 내용연수 경과 시엔 roomCount로 자동 확정 */
   replaceCount: number | null;
   /** 교체 대상별 사유 — 길이 = replaceCount (내용연수 경과 시엔 비어 있다) */
@@ -64,7 +59,10 @@ export interface InspectionFormState {
   extinguisherInstalled: Installed | null;
   // Step 3 — 사후관리
   rxDone: RxDone | null;
+  /** 필수 — 세대가 큐에 남는지를 이 값이 정한다. 현장 교체 완료 시엔 '불필요'로 고정된다 */
   revisit: RevisitPlan | null;
+  /** 경과 세대를 교체·재방문 없이 종료할 때의 사유 — 큐에서 빼는 판단의 책임 소재 */
+  noRevisitNote: string;
   note: string;
 }
 
@@ -77,18 +75,18 @@ export function createInitialState(
     consent: null,
     respondent: null,
     refusalReason: null,
-    selfReport: { period: null, tested: null },
     refusalNote: "",
     roomCount: null,
     // 세대 목록에서 온 호수 우선. 단독주택(1가구)은 "본가구" 자동
     unitLabel: unitLabel ?? (item.unitCount <= 1 ? "본가구" : ""),
     mfgYm: null,
-    ageBand: null,
+    mfgUnmarked: false,
     replaceCount: null,
     replacements: [],
     extinguisherInstalled: null,
     rxDone: null,
     revisit: null,
+    noRevisitNote: "",
     note: "",
   };
 }
@@ -97,11 +95,10 @@ export type InspectionAction =
   | { type: "SET_CONSENT"; value: ConsentStatus }
   | { type: "SET_RESPONDENT"; value: RespondentType }
   | { type: "SET_REFUSAL_REASON"; value: RefusalReason }
-  | { type: "SET_SELF_REPORT"; patch: Partial<InspectionFormState["selfReport"]> }
   | { type: "SET_REFUSAL_NOTE"; value: string }
   | { type: "SET_ROOM_COUNT"; value: number | null }
   | { type: "SET_MFG_YM"; value: string | null }
-  | { type: "SET_AGE_BAND"; value: AgeBand }
+  | { type: "SET_MFG_UNMARKED"; value: boolean }
   | { type: "SET_REPLACE_COUNT"; value: number | null }
   | { type: "SET_REPLACEMENT_REASON"; index: number; value: ReplaceReason }
   | { type: "SET_REPLACEMENT_BATTERY"; index: number; value: BatteryType }
@@ -109,6 +106,7 @@ export type InspectionAction =
   | { type: "SET_EXTINGUISHER_INSTALLED"; value: Installed }
   | { type: "SET_RX_DONE"; value: RxDone }
   | { type: "SET_REVISIT"; value: RevisitPlan }
+  | { type: "SET_NO_REVISIT_NOTE"; value: string }
   | { type: "SET_NOTE"; value: string };
 
 export function inspectionReducer(
@@ -121,25 +119,14 @@ export function inspectionReducer(
       if (action.value !== "refused") {
         // 거부 하위 필드 초기화 (거부→다른 상태 전환 시 잔존값 방지)
         next.refusalReason = null;
-        next.selfReport = { period: null, tested: null };
         next.refusalNote = "";
       }
       return next;
     }
     case "SET_RESPONDENT":
       return { ...state, respondent: action.value };
-    case "SET_REFUSAL_REASON": {
-      const next: InspectionFormState = { ...state, refusalReason: action.value };
-      if (action.value !== "self-replaced") {
-        next.selfReport = { period: null, tested: null };
-      } else if (state.revisit === null) {
-        // 자체교체 신고 = 재방문 불필요 기본값 (큐 제외, 권장연수 재도래 시 배치 재산입)
-        next.revisit = "not-needed";
-      }
-      return next;
-    }
-    case "SET_SELF_REPORT":
-      return { ...state, selfReport: { ...state.selfReport, ...action.patch } };
+    case "SET_REFUSAL_REASON":
+      return { ...state, refusalReason: action.value };
     case "SET_REFUSAL_NOTE":
       return { ...state, refusalNote: action.value };
     case "SET_ROOM_COUNT": {
@@ -150,10 +137,10 @@ export function inspectionReducer(
       return { ...state, roomCount: n, replaceCount };
     }
     case "SET_MFG_YM":
-      // 실측이 들어오면 추정 폴백은 버린다 (둘이 공존하면 판정 근거가 모호해진다)
-      return { ...state, mfgYm: action.value, ageBand: action.value ? null : state.ageBand };
-    case "SET_AGE_BAND":
-      return { ...state, ageBand: action.value };
+      // 실측이 들어오면 미표기는 성립하지 않는다 (둘이 공존하면 판정 근거가 모호해진다)
+      return { ...state, mfgYm: action.value, mfgUnmarked: action.value ? false : state.mfgUnmarked };
+    case "SET_MFG_UNMARKED":
+      return { ...state, mfgUnmarked: action.value, mfgYm: action.value ? null : state.mfgYm };
     case "SET_REPLACE_COUNT": {
       const n = action.value;
       // 개수만큼 사유 칸을 만든다 — 기존 항목은 인덱스로 보존, 초과분은 잘라낸다
@@ -202,9 +189,19 @@ export function inspectionReducer(
     case "SET_EXTINGUISHER_INSTALLED":
       return { ...state, extinguisherInstalled: action.value };
     case "SET_RX_DONE":
-      return { ...state, rxDone: action.value };
+      // 현장에서 교체를 끝냈으면 다시 갈 이유가 없다 — 재방문 여부를 고정한다
+      return action.value === "done"
+        ? { ...state, rxDone: action.value, revisit: "not-needed", noRevisitNote: "" }
+        : { ...state, rxDone: action.value };
     case "SET_REVISIT":
-      return { ...state, revisit: action.value };
+      // 재방문이 필요하면 큐에 남으므로 '빼는 사유'가 성립하지 않는다
+      return {
+        ...state,
+        revisit: action.value,
+        noRevisitNote: action.value === "revisit" ? "" : state.noRevisitNote,
+      };
+    case "SET_NO_REVISIT_NOTE":
+      return { ...state, noRevisitNote: action.value };
     case "SET_NOTE":
       return { ...state, note: action.value };
   }
@@ -245,27 +242,40 @@ export function formatDay(day: string | null | undefined): string | null {
   return `${s.slice(0, 4)}.${s.slice(4, 6)}.${s.slice(6, 8)}`;
 }
 
-/** 연차 산정: mfgYm(실측) 우선 > ageBand.minYears(추정) 폴백 */
-function elapsedYears(mfgYm: string | null, ageBand: AgeBand | null): number | null {
-  if (mfgYm) return yearsSince(mfgYm);
-  if (ageBand) return AGE_BAND[ageBand].minYears;
+/** 내용연수 경과 여부 — 경과면 작동여부와 무관하게 전량 교체 대상 */
+export function isExpired(state: InspectionFormState): boolean {
+  if (!state.mfgYm) return false;
+  return yearsSince(state.mfgYm) >= SERVICE_LIFE_YEARS.detector;
+}
+
+/**
+ * 전량 교체 대상(경과·미표기) 세대를 교체도 재방문도 없이 종료하는 경우 —
+ * 사유를 받는다. BE의 ck_v_norev와 같은 조건.
+ */
+export function needsNoRevisitNote(state: InspectionFormState): boolean {
+  return (
+    autoReplaceReason(state) !== null &&
+    state.revisit === "not-needed" &&
+    state.rxDone !== "done"
+  );
+}
+
+/**
+ * 개수·사유 입력 없이 전량 교체가 확정되는 경우의 사유. 아니면 null.
+ *
+ * 경과는 연식이 다한 것이고, 미표기는 연식을 보증할 수 없는 것이다. 둘 다 개별 판단의
+ * 여지가 없어 실 개수만큼 자동 기록한다. 제조년월이 없으면 경과 판정 자체가 불가능하므로
+ * 두 경우는 배타적이다.
+ */
+export function autoReplaceReason(state: InspectionFormState): ReplaceReason | null {
+  if (isExpired(state)) return "expired";
+  if (state.mfgUnmarked) return "unmarked";
   return null;
 }
 
-/** 연차가 추정 폴백 기반인지 — EXPIRED 판정에 "(추정)" 동반 표기용 */
-export function isAgeEstimated(row: { mfgYm?: string | null; ageBand: AgeBand | null }): boolean {
-  return !row.mfgYm && row.ageBand !== null;
-}
-
-/** 내용연수 경과 여부 — 경과면 작동여부와 무관하게 전량 교체 대상 */
-export function isExpired(state: InspectionFormState): boolean {
-  const years = elapsedYears(state.mfgYm, state.ageBand);
-  return years !== null && years >= SERVICE_LIFE_YEARS.detector;
-}
-
-/** 내용연수 경과 시 교체 대상은 전량 — 개수 입력을 받지 않고 분모를 그대로 쓴다 */
+/** 전량 교체가 확정된 경우 개수 입력을 받지 않고 분모를 그대로 쓴다 */
 export function effectiveReplaceCount(state: InspectionFormState): number | null {
-  if (isExpired(state)) return state.roomCount;
+  if (autoReplaceReason(state)) return state.roomCount;
   return state.replaceCount;
 }
 
@@ -296,7 +306,8 @@ export function judgeAlarms(state: InspectionFormState): ConditionCode | null {
   const count = effectiveReplaceCount(state);
   if (count === null) return null;
   if (count === 0) return "OK_GOOD";
-  if (isExpired(state)) return "EXPIRED"; // 전량 교체 자동 확정
+  const auto = autoReplaceReason(state);
+  if (auto) return judgeItem({ reason: auto, batteryType: null, flags: [] }); // 전량 교체 자동 확정
   const codes = state.replacements.map(judgeItem);
   if (codes.length === 0 || codes.some((c) => c === null)) return null;
   return (codes as ConditionCode[]).reduce((worst, c) =>
@@ -317,9 +328,9 @@ function rxOf(item: ReplacementItem): RxCode | null {
 /** 처방 목록 — 같은 코드끼리 묶어 건수와 함께 */
 export function deriveRxList(state: InspectionFormState): { rx: RxCode; count: number }[] {
   const counts = new Map<RxCode, number>();
-  if (isExpired(state)) {
-    // 전량 교체 — 사유 '내용연수 지남' 고정
-    const rx = REPLACE_REASON.expired.rx;
+  const auto = autoReplaceReason(state);
+  if (auto) {
+    const rx = REPLACE_REASON[auto].rx;
     if (rx) counts.set(rx, effectiveReplaceCount(state) ?? 0);
   } else {
     for (const item of state.replacements) {
@@ -333,8 +344,9 @@ export function deriveRxList(state: InspectionFormState): { rx: RxCode; count: n
 /** 사유별 건수 요약 — 최종 확인 화면용 */
 export function reasonSummary(state: InspectionFormState): { reason: ReplaceReason; count: number }[] {
   const counts = new Map<ReplaceReason, number>();
-  if (isExpired(state)) {
-    counts.set("expired", effectiveReplaceCount(state) ?? 0);
+  const auto = autoReplaceReason(state);
+  if (auto) {
+    counts.set(auto, effectiveReplaceCount(state) ?? 0);
   } else {
     for (const item of state.replacements) {
       if (item.reason) counts.set(item.reason, (counts.get(item.reason) ?? 0) + 1);
@@ -372,8 +384,8 @@ export function canAdvance(state: InspectionFormState, step: StepId): boolean {
       return true;
     case "alarm": {
       if (!state.roomCount || state.roomCount < 1) return false;
-      if (!state.mfgYm && !state.ageBand) return false;
-      if (isExpired(state)) return true; // 전량 교체 자동 확정 — 추가 입력 없음
+      if (!state.mfgYm && !state.mfgUnmarked) return false;
+      if (autoReplaceReason(state)) return true; // 전량 교체 자동 확정 — 추가 입력 없음
       if (state.replaceCount === null) return false;
       if (state.replaceCount === 0) return true;
       // 항목마다 사유가 있어야 하고, 방전엔 전지 유형·외관이상엔 세부 항목이 필요하다
@@ -387,7 +399,8 @@ export function canAdvance(state: InspectionFormState, step: StepId): boolean {
     case "extinguisher":
       return state.extinguisherInstalled !== null;
     case "post":
-      return true; // 사후관리는 전 항목 선택 입력
+      if (state.revisit === null) return false;
+      return !needsNoRevisitNote(state) || state.noRevisitNote.trim().length > 0;
     case "review":
       return canSubmit(state);
   }

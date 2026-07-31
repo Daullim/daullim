@@ -20,7 +20,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import org.hibernate.annotations.GeneratedColumn;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -84,12 +83,6 @@ public class Visit {
   @Column(name = "refusal_reason_cd", length = 20)
   private String refusalReasonCode;
 
-  @Column(name = "self_report_period_cd", length = 20)
-  private String selfReportPeriodCode;
-
-  @Column(name = "self_report_tested_cd", length = 10)
-  private String selfReportTestedCode;
-
   @Column(name = "refusal_note")
   private String refusalNote;
 
@@ -101,13 +94,9 @@ public class Visit {
   @Column(name = "mfg_ym", length = 7)
   private String mfgYm;
 
-  /** 라벨 판독 불가 시 추정 폴백. mfgYm과 공존할 수 없다. */
-  @Column(name = "age_band_cd", length = 10)
-  private String ageBandCode;
-
-  @GeneratedColumn("(mfg_ym is null and age_band_cd is not null)")
-  @Column(name = "is_age_estimated", insertable = false, updatable = false)
-  private Boolean ageEstimated;
+  /** 라벨 판독 불가. mfgYm과 공존할 수 없고, 참이면 연식 미보증이라 전량 교체 대상이다. */
+  @Column(name = "mfg_unmarked", nullable = false)
+  private boolean mfgUnmarked;
 
   @Column(name = "replace_count")
   private Short replaceCount;
@@ -125,8 +114,12 @@ public class Visit {
   @Column(name = "rx_done_cd", length = 20)
   private String rxDoneCode;
 
-  @Column(name = "revisit_plan_cd", length = 20)
+  @Column(name = "revisit_plan_cd", length = 20, nullable = false)
   private String revisitPlanCode;
+
+  /** 경과 세대를 큐에서 뺀 판단의 책임 소재 (ck_v_norev). */
+  @Column(name = "no_revisit_note")
+  private String noRevisitNote;
 
   @Column(name = "note")
   private String note;
@@ -184,17 +177,9 @@ public class Visit {
     this.ruleVersion = ruleVersion;
   }
 
-  /** 자가신고 2필드는 거부 사유가 self-replaced일 때만 채워진다. */
-  public void applyGate(
-      String respondentTypeCode,
-      String refusalReasonCode,
-      String selfReportPeriodCode,
-      String selfReportTestedCode,
-      String refusalNote) {
+  public void applyGate(String respondentTypeCode, String refusalReasonCode, String refusalNote) {
     this.respondentTypeCode = respondentTypeCode;
     this.refusalReasonCode = refusalReasonCode;
-    this.selfReportPeriodCode = selfReportPeriodCode;
-    this.selfReportTestedCode = selfReportTestedCode;
     this.refusalNote = refusalNote;
   }
 
@@ -202,14 +187,14 @@ public class Visit {
   public void applyAlarmJudgment(
       Short roomCount,
       String mfgYm,
-      String ageBandCode,
+      boolean mfgUnmarked,
       Short replaceCount,
       Boolean expired,
       Short effectiveReplaceCount,
       String conditionCode) {
     this.roomCount = roomCount;
     this.mfgYm = mfgYm;
-    this.ageBandCode = ageBandCode;
+    this.mfgUnmarked = mfgUnmarked;
     this.replaceCount = replaceCount;
     this.expired = expired;
     this.effectiveReplaceCount = effectiveReplaceCount;
@@ -217,10 +202,15 @@ public class Visit {
   }
 
   public void applyPostCare(
-      String extinguisherInstalledCode, String rxDoneCode, String revisitPlanCode, String note) {
+      String extinguisherInstalledCode,
+      String rxDoneCode,
+      String revisitPlanCode,
+      String noRevisitNote,
+      String note) {
     this.extinguisherInstalledCode = extinguisherInstalledCode;
     this.rxDoneCode = rxDoneCode;
     this.revisitPlanCode = revisitPlanCode;
+    this.noRevisitNote = noRevisitNote;
     this.note = note;
   }
 
@@ -319,14 +309,6 @@ public class Visit {
     return refusalReasonCode;
   }
 
-  public String getSelfReportPeriodCode() {
-    return selfReportPeriodCode;
-  }
-
-  public String getSelfReportTestedCode() {
-    return selfReportTestedCode;
-  }
-
   public String getRefusalNote() {
     return refusalNote;
   }
@@ -339,12 +321,8 @@ public class Visit {
     return mfgYm;
   }
 
-  public String getAgeBandCode() {
-    return ageBandCode;
-  }
-
-  public Boolean getAgeEstimated() {
-    return ageEstimated;
+  public boolean isMfgUnmarked() {
+    return mfgUnmarked;
   }
 
   public Short getReplaceCount() {
@@ -369,6 +347,10 @@ public class Visit {
 
   public String getRevisitPlanCode() {
     return revisitPlanCode;
+  }
+
+  public String getNoRevisitNote() {
+    return noRevisitNote;
   }
 
   public String getNote() {

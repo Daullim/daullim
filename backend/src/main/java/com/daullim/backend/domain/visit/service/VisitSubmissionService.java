@@ -1,0 +1,199 @@
+package com.daullim.backend.domain.visit.service;
+
+import com.daullim.backend.common.error.BusinessException;
+import com.daullim.backend.common.error.ErrorCode;
+import com.daullim.backend.domain.code.service.CodeBook;
+import com.daullim.backend.domain.code.service.CodeBookProvider;
+import com.daullim.backend.domain.unit.entity.Unit;
+import com.daullim.backend.domain.unit.repository.UnitRepository;
+import com.daullim.backend.domain.user.entity.User;
+import com.daullim.backend.domain.user.repository.UserRepository;
+import com.daullim.backend.domain.visit.entity.ReplacementItem;
+import com.daullim.backend.domain.visit.entity.Visit;
+import com.daullim.backend.domain.visit.repository.VisitRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Optional;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/** 점검 1건 저장 — 방문·교체 항목·외관 플래그·세대 캐시를 한 트랜잭션에서 처리. */
+@Service
+public class VisitSubmissionService {
+
+  private static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
+
+  /** 큐에 올라와 있는 세대 상태. unit_statuses의 시작 상태와 같은 값이다. */
+  private static final String QUEUED_STATUS = "pending";
+
+  private final JudgmentService judgment;
+  private final CodeBookProvider codeBooks;
+  private final VisitRepository visits;
+  private final UnitRepository units;
+  private final UserRepository users;
+  private final Clock clock;
+
+  VisitSubmissionService(
+      JudgmentService judgment,
+      CodeBookProvider codeBooks,
+      VisitRepository visits,
+      UnitRepository units,
+      UserRepository users,
+      Clock clock) {
+    this.judgment = judgment;
+    this.codeBooks = codeBooks;
+    this.visits = visits;
+    this.units = units;
+    this.users = users;
+    this.clock = clock;
+  }
+
+  @Transactional
+  public VisitSaveResult submit(VisitSubmission raw) {
+    VisitSubmission s = raw.normalized();
+    CodeBook cb = codeBooks.get();
+
+    // 현장은 오프라인에서 재전송한다. 같은 키가 이미 있으면 다시 저장하지 않는다.
+    Optional<Visit> replay = findReplay(s);
+    if (replay.isPresent()) {
+      Visit saved = replay.get();
+      return new VisitSaveResult(saved.getId(), saved.getVisitedDay(), true);
+    }
+
+    // 세대 캐시는 이 트랜잭션과 야간 재산입 스캔 둘이 쓴다 — 갱신 전에 잠근다.
+    Unit unit =
+        units
+            .findByIdForUpdate(s.unitId())
+            .orElseThrow(() -> notFound("세대를 찾을 수 없습니다: unitId=" + s.unitId()));
+    User officer =
+        users
+            .findById(s.officerId())
+            .orElseThrow(() -> notFound("점검원을 찾을 수 없습니다: officerId=" + s.officerId()));
+
+    AlarmJudgment j = judgment.judge(s);
+    String visitedDay = LocalDate.now(clock).format(DAY);
+    // 점검을 못 한 방문에 현장 교체가 있을 수 없다.
+    String rxDone = j.inspected() ? s.rxDoneCode() : null;
+    // 현장에서 교체를 끝냈으면 다시 갈 이유가 없다 (ck_v_rxrev).
+    String revisitPlan = "done".equals(rxDone) ? "not-needed" : s.revisitPlanCode();
+
+    Visit visit = assemble(s, j, unit, officer, visitedDay, rxDone, revisitPlan);
+    visits.save(visit);
+
+    unit.recordVisit(unitStatus(s, revisitPlan, cb), visitedDay);
+    if (j.inspected()) {
+      unit.markRxBaseline(rxBaselineDay(j, visitedDay, rxDone).orElse(null));
+    }
+
+    return new VisitSaveResult(visit.getId(), visitedDay, false);
+  }
+
+  private Optional<Visit> findReplay(VisitSubmission s) {
+    return s.clientVisitId() == null
+        ? Optional.empty()
+        : visits.findByClientVisitId(s.clientVisitId());
+  }
+
+  private Visit assemble(
+      VisitSubmission s,
+      AlarmJudgment j,
+      Unit unit,
+      User officer,
+      String visitedDay,
+      String rxDone,
+      String revisitPlan) {
+    Visit visit =
+        new Visit(
+            unit,
+            officer,
+            visitedDay,
+            Instant.now(clock),
+            s.consentCode(),
+            j.inspected(),
+            j.ruleVersion());
+
+    visit.applyGate(s.respondentTypeCode(), s.refusalReasonCode(), s.refusalNote());
+
+    visit.applyAlarmJudgment(
+        j.roomCount(),
+        j.mfgYm(),
+        j.mfgUnmarked(),
+        j.replaceCount(),
+        j.expired(),
+        j.effectiveReplaceCount(),
+        j.conditionCode());
+
+    // 점검을 못 한 방문은 소화기가 발생 자체를 하지 않는다 (ck_v_na).
+    visit.applyPostCare(
+        j.inspected() ? s.extinguisherInstalledCode() : null,
+        rxDone,
+        revisitPlan,
+        s.noRevisitNote(),
+        s.note());
+
+    visit.applyDispatchSnapshot(
+        s.clientVisitId(),
+        s.routeOrder(),
+        s.dispatchedScore(),
+        s.dispatchedOrderKey(),
+        s.scoreVersion(),
+        s.gpsLat(),
+        s.gpsLng());
+
+    for (ItemJudgment item : j.items()) {
+      ReplacementItem row =
+          new ReplacementItem(
+              item.itemSeq(),
+              item.replaceReasonCode(),
+              item.batteryTypeCode(),
+              item.rxCode(),
+              item.conditionCode(),
+              item.autoGenerated());
+      item.detectorFlagCodes().forEach(row::addFlag);
+      visit.addReplacementItem(row);
+    }
+    return visit;
+  }
+
+  /**
+   * 세대가 다음에 어떤 상태로 남는가.
+   *
+   * <p>기본 전이는 lookup(consent_statuses.unit_status_cd)이 정한다. 재방문이 필요하다고 기록한 방문만 그 결과를 덮어 세대를 큐에 붙잡아
+   * 둔다 — 승낙·거부·공가·연락두절 어느 쪽이든 같다.
+   */
+  private String unitStatus(VisitSubmission s, String revisitPlan, CodeBook cb) {
+    if ("revisit".equals(revisitPlan)) {
+      return QUEUED_STATUS;
+    }
+    return cb.consentStatus(s.consentCode()).getUnitStatusCode();
+  }
+
+  /**
+   * 재산입 기준일 — 여기서 15년이 지나면 세대가 다시 큐로 온다.
+   *
+   * <p>교체를 했으면 새 기기의 시계가 방문일에 시작한다. 교체가 없었으면 기존 기기의 시계를 그대로 쓴다(제조년월 기준) — 그래야 권고만 받고 끝난 세대도 남은 기간
+   * 뒤에 제 발로 돌아온다.
+   *
+   * <p>이미 경과한 세대는 비운다. 사유까지 받아 큐에서 뺀 판단을 다음 스캔이 하루 만에 뒤집으면 안 되므로, 예전 방문이 남긴 지난 기준일까지 지워야 한다.
+   */
+  private Optional<String> rxBaselineDay(AlarmJudgment j, String visitedDay, String rxDone) {
+    if ("done".equals(rxDone)) {
+      return Optional.of(visitedDay);
+    }
+    if (Boolean.TRUE.equals(j.expired()) || j.mfgYm() == null) {
+      return Optional.empty();
+    }
+    return Optional.of(manufacturedDay(j.mfgYm()));
+  }
+
+  /** "YYYY-MM" → "YYYYMM01". 라벨에 일자가 없으므로 그 달의 시작으로 둔다. */
+  private static String manufacturedDay(String mfgYm) {
+    return mfgYm.replace("-", "") + "01";
+  }
+
+  private static BusinessException notFound(String message) {
+    return new BusinessException(ErrorCode.NOT_FOUND, message);
+  }
+}

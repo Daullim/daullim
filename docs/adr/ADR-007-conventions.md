@@ -13,7 +13,9 @@
 
 ## 결정
 1. **Java 스타일**: Spotless + google-java-format. `spotlessApply` 자동 정렬, `spotlessCheck` build 연결.
-2. **FE 스타일**: ESLint + Prettier 기본값(Vite 템플릿 + prettier). 커스텀 룰 금지.
+2. **FE 스타일**: ~~ESLint + Prettier 기본값~~ → **oxlint 단독**(2026-07-31 정정).
+   Vite 템플릿이 oxlint로 바뀌었고 Prettier는 도입하지 않았다 — 포매터를 따로 두지 않는다.
+   커스텀 룰 금지는 유지. `ui/` 벤더 파일의 `only-export-components` warning은 기존값 — **에러 0이면 통과**.
 3. **커밋**: Conventional Commits 경량형 `type(scope): 요약` — type 5개(feat/fix/chore/docs/refactor), scope 5개(be/fe/pipeline/seed/docs).
 4. **브랜치**: `main` 단일 + 짧은 기능 브랜치(`feat/be-queue-api`) → PR → merge.
 5. **PR**: main 직커밋 금지, 상호 리뷰 원칙 + **24h 무응답 시 셀프 머지 허용**. 예외: 계약 변경 PR(ADR-005)은 반드시 상호 승인.

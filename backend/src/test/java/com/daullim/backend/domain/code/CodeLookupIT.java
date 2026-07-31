@@ -3,7 +3,6 @@ package com.daullim.backend.domain.code;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.daullim.backend.TestcontainersConfiguration;
-import com.daullim.backend.domain.code.repository.AgeBandRepository;
 import com.daullim.backend.domain.code.repository.BatteryTypeRepository;
 import com.daullim.backend.domain.code.repository.ConditionCodeRepository;
 import com.daullim.backend.domain.code.repository.ConsentStatusRepository;
@@ -30,18 +29,16 @@ class CodeLookupIT {
   @Autowired BatteryTypeRepository batteryTypes;
   @Autowired DetectorFlagRepository detectorFlags;
   @Autowired ConditionCodeRepository conditionCodes;
-  @Autowired AgeBandRepository ageBands;
   @Autowired UnitStatusRepository unitStatuses;
   @Autowired ConsentStatusRepository consentStatuses;
 
   @Test
-  @DisplayName("lookup 7종의 행수가 domain.ts 열거값 개수와 일치한다")
+  @DisplayName("lookup 6종의 행수가 domain.ts 열거값 개수와 일치한다")
   void seedRowCounts() {
     assertThat(replaceReasons.findAll()).hasSize(6);
     assertThat(batteryTypes.findAll()).hasSize(3);
     assertThat(detectorFlags.findAll()).hasSize(4);
     assertThat(conditionCodes.findAll()).hasSize(4);
-    assertThat(ageBands.findAll()).hasSize(5);
     assertThat(unitStatuses.findAll()).hasSize(3);
     assertThat(consentStatuses.findAll()).hasSize(4);
   }
@@ -92,17 +89,6 @@ class CodeLookupIT {
         .get()
         .extracting("severityRank")
         .isEqualTo((short) 3);
-  }
-
-  @Test
-  @DisplayName("연차 구간의 하한값이 AGE_BAND.minYears와 같고, 15년 이상은 gt-15뿐이다")
-  void ageBandMinYears() {
-    assertThat(ageBands.findById("le-5")).get().extracting("minYears").isEqualTo((short) 0);
-    assertThat(ageBands.findById("y5-10")).get().extracting("minYears").isEqualTo((short) 5);
-    assertThat(ageBands.findById("y10-15")).get().extracting("minYears").isEqualTo((short) 10);
-    assertThat(ageBands.findById("gt-15")).get().extracting("minYears").isEqualTo((short) 15);
-    // '모름'은 연차 판정 자체를 못 한다 — 경과 아님으로 떨어져야 한다
-    assertThat(ageBands.findById("unknown")).get().extracting("minYears").isNull();
   }
 
   @Test

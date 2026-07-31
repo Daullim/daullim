@@ -12,9 +12,9 @@ import { ConditionBadge, FormSection, InfoNote } from "@/components/inspection/f
 import {
   deriveRxList,
   effectiveReplaceCount,
-  isAgeEstimated,
   judgeAlarms,
   missingItems,
+  needsNoRevisitNote,
   reasonSummary,
   type InspectionFormState,
 } from "@/lib/inspection";
@@ -31,7 +31,6 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
 
 /**
  * 최종 확인 — 제출 직전 누락 점검 + 자동 판정 요약(읽기전용).
- * 판정 우선순위·법적 각주는 폼설계 정본 — 추정 폴백 기반 판정은 "(추정)" 동반 (NFR-04).
  */
 export function ReviewSection({
   form,
@@ -47,6 +46,7 @@ export function ReviewSection({
   const rxList = deriveRxList(form);
   const count = effectiveReplaceCount(form);
   const reasons = reasonSummary(form);
+  const needsReason = needsNoRevisitNote(form);
 
   return (
     <FormSection>
@@ -74,8 +74,8 @@ export function ReviewSection({
             <Row label="제조연차">
               {form.mfgYm ? (
                 <DataText>{form.mfgYm.replace("-", ".")}</DataText>
-              ) : form.ageBand ? (
-                <span>구간 추정</span>
+              ) : form.mfgUnmarked ? (
+                <span>표기 없음</span>
               ) : (
                 "—"
               )}
@@ -93,7 +93,7 @@ export function ReviewSection({
             </Row>
             <Row label="경보기 판정">
               {code ? (
-                <ConditionBadge code={code} estimated={code === "EXPIRED" && isAgeEstimated(form)} />
+                <ConditionBadge code={code} />
               ) : (
                 <span className="text-subtle">입력 대기</span>
               )}
@@ -123,6 +123,11 @@ export function ReviewSection({
         <Row label="재방문">
           {form.revisit ? REVISIT_PLAN[form.revisit].label : <span className="text-subtle">미선택</span>}
         </Row>
+        {needsReason && (
+          <Row label="재방문하지 않는 사유">
+            {form.noRevisitNote || <span className="text-subtle">미입력</span>}
+          </Row>
+        )}
       </ul>
 
       {/* 법적 위험도 고정 각주 — 작성 화면의 필수 상설 문구. 저장된 기록 조회에는 띄우지 않는다 */}
