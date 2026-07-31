@@ -2,7 +2,6 @@ package com.daullim.backend.domain.code.service;
 
 import com.daullim.backend.common.error.BusinessException;
 import com.daullim.backend.common.error.ErrorCode;
-import com.daullim.backend.domain.code.entity.AgeBand;
 import com.daullim.backend.domain.code.entity.BatteryType;
 import com.daullim.backend.domain.code.entity.ConditionCode;
 import com.daullim.backend.domain.code.entity.ConsentStatus;
@@ -11,13 +10,12 @@ import com.daullim.backend.domain.code.entity.ReplaceReason;
 import com.daullim.backend.domain.code.entity.UnitStatus;
 import java.util.Map;
 
-/** lookup 7종의 읽기 전용 스냅샷. 판정 규칙이 참조하는 속성(중대결함 여부·심각도 서열·처방 코드·연차 하한·상태 전이). */
+/** lookup 6종의 읽기 전용 스냅샷. 판정 규칙이 참조하는 속성(중대결함 여부·심각도 서열·처방 코드·상태 전이). */
 public record CodeBook(
     Map<String, ReplaceReason> replaceReasons,
     Map<String, BatteryType> batteryTypes,
     Map<String, DetectorFlag> detectorFlags,
     Map<String, ConditionCode> conditionCodes,
-    Map<String, AgeBand> ageBands,
     Map<String, UnitStatus> unitStatuses,
     Map<String, ConsentStatus> consentStatuses) {
 
@@ -35,10 +33,6 @@ public record CodeBook(
 
   public ConditionCode conditionCode(String code) {
     return require(conditionCodes.get(code), "condition_code_cd", code);
-  }
-
-  public AgeBand ageBand(String code) {
-    return require(ageBands.get(code), "age_band_cd", code);
   }
 
   public UnitStatus unitStatus(String code) {

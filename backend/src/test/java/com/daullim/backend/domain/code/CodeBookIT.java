@@ -24,7 +24,7 @@ class CodeBookIT {
   @Autowired Clock clock;
 
   @Test
-  @DisplayName("lookup 7종이 한 스냅샷에 다 담긴다")
+  @DisplayName("lookup 6종이 한 스냅샷에 다 담긴다")
   void loadsAllSevenLookups() {
     CodeBook book = provider.get();
 
@@ -32,7 +32,6 @@ class CodeBookIT {
     assertThat(book.batteryTypes()).hasSize(3);
     assertThat(book.detectorFlags()).hasSize(4);
     assertThat(book.conditionCodes()).hasSize(4);
-    assertThat(book.ageBands()).hasSize(5);
     assertThat(book.unitStatuses()).hasSize(3);
     assertThat(book.consentStatuses()).hasSize(4);
   }
@@ -47,8 +46,6 @@ class CodeBookIT {
     assertThat(book.conditionCode("DEFECTIVE").getSeverityRank()).isEqualTo((short) 3);
     assertThat(book.batteryType("sealed").getRxCode()).isEqualTo("RX-IOT");
     assertThat(book.replaceReason("expired").getRxCode()).isEqualTo("RX-IOT");
-    assertThat(book.ageBand("gt-15").getMinYears()).isEqualTo((short) 15);
-    assertThat(book.ageBand("unknown").getMinYears()).isNull();
     assertThat(book.consentStatus("accepted").getUnitStatusCode()).isEqualTo("done");
   }
 

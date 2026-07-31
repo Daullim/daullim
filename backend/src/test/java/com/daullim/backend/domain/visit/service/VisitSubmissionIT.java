@@ -116,7 +116,7 @@ class VisitSubmissionIT {
     assertThat(saved.getEffectiveReplaceCount()).isEqualTo((short) 3);
     assertThat(saved.getConditionCode()).isEqualTo("EXPIRED");
     assertThat(saved.getRuleVersion()).isEqualTo("v1");
-    assertThat(saved.getAgeEstimated()).isFalse();
+    assertThat(saved.isMfgUnmarked()).isFalse();
 
     assertThat(saved.getReplacementItems()).hasSize(3);
     assertThat(saved.getReplacementItems())
@@ -160,6 +160,24 @@ class VisitSubmissionIT {
   }
 
   @Test
+  @DisplayName("제조년월 미표기 방문이 실측 없이 저장된다")
+  void unmarkedVisitSaves() {
+    VisitSaveResult result = service.submit(accepted(2, null, true, null, List.of(), "done"));
+    em.flush();
+    em.clear();
+
+    Visit saved = visits.findById(result.visitId()).orElseThrow();
+    assertThat(saved.getMfgYm()).isNull();
+    assertThat(saved.isMfgUnmarked()).isTrue();
+    assertThat(saved.getExpired()).isFalse();
+    assertThat(saved.getConditionCode()).isEqualTo("DEFECTIVE");
+    assertThat(saved.getEffectiveReplaceCount()).isEqualTo((short) 2);
+    assertThat(saved.getReplacementItems())
+        .hasSize(2)
+        .allSatisfy(item -> assertThat(item.getReplaceReasonCode()).isEqualTo("unmarked"));
+  }
+
+  @Test
   @DisplayName("권고만 전달했으면 재산입 기준일을 찍지 않는다")
   void advisoryOnlyLeavesBaselineEmpty() {
     service.submit(accepted(2, "2020-01", 0, List.of(), "advised-only"));
@@ -183,9 +201,7 @@ class VisitSubmissionIT {
             null,
             null,
             null,
-            null,
-            null,
-            null,
+            false,
             null,
             List.of(),
             // 클라이언트가 실수로 실어 보내도 저장되지 않아야 한다
@@ -237,8 +253,8 @@ class VisitSubmissionIT {
   void unknownUnitIsNotFound() {
     VisitSubmission orphan =
         new VisitSubmission(
-            -1L, officerId, null, "vacant", null, null, null, null, null, null, null, null, null,
-            List.of(), null, null, null, null, null, null, null, null, null, null);
+            -1L, officerId, null, "vacant", null, null, null, null, null, false, null, List.of(),
+            null, null, null, null, null, null, null, null, null, null);
 
     assertThatThrownBy(() -> service.submit(orphan))
         .isInstanceOf(BusinessException.class)
@@ -253,6 +269,16 @@ class VisitSubmissionIT {
       Integer replaceCount,
       List<ReplacementInput> items,
       String rxDoneCode) {
+    return accepted(roomCount, mfgYm, false, replaceCount, items, rxDoneCode);
+  }
+
+  private VisitSubmission accepted(
+      int roomCount,
+      String mfgYm,
+      boolean mfgUnmarked,
+      Integer replaceCount,
+      List<ReplacementInput> items,
+      String rxDoneCode) {
     return new VisitSubmission(
         unitId,
         officerId,
@@ -261,11 +287,9 @@ class VisitSubmissionIT {
         "owner",
         null,
         null,
-        null,
-        null,
         roomCount,
         mfgYm,
-        null,
+        mfgUnmarked,
         replaceCount,
         items,
         "installed",
@@ -288,12 +312,10 @@ class VisitSubmissionIT {
         s.consentCode(),
         s.respondentTypeCode(),
         s.refusalReasonCode(),
-        s.selfReportPeriodCode(),
-        s.selfReportTestedCode(),
         s.refusalNote(),
         s.roomCount(),
         s.mfgYm(),
-        s.ageBandCode(),
+        s.mfgUnmarked(),
         s.replaceCount(),
         s.replacements(),
         s.extinguisherInstalledCode(),

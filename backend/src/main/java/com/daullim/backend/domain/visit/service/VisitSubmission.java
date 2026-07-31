@@ -14,14 +14,12 @@ public record VisitSubmission(
     String consentCode,
     String respondentTypeCode,
     String refusalReasonCode,
-    String selfReportPeriodCode,
-    String selfReportTestedCode,
     String refusalNote,
 
     // 경보기
     Integer roomCount,
     String mfgYm,
-    String ageBandCode,
+    boolean mfgUnmarked,
     Integer replaceCount,
     List<ReplacementInput> replacements,
 
@@ -43,7 +41,7 @@ public record VisitSubmission(
     replacements = replacements == null ? List.of() : List.copyOf(replacements);
   }
 
-  /** 게이트 하위 필드를 상위 선택에 맞춰 지운다. */
+  /** 하위 필드를 상위 선택에 맞춰 지운다 — 클라이언트가 지워 보냈으리라 믿지 않는다. */
   public VisitSubmission normalized() {
     boolean refused = "refused".equals(consentCode);
 
@@ -54,13 +52,11 @@ public record VisitSubmission(
         consentCode,
         respondentTypeCode,
         refused ? refusalReasonCode : null,
-        // selfReplaced(자가신고) 삭제하였으므로 null로 비움
-        null,
-        null,
         refused ? refusalNote : null,
         roomCount,
         mfgYm,
-        ageBandCode,
+        // 실측이 있으면 미표기는 성립하지 않는다 (ck_v_mfg_excl).
+        mfgYm == null && mfgUnmarked,
         replaceCount,
         replacements,
         extinguisherInstalledCode,

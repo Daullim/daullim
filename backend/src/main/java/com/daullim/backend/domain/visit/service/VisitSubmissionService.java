@@ -106,17 +106,12 @@ public class VisitSubmissionService {
             j.inspected(),
             j.ruleVersion());
 
-    visit.applyGate(
-        s.respondentTypeCode(),
-        s.refusalReasonCode(),
-        s.selfReportPeriodCode(),
-        s.selfReportTestedCode(),
-        s.refusalNote());
+    visit.applyGate(s.respondentTypeCode(), s.refusalReasonCode(), s.refusalNote());
 
     visit.applyAlarmJudgment(
         j.roomCount(),
         j.mfgYm(),
-        j.ageBandCode(),
+        j.mfgUnmarked(),
         j.replaceCount(),
         j.expired(),
         j.effectiveReplaceCount(),

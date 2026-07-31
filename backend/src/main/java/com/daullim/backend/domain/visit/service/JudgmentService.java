@@ -39,21 +39,20 @@ public class JudgmentService {
 
     validateAlarm(s, cb);
 
-    Integer elapsed = elapsedYears(s);
-    boolean expired = elapsed != null && elapsed >= DetectorPolicy.SERVICE_LIFE_YEARS;
-    int effective = expired ? s.roomCount() : s.replaceCount();
+    String auto = autoReason(s);
+    int effective = auto != null ? s.roomCount() : s.replaceCount();
 
-    List<ItemJudgment> items = expired ? expiredItems(effective, cb) : judgedItems(s, cb);
-    String condition = overallCondition(expired, effective, items, cb);
+    List<ItemJudgment> items = auto != null ? autoItems(auto, effective, cb) : judgedItems(s, cb);
+    String condition = overallCondition(auto, effective, items, cb);
 
     return new AlarmJudgment(
         true,
         s.roomCount().shortValue(),
         s.mfgYm(),
-        s.ageBandCode(),
-        // 경과 시엔 개수를 입력받지 않으므로 원입력을 그대로 둔다.
+        s.mfgUnmarked(),
+        // 전량 교체 확정 시엔 개수를 입력받지 않으므로 원입력을 그대로 둔다.
         s.replaceCount() == null ? null : s.replaceCount().shortValue(),
-        expired,
+        "expired".equals(auto),
         (short) effective,
         condition,
         items,
@@ -79,15 +78,15 @@ public class JudgmentService {
     if (s.roomCount() == null || s.roomCount() < 1) {
       throw invalid("roomCount: 구획된 실 개수는 1 이상이어야 합니다.");
     }
-    if (s.mfgYm() == null) {
-      throw invalid("mfgYm: 제조년월은 필수입니다.");
+    if (s.mfgYm() == null && !s.mfgUnmarked()) {
+      throw invalid("mfgYm: 제조년월 실측 또는 '표기 없음' 중 하나는 필수입니다.");
     }
     if (s.extinguisherInstalledCode() == null) {
       throw invalid("extinguisherInstalledCode: 소화기 설치 여부는 필수입니다.");
     }
 
-    // 경과면 전량 교체로 자동 확정이라 개수·사유를 입력받지 않는다.
-    if (elapsedIsExpired(s)) {
+    // 전량 교체로 자동 확정된 건은 개수·사유를 입력받지 않는다.
+    if (autoReason(s) != null) {
       return;
     }
     if (s.replaceCount() == null) {
@@ -139,14 +138,17 @@ public class JudgmentService {
 
   /* ------------------------------- 판정 ------------------------------- */
 
-  /** 제조년월 실측이 유일한 근거다 — 승낙하고 들어간 이상 라벨을 읽는다. */
-  private Integer elapsedYears(VisitSubmission s) {
-    return s.mfgYm() == null ? null : yearsSince(s.mfgYm());
-  }
-
-  private boolean elapsedIsExpired(VisitSubmission s) {
-    Integer years = elapsedYears(s);
-    return years != null && years >= DetectorPolicy.SERVICE_LIFE_YEARS;
+  /**
+   * 개수·사유 입력 없이 전량 교체가 확정되는 사유. 아니면 null.
+   *
+   * <p>경과는 연식이 다한 것이고 미표기는 연식을 보증할 수 없는 것이다. 둘 다 실별로 따질 여지가 없다. 제조년월이 없으면 경과 판정 자체가 불가능하므로 두 경우는
+   * 배타적이다.
+   */
+  private String autoReason(VisitSubmission s) {
+    if (s.mfgYm() != null) {
+      return yearsSince(s.mfgYm()) >= DetectorPolicy.SERVICE_LIFE_YEARS ? "expired" : null;
+    }
+    return s.mfgUnmarked() ? "unmarked" : null;
   }
 
   private int yearsSince(String mfgYm) {
@@ -163,12 +165,13 @@ public class JudgmentService {
     return (int) (months / 12);
   }
 
-  /** 경과는 작동 여부와 무관하게 전량 교체. 사유를 '내용연수 지남'으로 고정해 집계 경로를 하나로 만든다. */
-  private List<ItemJudgment> expiredItems(int count, CodeBook cb) {
-    String rx = cb.replaceReason("expired").getRxCode();
+  /** 사유를 하나로 고정해 실 개수만큼 자동 기록한다 — 집계 경로를 현장 입력과 하나로 맞춘다. */
+  private List<ItemJudgment> autoItems(String reason, int count, CodeBook cb) {
+    String rx = cb.replaceReason(reason).getRxCode();
+    String condition = conditionOf(reason, Set.of(), cb);
     List<ItemJudgment> items = new ArrayList<>(count);
     for (int i = 0; i < count; i++) {
-      items.add(new ItemJudgment((short) (i + 1), "expired", null, Set.of(), rx, "EXPIRED", true));
+      items.add(new ItemJudgment((short) (i + 1), reason, null, Set.of(), rx, condition, true));
     }
     return items;
   }
@@ -184,20 +187,24 @@ public class JudgmentService {
               in.batteryTypeCode(),
               in.detectorFlagCodes(),
               rxOf(in, cb),
-              conditionOf(in, cb),
+              conditionOf(in.replaceReasonCode(), in.detectorFlagCodes(), cb),
               false));
     }
     return items;
   }
 
-  /** 항목 1건의 판정. */
-  private String conditionOf(ReplacementInput in, CodeBook cb) {
-    return switch (in.replaceReasonCode()) {
+  /**
+   * 항목 1건의 판정.
+   *
+   * <p>이 사다리는 lookup 어디에도 컬럼이 없다 — 데이터가 아니라 로직이다. 고치지 말 것.
+   */
+  private String conditionOf(String reason, Set<String> flags, CodeBook cb) {
+    return switch (reason) {
       case "expired" -> "EXPIRED";
       // 미표기는 연차를 논할 자격이 없는 건이라 EXPIRED가 아니라 DEFECTIVE로.
       case "battery-dead", "detached", "unmarked" -> "DEFECTIVE";
       case "appearance" ->
-          in.detectorFlagCodes().stream().anyMatch(f -> cb.detectorFlag(f).isSevere())
+          flags.stream().anyMatch(f -> cb.detectorFlag(f).isSevere())
               ? "DEFECTIVE"
               : "REPLACE_ADVISED";
       default -> "REPLACE_ADVISED";
@@ -216,12 +223,12 @@ public class JudgmentService {
 
   /** 세대 종합 판정 = 항목 최악값. 서열은 lookup의 severity_rank가 정한다. */
   private String overallCondition(
-      boolean expired, int effective, List<ItemJudgment> items, CodeBook cb) {
+      String auto, int effective, List<ItemJudgment> items, CodeBook cb) {
     if (effective == 0) {
       return "OK_GOOD";
     }
-    if (expired) {
-      return "EXPIRED";
+    if (auto != null) {
+      return conditionOf(auto, Set.of(), cb);
     }
     return items.stream()
         .map(ItemJudgment::conditionCode)

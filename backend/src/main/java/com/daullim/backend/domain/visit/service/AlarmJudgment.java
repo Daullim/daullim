@@ -7,7 +7,7 @@ public record AlarmJudgment(
     boolean inspected,
     Short roomCount,
     String mfgYm,
-    String ageBandCode,
+    boolean mfgUnmarked,
     Short replaceCount,
     Boolean expired,
     Short effectiveReplaceCount,
@@ -21,6 +21,6 @@ public record AlarmJudgment(
 
   static AlarmJudgment notInspected() {
     return new AlarmJudgment(
-        false, null, null, null, null, null, null, null, List.of(), DetectorPolicy.RULE_VERSION);
+        false, null, null, false, null, null, null, null, List.of(), DetectorPolicy.RULE_VERSION);
   }
 }
