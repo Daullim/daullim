@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Menu } from "lucide-react";
 import { AppDrawer } from "@/components/layout/app-drawer";
-import { INSPECTOR } from "@/mock/sample";
 import { cn } from "@/lib/utils";
+import { fetchCurrentUser, type CurrentUser } from "@/lib/auth";
 
 export interface Crumb {
   label: string;
@@ -34,15 +34,19 @@ function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
 }
 
 /** 우측 계정 표기 — `소속 | 이름 직급` (양 모드 공통) */
-function Account({ className }: { className?: string }) {
+function Account({ className, user }: { className?: string; user?: CurrentUser }) {
+  const org = user?.orgName;
+  const rank = user?.rankName;
   return (
     <span className={cn("ml-auto flex shrink-0 items-center gap-2 pr-3", className)}>
-      <span className="text-subtle">{INSPECTOR.org}</span>
-      <span aria-hidden className="text-hairline-strong">
-        |
-      </span>
+      {org && <span className="text-subtle">{org}</span>}
+      {org && (
+        <span aria-hidden className="text-hairline-strong">
+          |
+        </span>
+      )}
       <span className="text-body">
-        {INSPECTOR.name} {INSPECTOR.rank}
+        {user?.name ?? "사용자"} {rank ?? ""}
       </span>
     </span>
   );
@@ -74,6 +78,18 @@ export function TopBar({
   crumbs?: Crumb[];
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [user, setUser] = useState<CurrentUser>();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchCurrentUser()
+      .then(setUser)
+      .catch((error: unknown) => {
+        if (error instanceof Error && error.message === "UNAUTHORIZED") {
+          navigate("/login", { replace: true });
+        }
+      });
+  }, [navigate]);
 
   if (mode === "control") {
     return (
@@ -89,8 +105,8 @@ export function TopBar({
             className="h-8 w-auto"
           />
         </Link>
-        <Account className="text-body-sm" />
-        <AppDrawer mode="control" open={drawerOpen} onOpenChange={setDrawerOpen} />
+        <Account className="text-body-sm" user={user} />
+        <AppDrawer mode="control" open={drawerOpen} onOpenChange={setDrawerOpen} user={user} />
       </header>
     );
   }
@@ -99,8 +115,8 @@ export function TopBar({
     <header className="flex h-16 shrink-0 items-center gap-3 border-b border-hairline bg-surface px-3">
       <HamburgerButton onClick={() => setDrawerOpen(true)} />
       {crumbs && <Breadcrumb crumbs={crumbs} />}
-      <Account className="text-body-md" />
-      <AppDrawer mode="field" open={drawerOpen} onOpenChange={setDrawerOpen} />
+      <Account className="text-body-md" user={user} />
+      <AppDrawer mode="field" open={drawerOpen} onOpenChange={setDrawerOpen} user={user} />
     </header>
   );
 }

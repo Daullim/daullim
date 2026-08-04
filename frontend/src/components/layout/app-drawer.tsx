@@ -7,7 +7,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/core/button";
-import { INSPECTOR } from "@/mock/sample";
+import type { CurrentUser } from "@/lib/auth";
 
 /* to가 없는 항목은 라우트 미정 — 자리만 확보한 플레이스홀더 (라우트를 지어내지 않는다) */
 const MENU_ITEMS: { label: string; to?: string }[] = [
@@ -24,10 +24,12 @@ export function AppDrawer({
   mode,
   open,
   onOpenChange,
+  user,
 }: {
   mode: "control" | "field";
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  user?: CurrentUser;
 }) {
   const navigate = useNavigate();
   return (
@@ -35,10 +37,10 @@ export function AppDrawer({
       <SheetContent side="left" className="w-80 gap-0 bg-surface p-0">
         <SheetHeader className="shrink-0 border-b border-hairline px-5 py-5 text-left">
           <SheetTitle className="text-title text-ink">
-            {INSPECTOR.name} {INSPECTOR.title}
+            {user?.name ?? "사용자"} {user?.titleName ?? ""}
           </SheetTitle>
           <SheetDescription className="text-body-md font-normal text-subtle">
-            {INSPECTOR.org}
+            {user?.orgName ?? ""}
           </SheetDescription>
         </SheetHeader>
 
@@ -71,7 +73,10 @@ export function AppDrawer({
               variant="danger"
               size="field-xl"
               className="w-full"
-              onClick={() => navigate("/login")}
+              onClick={() => {
+                localStorage.removeItem("accessToken");
+                navigate("/login");
+              }}
             >
               로그아웃
             </Button>
