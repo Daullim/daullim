@@ -1,0 +1,701 @@
+openapi: 3.1.0
+
+# 계약 정본 (ADR-005). 변경은 "계약 변경 PR"로만 한다.
+#
+# 범위: Issue #25 조회 API 9종. 인증(#20·#22·#23)·visits 저장/조회·GET /grids(정적 GeoJSON)·
+# GET /codes·재방문은 이 파일에 없다 — 아직 구현되지 않았고, 지어내지 않는다.
+#
+# ⚠️ 값 규약은 실데이터에 맞춘다. Notion "API 명세서 v2" §4의 JSON 예시는 갱신되지 않아 값이 낡았고,
+# 구조는 v2를, 값은 아래 description을 따른다.
+
+info:
+  title: 다울림 API
+  description: |
+    소방 취약가구 화재경보기 사후관리 우선순위 처방 도구.
+
+    **지역 코드는 행정표준코드다.** 시도 2자리(`11` 서울 · `52` 전북특별자치도), 시군구 5자리
+    (`11620` 관악구 · `52750` 임실군), 행정동 10자리(`1162069500`). 접두사 관계가 성립해
+    (`dongCd[:5] == sigunguCd`, `[:2] == sidoCd`) 계층 조회에 별도 매핑이 필요 없다.
+    `45`는 전북특별자치도 출범으로 폐지됐다.
+
+    **격자 코드는 응답이 1km다.** DB(`buildings.grid_id`)는 500m(`다사46a41a`)이고 정적
+    GeoJSON은 1km(`다사4641`)이라, 서버가 유도해 내린다. 그대로 조인하면 0건이 된다.
+  version: v1
+
+servers:
+  - url: https://{host}/api/v1
+    variables:
+      host:
+        default: localhost:8080
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: 지역
+    description: 지역 셀렉터 3단
+  - name: 대상건물
+    description: 우선순위 큐와 대장 프리필
+  - name: 세대
+    description: 세대 목록과 현장 호수 입력
+  - name: 지도
+    description: 격자 집계
+  - name: 관제
+    description: 관제 화면 하단 요약
+
+paths:
+  /regions/sidos:
+    get:
+      tags: [지역]
+      summary: 시도 목록 조회
+      operationId: listSidos
+      description: 명칭 원천은 `seed/regions.csv`다 — `buildings`에 명칭 컬럼이 없다.
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Sido" }
+              example:
+                code: SUCCESS
+                message: 요청을 처리했습니다.
+                data:
+                  - { sidoCd: "11", sidoNm: 서울특별시 }
+                  - { sidoCd: "52", sidoNm: 전북특별자치도 }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /regions/sigungus:
+    get:
+      tags: [지역]
+      summary: 시군구 목록 조회
+      operationId: listSigungus
+      parameters:
+        - name: sidoCd
+          in: query
+          required: true
+          schema: { type: string, pattern: "^\\d{2}$" }
+          example: "11"
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Sigungu" }
+              example:
+                code: SUCCESS
+                message: 요청을 처리했습니다.
+                data:
+                  - { sigunguCd: "11620", sigunguNm: 관악구, regionTypeCd: URBAN }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /regions/dongs:
+    get:
+      tags: [지역]
+      summary: 행정동 목록 조회
+      operationId: listDongs
+      description: |
+        사전에 있는 행정동을 모두 내린다(관악구 21 · 임실군 12). 대상 가구 수는 세대 기준, 평균 위험도는
+        건물 기준이며 건물이 없는 동은 0으로 내려간다. 평균 위험도 내림차순 정렬은 FE 몫이다.
+      parameters:
+        - name: sigunguCd
+          in: query
+          required: true
+          schema: { type: string, pattern: "^\\d{5}$" }
+          example: "11620"
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Dong" }
+              example:
+                code: SUCCESS
+                message: 요청을 처리했습니다.
+                data:
+                  - dongCd: "1162069500"
+                    dongNm: 신림동
+                    householdCount: 2446
+                    avgRiskScore: 53.1
+                    avgRiskLevelCd: warn
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /buildings/queue:
+    get:
+      tags: [대상건물]
+      summary: 우선순위 큐 조회
+      operationId: getBuildingQueue
+      description: |
+        큐는 저장물이 아니라 조회 시 파생이다(ADR-012 결정 18). 정렬은 `order_key` 오름차순 고정이며
+        커서는 그 값을 감싼 Base64 불투명 문자열이다.
+      parameters:
+        - name: dongCd
+          in: query
+          required: true
+          description: 행정동코드 10자리
+          schema: { type: string, pattern: "^\\d{10}$" }
+          example: "1162069500"
+        - name: gridId
+          in: query
+          required: false
+          description: |
+            **1km** 격자 코드. 도시 격자 필터이며 농촌은 전달하지 않는다(동 전체).
+            500m 코드를 그대로 주면 0건이 된다.
+          schema: { type: string }
+          example: 다사4641
+        - name: q
+          in: query
+          required: false
+          description: 주소 부분검색. 서버가 공백을 제거한 뒤 `address_norm` LIKE로 매칭한다(FE B3 검색과 동일 규칙).
+          schema: { type: string }
+          example: 신림로 1
+        - name: cursor
+          in: query
+          required: false
+          description: 직전 응답의 `nextCursor`. 해석할 수 없으면 400이다.
+          schema: { type: string }
+        - name: size
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/BuildingQueuePage" }
+              example:
+                code: SUCCESS
+                message: 요청을 처리했습니다.
+                data:
+                  items:
+                    - buildingId: 101
+                      orderKey: 5407
+                      address: 서울특별시 관악구 광신1길 15
+                      houseTypeCd: multi-unit
+                      score: 100.00
+                      riskLevelCd: danger
+                      isEstimated: false
+                      basis: 미보급 · 동선 5407
+                      rxCodeCd: RX-IOT
+                      lat: 37.479400
+                      lng: 126.931700
+                      installDay: null
+                      lastInspectedDay: null
+                      unitCount: 8
+                      unitDoneCount: 0
+                  nextCursor: b3JkZXJfa2V5OjQ=
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /buildings/{buildingId}:
+    get:
+      tags: [대상건물]
+      summary: 건물 상세 조회
+      operationId: getBuilding
+      description: 세대패널 대장 프리필 + 점검폼 헤더 + 위험 분석 근거. `lambdaI`·`rrI`는 화면 미사용이라 내리지 않는다.
+      parameters:
+        - $ref: "#/components/parameters/BuildingId"
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/BuildingDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /buildings/{buildingId}/units:
+    get:
+      tags: [세대]
+      summary: 세대 목록 조회
+      operationId: listUnits
+      description: UnitPanel 라디오 목록과 1:1. 정렬은 `unitSeq`. 건물이 없으면 빈 배열이 아니라 404다.
+      parameters:
+        - $ref: "#/components/parameters/BuildingId"
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/Unit" }
+              example:
+                code: SUCCESS
+                message: 요청을 처리했습니다.
+                data:
+                  - { unitId: 1001, unitSeq: 1, hoNm: 101호, flrNo: 1, hoNmSourceCd: expos, statusCd: pending, lastInspectedDay: null }
+                  - { unitId: 1002, unitSeq: 2, hoNm: null, flrNo: null, hoNmSourceCd: field, statusCd: pending, lastInspectedDay: null }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /units/{unitId}:
+    patch:
+      tags: [세대]
+      summary: 세대 호수 수정
+      operationId: renameUnit
+      description: |
+        다가구 현장 호수 입력. `ho_nm_source_cd='field'` 행만 허용한다 — 전유부·본가구는 대장값이라 403이다.
+
+        업무 상태(`statusCd`·`lastInspectedDay`·`rxBaselineDay`)는 이 경로로 바뀌지 않는다.
+        `buildings`·`units`에서 유일하게 허용된 쓰기다(그 외는 pipeline 소유).
+      parameters:
+        - name: unitId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hoNm]
+              properties:
+                hoNm:
+                  type: string
+                  minLength: 1
+                  maxLength: 20
+                  example: 201호
+      responses:
+        "200":
+          description: 수정된 세대
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/Unit" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403":
+          description: 대장에서 온 호수(`expos`·`implicit`)라 수정할 수 없다
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+              example: { code: FORBIDDEN, message: 대장에서 온 호수는 수정할 수 없습니다., data: null }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409":
+          description: 같은 건물 안에 이미 있는 호수 (부분 UNIQUE `building_id, ho_nm`)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+              example: { code: CONFLICT, message: 같은 건물에 이미 있는 호수입니다., data: null }
+
+  /grids/summary:
+    get:
+      tags: [지도]
+      summary: 격자 방문 현황 조회
+      operationId: getGridSummary
+      description: |
+        B2 리스트의 **실시간** 부분만 분리한 것이다. 정적 속성(경계·zoneNo 등)은 GeoJSON에 있고
+        FE가 `gridId`로 조인한다 — 그래서 응답 `gridId`가 1km여야 한다.
+
+        `visitedCount`는 전 세대가 완료된 건물 수다(건물 완료 = `unitDoneCount == unitCount` 파생, 저장 안 함).
+      parameters:
+        - name: dongCd
+          in: query
+          required: true
+          schema: { type: string, pattern: "^\\d{10}$" }
+          example: "1162069500"
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/GridSummary" }
+              example:
+                code: SUCCESS
+                message: 요청을 처리했습니다.
+                data:
+                  - { gridId: 다사4641, targetCount: 42, visitedCount: 12 }
+                  - { gridId: 다사4741, targetCount: 37, visitedCount: 29 }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /dashboard/summary:
+    get:
+      tags: [관제]
+      summary: 관제 요약 조회
+      operationId: getDashboardSummary
+      description: |
+        하단 카운터 3종 + 갱신 시각. 집계 단위는 **세대**다(화면 라벨이 "대상 가구") —
+        `dangerCount`만 위험 등급이 건물 속성이라 건물 기준이다.
+
+        `updatedAt`은 이 응답을 만든 시각이다. 큐가 조회 시 파생이라 마지막 집계 시각이 곧 응답 시각이다.
+      parameters:
+        - name: sigunguCd
+          in: query
+          required: false
+          description: 생략하면 전 지역 집계
+          schema: { type: string, pattern: "^\\d{5}$" }
+          example: "11620"
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/DashboardSummary" }
+              example:
+                code: SUCCESS
+                message: 요청을 처리했습니다.
+                data:
+                  targetCount: 85139
+                  doneCount: 0
+                  dangerCount: 5231
+                  updatedAt: "2026-08-05T04:20:00Z"
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: ⚠️ 인증 방식 자체가 미결이다(ADR-012 §17). Bearer 토큰은 작업 가정이다.
+
+  parameters:
+    BuildingId:
+      name: buildingId
+      in: path
+      required: true
+      schema: { type: integer, format: int64 }
+
+  responses:
+    ValidationError:
+      description: 필드 형식·필수값 위반
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+          example: { code: VALIDATION_ERROR, message: "size는 100 이하입니다.", data: null }
+    Unauthorized:
+      description: 토큰 없음·만료
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+          example: { code: UNAUTHORIZED, message: 인증이 필요합니다., data: null }
+    NotFound:
+      description: 자원 없음
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ApiError" }
+          example: { code: NOT_FOUND, message: 대상을 찾을 수 없습니다., data: null }
+
+  schemas:
+    ApiResponse:
+      type: object
+      description: "공통 응답 봉투. 성공은 `code: SUCCESS`."
+      required: [code, message, data]
+      properties:
+        code: { type: string, example: SUCCESS }
+        message: { type: string, example: 요청을 처리했습니다. }
+        data: {}
+
+    ApiError:
+      type: object
+      required: [code, message, data]
+      properties:
+        code:
+          type: string
+          enum:
+            [
+              VALIDATION_ERROR,
+              UNAUTHORIZED,
+              FORBIDDEN,
+              NOT_FOUND,
+              CONFLICT,
+              DOMAIN_CODE_INVALID,
+              INTERNAL_ERROR,
+            ]
+        message: { type: string }
+        data: { type: "null" }
+
+    Sido:
+      type: object
+      required: [sidoCd, sidoNm]
+      properties:
+        sidoCd: { type: string, description: 행정표준코드 2자리, example: "11" }
+        sidoNm: { type: string, example: 서울특별시 }
+
+    Sigungu:
+      type: object
+      required: [sigunguCd, sigunguNm, regionTypeCd]
+      properties:
+        sigunguCd: { type: string, description: 행정표준코드 5자리, example: "11620" }
+        sigunguNm: { type: string, example: 관악구 }
+        regionTypeCd:
+          type: [string, "null"]
+          enum: [URBAN, RURAL, null]
+          description: |
+            시군구 내 건물의 URBAN·RURAL만 센 **다수값**이다(BUFFER·NO_POP 제외 — 파이프라인 v0
+            성적표의 대조 규약과 같다). 도농 판별이 격자 단위라 한 시군구에 여러 클래스가 공존한다:
+            관악구 URBAN 22,497 / BUFFER 3 / NO_POP 1, 임실군 URBAN 325 / RURAL 6,839 / BUFFER 928.
+
+            **화면 모드 분기용 대표값이지 개별 건물의 분류가 아니다.** 건물이 한 채도 없으면 null.
+
+    Dong:
+      type: object
+      required: [dongCd, dongNm, householdCount, avgRiskScore, avgRiskLevelCd]
+      properties:
+        dongCd: { type: string, description: 행정표준코드 10자리, example: "1162069500" }
+        dongNm: { type: string, example: 신림동 }
+        householdCount:
+          type: integer
+          format: int64
+          description: |
+            동 안의 **세대** 수 (`count(units)`). 점검의 실제 단위가 세대라 `GET /dashboard/summary`의
+            `targetCount`와 같은 축이다.
+        avgRiskScore:
+          type: number
+          description: |
+            동 안의 **건물** 평균 점수를 소수 1자리로 반올림. `householdCount`와 축이 다르다 — 위험 점수가
+            건물 속성이라 세대에 조인해 평균 내면 세대 많은 건물이 그만큼 가중된다.
+          example: 55.4
+        avgRiskLevelCd:
+          type: [string, "null"]
+          enum: [danger, warn, ok, null]
+          description: |
+            `avgRiskScore`에서 파생. 절대 임계값이며 pipeline `scoring.py::risk_level`과 같다 —
+            danger ≥70 · warn ≥35 · ok <35. 건물이 없는 동은 null.
+
+    BuildingQueuePage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/BuildingQueueItem" }
+        nextCursor:
+          type: [string, "null"]
+          description: 마지막 페이지면 null. `order_key`를 감싼 Base64 불투명 문자열이다.
+
+    BuildingQueueItem:
+      type: object
+      description: B3 QueueRow + 진행 표시와 1:1.
+      required:
+        [
+          buildingId,
+          orderKey,
+          address,
+          houseTypeCd,
+          score,
+          riskLevelCd,
+          isEstimated,
+          basis,
+          rxCodeCd,
+          lat,
+          lng,
+          installDay,
+          lastInspectedDay,
+          unitCount,
+          unitDoneCount,
+        ]
+      properties:
+        buildingId: { type: integer, format: int64 }
+        orderKey: { type: integer, description: 위험 + 동선을 종합한 방문 순서. 전역 유일·연속이다. }
+        address: { type: string }
+        houseTypeCd: { $ref: "#/components/schemas/HouseTypeCd" }
+        score: { type: number, minimum: 0, maximum: 100 }
+        riskLevelCd: { $ref: "#/components/schemas/RiskLevelCd" }
+        isEstimated:
+          type: boolean
+          description: 지오코딩이 지번으로 폴백한 행(관악 1.5% · 임실 8.8%). FE 점선 규칙의 근거다.
+        basis:
+          type: [string, "null"]
+          description: |
+            분석 근거 문자열. **보급이력이 전량 NULL이라 실제 값은 `"미보급 · 동선 5407"` 형태다** —
+            명세 초안의 `"보급 2016 · 동선 1"`은 목데이터였다.
+          example: 미보급 · 동선 5407
+        rxCodeCd:
+          $ref: "#/components/schemas/RxCodeCd"
+        lat: { type: number }
+        lng: { type: number }
+        installDay:
+          type: [string, "null"]
+          description: 감지기 보급 통합 대장이 존재하지 않아 **항상 null**이다(확정 결정).
+        lastInspectedDay:
+          type: [string, "null"]
+          pattern: "^\\d{8}$"
+          description: |
+            `max(units.last_inspected_day)` 파생. `units.last_inspected_day`는 BE 전용 업무 상태라
+            파이프라인이 채우지 않는다 — **첫 점검이 저장되기 전까지 null**이다.
+        unitCount: { type: integer, description: "`buildings.unit_count` (대장 세대수)" }
+        unitDoneCount:
+          type: integer
+          format: int64
+          description: |
+            `count(units WHERE status_cd='done')` 파생. 건물 완료는 `unitDoneCount == unitCount`이며
+            **저장하지 않는다**(FE `isBuildingDone`과 같은 규칙).
+
+    BuildingDetail:
+      type: object
+      required:
+        [
+          buildingId,
+          address,
+          houseTypeCd,
+          floorCount,
+          unitCount,
+          useAprDay,
+          installDay,
+          installYear,
+          detectorModel,
+          lat,
+          lng,
+          score,
+          riskLevelCd,
+          rxCodeCd,
+          isEstimated,
+          isExplore,
+          basis,
+          scoreVersion,
+          computedAt,
+        ]
+      properties:
+        buildingId: { type: integer, format: int64 }
+        address: { type: string }
+        houseTypeCd: { $ref: "#/components/schemas/HouseTypeCd" }
+        floorCount: { type: integer }
+        unitCount: { type: integer }
+        useAprDay:
+          type: [string, "null"]
+          pattern: "^\\d{8}$"
+          description: |
+            건축물대장 표제부 사용승인일. null은 **대장 미등재**이며 FE가 '미등재'로 분기한다
+            (관악 0.4% · 임실 9.2% 실측).
+        installDay:
+          type: [string, "null"]
+          description: 통합 대장 부재 — **항상 null**(확정 결정).
+        installYear:
+          type: [integer, "null"]
+          description: 통합 대장 부재 — **항상 null**(확정 결정).
+        detectorModel:
+          type: [string, "null"]
+          description: 통합 대장 부재 — **항상 null**. `"SD-100"` 같은 예시는 목데이터였다.
+        lat: { type: number }
+        lng: { type: number }
+        score: { type: number }
+        riskLevelCd: { $ref: "#/components/schemas/RiskLevelCd" }
+        rxCodeCd: { $ref: "#/components/schemas/RxCodeCd" }
+        isEstimated: { type: boolean }
+        isExplore: { type: boolean, description: 탐사 쿼터(G2)로 큐에 올라온 건물 }
+        basis: { type: [string, "null"], example: 미보급 · 동선 5407 }
+        scoreVersion:
+          type: string
+          description: |
+            점수 버전 **키**. 변환 파라미터(q01·q99·α·m·λ̄·β)는 `varchar(20)` 제약으로 담을 수 없어
+            `seed/score_params.json`에 분리 보관한다.
+          example: v0-20260805
+        computedAt: { type: string, format: date-time }
+
+    Unit:
+      type: object
+      required: [unitId, unitSeq, hoNm, flrNo, hoNmSourceCd, statusCd, lastInspectedDay]
+      properties:
+        unitId: { type: integer, format: int64 }
+        unitSeq: { type: integer }
+        hoNm:
+          type: [string, "null"]
+          description: null은 미지정이다(FE 표시 "미지정"). 다가구는 전유부가 없어 호수를 현장에서 받는다.
+        flrNo: { type: [integer, "null"] }
+        hoNmSourceCd:
+          type: string
+          enum: [expos, field, implicit]
+          description: 호수 출처. `field`인 행만 `PATCH /units/{unitId}`로 수정할 수 있다.
+        statusCd:
+          type: string
+          enum: [pending, refused, done]
+          description: 진행 상태(ADR-013). 조회 API는 이 값을 바꾸지 않는다.
+        lastInspectedDay:
+          type: [string, "null"]
+          pattern: "^\\d{8}$"
+
+    GridSummary:
+      type: object
+      required: [gridId, targetCount, visitedCount]
+      properties:
+        gridId:
+          type: string
+          description: |
+            **1km** 격자 코드. 서버가 500m 저장값에서 유도한다(`다사46a41a` → `다사4641`).
+            pipeline `utils.py::grid500_to_1km`과 같은 규칙이며 서울 2023 화재 5,646/5,646 = 100% 검증됐다.
+          example: 다사4641
+        targetCount: { type: integer, format: int64, description: 격자 내 대상 건물 수 }
+        visitedCount: { type: integer, format: int64, description: 전 세대가 완료된 건물 수 }
+
+    DashboardSummary:
+      type: object
+      required: [targetCount, doneCount, dangerCount, updatedAt]
+      properties:
+        targetCount: { type: integer, format: int64, description: "`count(units)`" }
+        doneCount: { type: integer, format: int64, description: "`count(units WHERE status_cd='done')`" }
+        dangerCount: { type: integer, format: int64, description: "`count(buildings WHERE risk_level_cd='danger')`" }
+        updatedAt: { type: string, format: date-time }
+
+    HouseTypeCd:
+      type: string
+      enum: [detached, multi-user, multi-family, row-house, multi-unit]
+      description: 소방시설법 제8조 대상 5분류. 아파트는 스코프 밖이라 없다.
+
+    RiskLevelCd:
+      type: string
+      enum: [danger, warn, ok]
+
+    RxCodeCd:
+      type: [string, "null"]
+      enum: [RX-BAT, RX-IOT, null]
+      description: |
+        처방 코드. DB `rx_code_cd` ↔ camelCase 1:1 규칙이라 필드명이 `rxCd`가 아니라 **`rxCodeCd`**다.

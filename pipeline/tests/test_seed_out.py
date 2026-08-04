@@ -9,6 +9,8 @@ import pytest
 
 from daullim_data.seed_out import (
     BUILDING_COLUMNS,
+    REGION_COLUMNS,
+    build_regions_csv,
     UNIT_COLUMNS,
     build_buildings_csv,
     build_grid_geojson,
@@ -147,3 +149,56 @@ def test_CSV는_BOM_없이_UTF8이다(tmp_path):
     u = build_units_csv(_units(["K0"]), keep_keys={"K0"})
     write_seed(tmp_path, b, u, _geojson())
     assert not (tmp_path / "buildings.csv").read_bytes().startswith(b"\xef\xbb\xbf")
+
+
+# ── 지역 사전 ───────────────────────────────────────────────────────────
+def _names():
+    return {"1162069500": ("서울특별시", "관악구", "신림동"),
+            "5275025000": ("전북특별자치도", "임실군", "임실읍")}
+
+
+def _bld_regions():
+    return pd.DataFrame({
+        "admin_dong_cd": ["1162069500", "1162069500", "5275025000"],
+        "sido_cd": ["11", "11", "52"],
+        "sigungu_cd": ["11620", "11620", "52750"],
+    })
+
+
+def test_지역사전은_3계층을_낸다():
+    """`buildings`에 명칭 컬럼이 없어 이름 없이는 지역 셀렉터를 못 그린다."""
+    r = build_regions_csv(_bld_regions(), names=_names())
+    assert list(r.columns) == REGION_COLUMNS
+    assert dict(r["level"].value_counts()) == {"sido": 2, "sigungu": 2, "dong": 2}
+    assert list(r.loc[r["level"] == "sido", "code"]) == ["11", "52"]
+
+
+def test_부모_코드는_접두사_관계다():
+    """실측 확인 — admin_dong_cd[:5] == sigungu_cd, [:2] == sido_cd."""
+    r = build_regions_csv(_bld_regions(), names=_names()).set_index("code")
+    assert r.loc["11620", "parent_code"] == "11"
+    assert r.loc["1162069500", "parent_code"] == "11620"
+    assert pd.isna(r.loc["11", "parent_code"]) or r.loc["11", "parent_code"] is None
+
+
+def test_이름을_못_찾은_지역은_빠진다():
+    r = build_regions_csv(_bld_regions(), names={"1162069500": ("서울특별시", "관악구", "신림동")})
+    assert "5275025000" not in set(r["code"])
+
+
+def test_명칭_누락은_검증에서_잡힌다():
+    """지역 셀렉터가 그려지지 않는 상태로 적재되면 안 된다."""
+    b = build_buildings_csv(_scored(20))
+    b["is_explore"] = [True] + [False] * 19
+    u = build_units_csv(_units([f"K{i}" for i in range(20)]), keep_keys=set(b["bld_key"]))
+    empty = pd.DataFrame(columns=REGION_COLUMNS)
+    assert any("regions에" in e for e in validate_seed(b, u, _geojson(), empty))
+
+
+def test_지역사전도_함께_산출된다(tmp_path):
+    b = build_buildings_csv(_scored(2))
+    u = build_units_csv(_units(["K0", "K1"]), keep_keys={"K0", "K1"})
+    r = build_regions_csv(_bld_regions(), names=_names())
+    written = write_seed(tmp_path, b, u, _geojson(), r)
+    assert (tmp_path / "regions.csv").exists()
+    assert len(written) == 4
