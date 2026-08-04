@@ -333,8 +333,38 @@ def build_master(
 
     buildings = pd.DataFrame(b_rows)
     units_df = pd.DataFrame(u_rows)
+    if not buildings.empty:
+        buildings, filled = fill_missing_dong(buildings)
+        rep.missing_dong = max(rep.missing_dong - filled, 0)
     rep.units = len(units_df)
     return buildings, units_df, rep
+
+
+def fill_missing_dong(buildings: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """`admin_dong_cd` 결측을 **최근접 건물**의 값으로 채운다 → (보완된 표, 채운 수).
+
+    지번 폴백 응답에는 `level4AC`가 없다(실측). 그런데 이 컬럼은 NOT NULL이라
+    비면 그 행은 통째로 적재되지 않는다 — 화면의 지역 셀렉터도 이걸로 돈다.
+
+    법정동에서 행정동을 역산하는 건 1:다라 불가능하지만, **바로 옆 건물의 행정동**은
+    거의 확실히 같다. 추가 API 호출이 0이고 공간적으로도 타당하다.
+    채운 행은 `is_estimated=true`로 표기해 추정임을 화면까지 전파한다.
+    """
+    out = buildings.copy()
+    missing = out["admin_dong_cd"].isna()
+    known = out.loc[~missing]
+    if not missing.any() or known.empty:
+        return out, 0
+
+    kx = known["lat"].to_numpy(float)
+    ky = known["lng"].to_numpy(float)
+    codes = known["admin_dong_cd"].to_numpy()
+    idx = out.index[missing]
+    for i in idx:
+        d2 = (kx - float(out.at[i, "lat"])) ** 2 + (ky - float(out.at[i, "lng"])) ** 2
+        out.at[i, "admin_dong_cd"] = codes[int(d2.argmin())]
+        out.at[i, "is_estimated"] = True
+    return out, int(missing.sum())
 
 
 def _units_for(kind, bld_key, count, title_row, expos_fetcher, rep) -> list[dict]:
@@ -356,9 +386,14 @@ def _units_for(kind, bld_key, count, title_row, expos_fetcher, rep) -> list[dict
         if dong:
             expos = [e for e in expos if str(e.get("dongNm") or "").strip() == dong]
         hos = [e for e in expos if str(e.get("hoNm") or "").strip()]
-        # 전유부 호수 개수가 표제부 세대수와 어긋나면 신뢰하지 않는다 —
-        # 같은 지번에 여러 동이 섞여 들어올 수 있어서다.
-        if hos and len(hos) == count:
+        names = [nfc(str(e.get("hoNm")).strip()) for e in hos]
+        # 전유부를 신뢰하는 조건은 둘 다 충족일 때뿐이다.
+        #   ① 호수 개수 == 표제부 세대수
+        #   ② 호수명에 중복이 없을 것
+        # 같은 지번에 여러 동이 있으면 '2층201호'가 동마다 반복돼 들어온다(실측 3.9%).
+        # 표제부의 dongNm이 비어 있으면 위의 동 필터가 걸리지 않으므로, 중복 자체를
+        # 신뢰 불가 신호로 삼는다 — DDL의 ux_units_bld_ho(건물 내 호수 유일)에 걸린다.
+        if hos and len(hos) == count and len(set(names)) == len(names):
             out = []
             for seq, e in enumerate(sorted(hos, key=lambda x: str(x.get("hoNm"))), start=1):
                 bump("expos")

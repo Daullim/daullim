@@ -206,3 +206,32 @@ def test_units_행수가_unit_count_합과_같다():
     ]
     b, u, rep = build_master("gwanak", titles=rows, geocoder=_geo, expos_fetcher=lambda r: [])
     assert len(u) == int(b["unit_count"].sum()) == 12
+
+
+def test_전유부_호수가_중복이면_믿지_않는다():
+    """같은 지번에 여러 동이 있으면 '2층201호'가 동마다 반복돼 들어온다(실측 3.9%).
+
+    DDL의 ux_units_bld_ho(건물 내 호수 유일)에 걸리므로 field로 정직하게 떨어뜨린다.
+    """
+    t = _title(mainPurpsCdNm="공동주택", etcPurps="다세대주택", hhldCnt=4, fmlyCnt=0)
+    expos = [{"hoNm": "201호", "flrNo": 2}, {"hoNm": "301호", "flrNo": 3},
+             {"hoNm": "201호", "flrNo": 2}, {"hoNm": "301호", "flrNo": 3}]  # 2개 동
+    b, u, rep = build_master("gwanak", titles=[t], geocoder=_geo, expos_fetcher=lambda r: expos)
+    assert set(u["ho_nm_source_cd"]) == {"field"}
+    assert u["ho_nm"].isna().all()
+
+
+def test_행정동_결측은_최근접_건물로_채우고_추정표시한다():
+    """지번 폴백 응답에는 level4AC가 없다 — NOT NULL이라 비면 행이 통째로 빠진다."""
+    from daullim_data.buildings import fill_missing_dong
+
+    df = pd.DataFrame({
+        "lat": [37.480, 37.481, 37.600], "lng": [126.950, 126.951, 127.100],
+        "admin_dong_cd": ["1162069500", None, "1168000000"],
+        "is_estimated": [False, True, False],
+    })
+    out, filled = fill_missing_dong(df)
+    assert filled == 1
+    assert out.loc[1, "admin_dong_cd"] == "1162069500"  # 14m 옆 건물
+    assert bool(out.loc[1, "is_estimated"]) is True
+    assert out["admin_dong_cd"].notna().all()

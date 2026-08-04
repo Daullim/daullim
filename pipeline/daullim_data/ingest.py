@@ -208,9 +208,18 @@ def load_sgis_grid(zones: tuple[str, ...]) -> pd.DataFrame:
 
     long = pd.concat(frames, ignore_index=True)
     wide = long.pivot_table(index="grid1k", columns="item", values="value", aggfunc="sum")
-    wide = wide.reindex(columns=list(dict.fromkeys(SGIS_ITEMS.values()))).reset_index()
+    wide = wide.reindex(columns=list(dict.fromkeys(SGIS_ITEMS.values())))
+
+    # ⚠️ **SGIS long 포맷은 값이 0인 항목을 행으로 내보내지 않는다.**
+    # 그래서 pivot 후의 결측은 '모름'이 아니라 **0채/0명**이다. NaN으로 두면
+    # 아파트가 한 채도 없는 격자에서 비아파트율이 계산되지 않아, 우리가 찾는
+    # 농촌 취약 지역이 통째로 빠진다(전북 실측: 비아파트율 결측 94.6%,
+    # 남은 격자만 보니 아파트율 중앙값이 0.728이라는 불가능한 수가 나왔다).
+    # 다마존 대조: 총주택 6,912격자 중 아파트 행은 372개뿐 — 나머지는 아파트 0채다.
+    wide = wide.fillna(0.0).reset_index()
 
     def ratio(num: str, den: str) -> pd.Series:
+        """분자 0은 정상값이고, 분모 0일 때만 비율이 정의되지 않는다."""
         d = wide[den]
         return (wide[num] / d.where(d > 0)).astype(float)
 
