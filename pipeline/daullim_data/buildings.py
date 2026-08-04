@@ -207,6 +207,23 @@ def road_address(row: dict) -> str:
     return nfc(str(row.get("newPlatPlc") or "")).strip()
 
 
+# 사용승인일의 현실적 하한. 근대적 건축물대장 제도 자체가 20세기라 그 이전은 입력 오류다.
+# 실측: `09970101`(997년) · `10460101`(1046년)이 들어 있었고, DDL CHECK는 형식(`^\d{8}$`)만
+# 보므로 그대로 통과한다. 걸러내지 않으면 x₁(연차)이 1029년이 되어 exp(Σβx)가 폭발한다.
+USE_APR_MIN_YEAR = 1900
+
+
+def clean_use_apr_day(value) -> str | None:
+    """사용승인일 정규화 — 형식·연도 범위를 둘 다 본다. 위반은 결측으로 돌린다."""
+    text = str(value or "").strip()
+    if len(text) != 8 or not text.isdigit():
+        return None
+    year = int(text[:4])
+    if not USE_APR_MIN_YEAR <= year <= 2100:
+        return None
+    return text
+
+
 @dataclass
 class MasterReport:
     region: str
@@ -309,7 +326,7 @@ def build_master(
             kind, families=int(_num(r.get("fmlyCnt"))),
             households=int(_num(r.get("hhldCnt"))), hos=int(_num(r.get("hoCnt"))),
         )
-        apr = str(r.get("useAprDay") or "").strip()
+        apr = clean_use_apr_day(r.get("useAprDay"))
         b_rows.append({
             "bld_key": bld_key,
             "sido_cd": str(r.get("sigunguCd") or "")[:2],
@@ -321,11 +338,14 @@ def build_master(
             "house_type_cd": kind,
             "floor_count": max(floors, 1),  # DDL CHECK floor_count > 0
             "unit_count": units,
-            "use_apr_day": apr if len(apr) == 8 and apr.isdigit() else None,
+            "use_apr_day": apr,  # clean_use_apr_day()가 형식·연도범위를 이미 검증했다
             # 감지기 보급 이력은 통합 대장 부재로 전량 NULL (확정 결정 1)
             "install_day": None, "install_year": None, "detector_model": None,
             "is_estimated": geo.estimated,  # 지오코딩 폴백만 — 유형 추론은 싣지 않는다
             "house_type_basis": basis,
+            # ③ x₂ 취약 구조의 입력. DDL 컬럼은 아니고 점수 산출에만 쓴다.
+            "struct_nm": nfc(str(r.get("strctCdNm") or "")),
+            "roof_nm": nfc(str(r.get("roofCdNm") or "")),
             "_bjdong": r.get("bjdongCd"), "_bun": r.get("bun"), "_ji": r.get("ji"),
             "_plat_gb": r.get("platGbCd"), "_dong_nm": r.get("dongNm"),
         })
