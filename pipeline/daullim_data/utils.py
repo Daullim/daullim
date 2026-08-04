@@ -34,6 +34,10 @@ ENCODINGS_KR = ("utf-8-sig", "cp949")
 def read_csv_kr(path: str | Path, **kwargs) -> pd.DataFrame:
     """한국 공공데이터 CSV를 UTF-8-SIG → cp949 순서로 시도해 읽는다."""
     path = Path(path)
+    if not path.exists():
+        raise DataTrapError(
+            f"원본 없음: {path}\ndata/README.md의 배치 경로·출처를 확인하라."
+        )
     last: UnicodeDecodeError | None = None
     for enc in ENCODINGS_KR:
         try:
@@ -196,6 +200,38 @@ def grid500_to_1km(grid_id: str) -> str:
     if not m:
         raise DataTrapError(f"500m 격자 ID 형식 아님: {grid_id!r}")
     return f"{m['zone']}{m['x']}{m['y']}"
+
+
+# 존 코드는 100km 셀을 '가나다라마바사' 두 글자로 찍은 좌표다.
+# 실측 역산(2026-08-04, 2023 화재 3개 시도)으로 확인된 원점:
+#   다사(900000,1900000) 마라(1100000,1600000) 마마(1100000,1700000)
+#   다마(900000,1700000) 라마(1000000,1700000) 나마(800000,1700000)
+# → x = 700000 + i*100000 / y = 1300000 + j*100000 로 일반화된다(테스트가 6개 전부 잠근다).
+ZONE_LETTERS = "가나다라마바사"
+ZONE_X0, ZONE_Y0 = 700_000, 1_300_000
+
+
+def zone_origin(zone: str) -> tuple[int, int]:
+    """존 코드 2글자 → EPSG:5179 100km 셀 원점."""
+    z = nfc(str(zone).strip())
+    if len(z) != 2 or any(c not in ZONE_LETTERS for c in z):
+        raise DataTrapError(f"존 코드 형식 아님(가~사 2글자): {zone!r}")
+    return (
+        ZONE_X0 + ZONE_LETTERS.index(z[0]) * 100_000,
+        ZONE_Y0 + ZONE_LETTERS.index(z[1]) * 100_000,
+    )
+
+
+def coord_to_grid500(lat: float, lng: float, zone: str) -> str:
+    """좌표 → 500m 격자 ID. `grid500_to_1km`의 문자열 경로와 자체 대조하는 용도(§4-5).
+
+    두 경로가 어긋나면 좌표계 변환이나 존 원점 중 하나가 틀린 것이다.
+    """
+    ox, oy = zone_origin(zone)
+    x, y = to_5179(lat, lng)
+    dx, dy = x - ox, y - oy
+    half = lambda d: "a" if d % 1000 < 500 else "b"  # noqa: E731
+    return f"{nfc(zone)}{int(dx // 1000):02d}{half(dx)}{int(dy // 1000):02d}{half(dy)}"
 
 
 # ── 7. 좌표계 ───────────────────────────────────────────────────────────
