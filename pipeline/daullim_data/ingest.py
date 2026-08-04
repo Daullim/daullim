@@ -163,6 +163,64 @@ def _call_files(sido: str) -> list[Path]:
     return glob_kr(CALL_DIR, f"119신고접수 건별 격자 정보_*_{sido}.csv")
 
 
+# ── SGIS 1km 격자 통계 ──────────────────────────────────────────────────
+SGIS_DIR = DATA_ROOT / "sgis" / "1. 통계"
+
+# 코드집(`3. 코드집/2. 제공용 코드`) 실측 대조로 확정한 항목.
+SGIS_ITEMS = {
+    "to_in_001": "pop",  # 총인구 — P, 그리고 1km 격자이므로 밀도 D와 같은 수
+    "to_ga_001": "households",  # 총가구수 — 노출량 E_i 후보
+    "to_ho_001": "houses",  # 총주택(거처)수 — 아파트율 분모
+    "in_grp_008": "elderly",  # 65세이상
+    "ga_sd_005": "single",  # 1인가구
+    "ho_gb_003": "apt",  # 아파트
+}
+SGIS_SUBDIRS = ("1. 2024년 격자 통계(인구)", "2. 2024년 격자 통계(가구)", "3. 2024년 격자 통계(주택)")
+
+
+def load_sgis_grid(zones: tuple[str, ...]) -> pd.DataFrame:
+    """SGIS 1km 격자 통계(long)를 격자당 1행(wide)으로 세운다.
+
+    ⚠️ 존은 100km 셀이라 **행정구역과 일치하지 않는다.** '다사'는 서울시가 아니라
+    수도권 전역(7,008격자·인구 2,515만)을 덮는다. 시군구 단위가 필요하면
+    격자가 아니라 좌표나 이벤트의 행정구역명으로 걸러야 한다.
+
+    반환: `grid1k` + SGIS_ITEMS의 값 컬럼 + 파생 비율(`elderly_ratio`·`single_ratio`·
+    `apt_ratio`·`nonapt_ratio`)
+    """
+    frames: list[pd.DataFrame] = []
+    for sub in SGIS_SUBDIRS:
+        for zone in zones:
+            for src in glob_kr(SGIS_DIR / sub, f"*_{zone}_1K.csv"):
+                raw = read_csv_kr(src, dtype={"격자코드": "string", "통계항목": "string"})
+                raw = raw.loc[raw["통계항목"].isin(SGIS_ITEMS)]
+                frames.append(
+                    pd.DataFrame(
+                        {
+                            "grid1k": nfc_series(raw["격자코드"]),
+                            "item": raw["통계항목"].map(SGIS_ITEMS),
+                            "value": pd.to_numeric(raw["통계값"], errors="coerce"),
+                        }
+                    )
+                )
+    if not frames:
+        raise DataTrapError(f"SGIS 격자 통계 없음: {zones} ({SGIS_DIR})")
+
+    long = pd.concat(frames, ignore_index=True)
+    wide = long.pivot_table(index="grid1k", columns="item", values="value", aggfunc="sum")
+    wide = wide.reindex(columns=list(dict.fromkeys(SGIS_ITEMS.values()))).reset_index()
+
+    def ratio(num: str, den: str) -> pd.Series:
+        d = wide[den]
+        return (wide[num] / d.where(d > 0)).astype(float)
+
+    wide["elderly_ratio"] = ratio("elderly", "pop")
+    wide["single_ratio"] = ratio("single", "households")
+    wide["apt_ratio"] = ratio("apt", "houses")
+    wide["nonapt_ratio"] = 1.0 - wide["apt_ratio"]
+    return wide
+
+
 @dataclass
 class CallReport:
     """119신고 집계의 감사 기록. **시도 클리핑이 실제로 한 일**을 격자 수로 보여준다.
