@@ -222,6 +222,21 @@ def zone_origin(zone: str) -> tuple[int, int]:
     )
 
 
+GRID1K_RE = re.compile(r"^(?P<zone>..)(?P<x>\d{2})(?P<y>\d{2})$")
+
+
+def grid1k_centroid(grid1k: str) -> tuple[float, float]:
+    """1km 격자 ID → 셀 중심의 EPSG:5179 좌표.
+
+    커널 계산에서 격자 속성(가구수 등)을 점으로 얹을 때 쓴다.
+    """
+    m = GRID1K_RE.match(nfc(str(grid1k).strip()))
+    if not m:
+        raise DataTrapError(f"1km 격자 ID 형식 아님: {grid1k!r}")
+    ox, oy = zone_origin(m["zone"])
+    return (ox + int(m["x"]) * 1000 + 500.0, oy + int(m["y"]) * 1000 + 500.0)
+
+
 def coord_to_grid500(lat: float, lng: float, zone: str) -> str:
     """좌표 → 500m 격자 ID. `grid500_to_1km`의 문자열 경로와 자체 대조하는 용도(§4-5).
 
