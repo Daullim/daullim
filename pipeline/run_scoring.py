@@ -89,6 +89,8 @@ def build_scored() -> tuple[pd.DataFrame, ScoreParams]:
     # 정규화는 **단일 유니버스**(관악+임실 합산)에서 — 도농 비교가 성립해야 한다
     scored["score"], q_lo, q_hi = normalize_score(scored["raw"])
     scored["risk_level_cd"] = risk_level(scored["score"]).values
+    # 저장값 4분류(BUFFER 보존)는 알고리즘 클래스(2분류)와 **다른 축**이다 — 확정 결정 6.
+    scored["region_type_cd"] = scored["grid1k"].map(gmap["region_type_cd"]).fillna("URBAN")
     scored["single_ratio"] = scored["grid1k"].map(gmap["single_ratio"])
     scored["fire_distance"] = scored["grid1k"].map(gmap["fire_distance"])
     scored["rural_target"] = (

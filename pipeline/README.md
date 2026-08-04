@@ -32,12 +32,15 @@ Python 3.13 고정(3.14는 geopandas 휠 미비). 근거는 [ADR-014](../docs/ad
 | `daullim_data/buildings.py` | 표제부 수집·유형 5분류·지오코딩·`buildings`/`units` 조립 |
 | `daullim_data/vulnerability.py` | ② 잔차 지역 취약 (1+αV⊥) · ③ 상대위험 exp(Σβx) |
 | `daullim_data/scoring.py` | 세 항 결합 · score 정규화 · 블록 배치 · 타이브레이커 · G2 쿼터 |
+| `daullim_data/seed_out.py` | seed 산출(원자성) + ADR-009 검증 |
 | `run_ingest.py` | 적재·검증 실행 로그(발표 자산). `--with-calls`로 신고 5년치까지 |
 | `run_region_type.py` | 도농 판별 + v0 성적표. 미달이면 종료코드 1 |
 | `run_kernel.py` | λ̂ 산출 로그 — m 추정·동점 소멸·민감도 |
 | `run_buildings.py` | 건물 마스터 수집 + DDL 검증. 미달이면 종료코드 1 |
 | `run_vulnerability.py` | ②③ 산출 로그 — G1 점검·β 민감도 |
 | `run_scoring.py` | 점수·순위 + 검증. `seed/score_params.json` 산출 |
+| `run_seed.py` | seed 3종 동시 산출 + 검증 |
+| `load_seed.py` | DB 적재 — buildings UPSERT / units DO NOTHING |
 
 ## 규칙 셋 (어기면 조용히 틀린 답이 나온다)
 
@@ -265,6 +268,47 @@ order_key 1..30,593 유일·연속 · 탐사 쿼터 7.0%
   실측에서 임실군 큐 상위 5건이 전부 결측이었다. `-inf`로 맨 뒤로 보낸다.
 - **NO_POP 격자의 건물 1건이 통째로 빠졌다.** NO_POP은 '인구 0'이지 '건물 0'이 아니고,
   실제로 집이 서 있으면 점검 대상이다. 격자 매핑 실패분과 함께 URBAN 기본값으로 넣는다.
+
+### 산출·적재 (`run_seed.py` → `load_seed.py`)
+
+```
+seed/buildings.csv  8,200 KB · 30,593행
+seed/units.csv      2,450 KB · 94,074행
+seed/grids.geojson    157 KB · 485격자 (경계 확보 485/485)
+seed/score_params.json         v0-20260805
+```
+
+세 산출물은 **한 실행에서 임시 파일에 쓴 뒤 일괄 rename**한다(ADR-008 §9) — 중간에 실패하면
+'버전이 어긋난 CSV와 GeoJSON'이 남는 게 가장 위험하다.
+
+**적재에 파이썬 DB 드라이버를 쓰지 않는다.** 컨테이너의 `psql`을 `docker exec`로 호출해
+`\copy`한다 — ADR-014의 의존성 최소화를 지키면서 ADR-012 결정 12의 COPY 방식을 그대로 만족한다.
+
+**멱등성·경계 실측 검증.** 업무 상태를 일부러 바꿔 두고 재적재했다:
+
+| | 1회차 | 재적재 |
+|---|---|---|
+| `buildings` | INSERT 30,593 | UPSERT (행수 유지) |
+| `units` | INSERT 94,074 | **INSERT 0** (DO NOTHING) |
+| 바꿔둔 `status_cd='done'` 3건 | — | **보존** |
+| 바꿔둔 `last_inspected_day` 3건 | — | **보존** |
+
+ADR-015의 쓰기 경계가 실제로 작동한다 — 월 1회 재실행이 현장 회신을 덮지 않는다.
+
+**BE 기동 확인.** `./gradlew bootRun`이 4.8초에 정상 기동한다. `ddl-auto=validate`가 통과했다는
+것은 우리 산출이 스키마와 정합한다는 뜻이다. 세대 행이 없는 건물은 **0건**이라
+`visits.unit_id`(NOT NULL) 제약도 만족한다 — 점검 폼 진입의 전제 조건이다.
+
+**⚠️ 화면 확인은 불가능하다 — API 계약이 미착수다.** §7의 최종 통합 확인
+"화면에서 목데이터 아닌 실데이터가 큐로 뜨는가"는 Controller·DTO·`openapi.yaml`이
+하나도 없어서(`find backend/src/main -name "*Controller*.java"` → 0건) **달성할 수 없다.**
+`/api/buildings`는 401(시큐리티만 동작), FE는 여전히 `mock/sample.ts`를 쓴다.
+대신 **BE가 실행할 큐 조회를 SQL로 재현**해 데이터가 실제로 서는 것을 확인했다:
+
+```
+order_key | address                          | score  | lv     | rx     | basis
+     5407 | 서울특별시 관악구 광신1길 15     | 100.00 | danger | RX-IOT | 미보급 · 동선 5407
+```
 
 ### ADR-010 시연 지역 교체 조건 — **교체 불필요** (2026-08-05 실측)
 
