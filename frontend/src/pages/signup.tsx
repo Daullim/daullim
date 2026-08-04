@@ -52,9 +52,38 @@ export default function SignupPage() {
     >
       <form
         className="space-y-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          if (canSubmit) navigate("/login");
+          if (!canSubmit) return;
+
+          try {
+            const response = await fetch("http://localhost:8080/api/v1/auth/signup", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                loginId: form.userId.trim(),
+                password: form.password,
+                name: form.name.trim(),
+                phone: form.phone,
+                birthOn: form.birth,
+              }),
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+              throw new Error(result.message ?? "회원가입에 실패했습니다.");
+            }
+
+            navigate("/login");
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : "회원가입에 실패했습니다.";
+
+            alert(message);
+          }
         }}
       >
         <TextField

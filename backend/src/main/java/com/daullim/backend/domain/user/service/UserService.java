@@ -1,0 +1,77 @@
+package com.daullim.backend.domain.user.service;
+
+import com.daullim.backend.common.error.BusinessException;
+import com.daullim.backend.common.error.ErrorCode;
+import com.daullim.backend.common.security.JwtTokenProvider;
+import com.daullim.backend.domain.user.dto.LoginRequest;
+import com.daullim.backend.domain.user.dto.LoginResponse;
+import com.daullim.backend.domain.user.dto.SignupRequest;
+import com.daullim.backend.domain.user.dto.SignupResponse;
+import com.daullim.backend.domain.user.entity.User;
+import com.daullim.backend.domain.user.repository.UserRepository;
+import java.util.Locale;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+/** Handles user registration rules. */
+@Service
+@Transactional(readOnly = true)
+public class UserService {
+
+  private static final String DEFAULT_ROLE_CODE = "officer";
+
+  private final UserRepository userRepository;
+  private final PasswordEncoder passwordEncoder;
+  private final JwtTokenProvider jwtTokenProvider;
+
+  public UserService(
+      UserRepository userRepository,
+      PasswordEncoder passwordEncoder,
+      JwtTokenProvider jwtTokenProvider) {
+    this.userRepository = userRepository;
+    this.passwordEncoder = passwordEncoder;
+    this.jwtTokenProvider = jwtTokenProvider;
+  }
+
+  public LoginResponse login(LoginRequest request) {
+    String loginId = request.loginId().trim().toLowerCase(Locale.ROOT);
+    User user =
+        userRepository
+            .findByLoginId(loginId)
+            .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
+
+    if (!user.isActive() || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+      throw new BusinessException(ErrorCode.UNAUTHORIZED);
+    }
+
+    String accessToken =
+        jwtTokenProvider.issue(user.getId(), user.getLoginId(), user.getRoleCode());
+    return LoginResponse.bearer(accessToken, jwtTokenProvider.getAccessTokenTtl().toSeconds());
+  }
+
+  @Transactional
+  public SignupResponse signup(SignupRequest request) {
+    String loginId = request.loginId().trim().toLowerCase(Locale.ROOT);
+
+    if (userRepository.existsByLoginId(loginId)) {
+      throw new BusinessException(ErrorCode.CONFLICT);
+    }
+
+    User user =
+        new User(
+            loginId,
+            passwordEncoder.encode(request.password()),
+            request.name().trim(),
+            formatPhone(request.phone()),
+            request.birthOn(),
+            DEFAULT_ROLE_CODE);
+
+    return SignupResponse.from(userRepository.save(user));
+  }
+
+  private String formatPhone(String phone) {
+    String digits = phone.replace("-", "");
+    return digits.replaceAll("^(\\d{3})(\\d{3,4})(\\d{4})$", "$1-$2-$3");
+  }
+}
