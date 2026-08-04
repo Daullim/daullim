@@ -12,6 +12,8 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [userId, setUserId] = useState("");
   const [password, setPassword] = useState("");
+  const [error, setError] = useState<string>();
+  const [submitting, setSubmitting] = useState(false);
   const canSubmit = userId.trim() !== "" && password !== "";
 
   return (
@@ -28,9 +30,35 @@ export default function LoginPage() {
     >
       <form
         className="space-y-4"
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          if (canSubmit) navigate("/control");
+          if (!canSubmit || submitting) return;
+          setError(undefined);
+          setSubmitting(true);
+
+          try {
+            const response = await fetch("http://localhost:8080/api/v1/auth/login", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ loginId: userId.trim(), password }),
+            });
+            const result = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                response.status === 401
+                  ? "아이디 또는 비밀번호가 올바르지 않습니다."
+                  : (result.message ?? "로그인에 실패했습니다."),
+              );
+            }
+
+            localStorage.setItem("accessToken", result.data.accessToken);
+            navigate("/control");
+          } catch (caught) {
+            setError(caught instanceof Error ? caught.message : "로그인에 실패했습니다.");
+          } finally {
+            setSubmitting(false);
+          }
         }}
       >
         <TextField
@@ -48,11 +76,18 @@ export default function LoginPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           autoComplete="current-password"
+          error={error}
           placeholder="비밀번호를 입력하세요"
         />
 
-        <Button type="submit" variant="primary" size="field-lg" className="w-full" disabled={!canSubmit}>
-          로그인
+        <Button
+          type="submit"
+          variant="primary"
+          size="field-lg"
+          className="w-full"
+          disabled={!canSubmit || submitting}
+        >
+          {submitting ? "로그인 중..." : "로그인"}
         </Button>
       </form>
     </AuthCard>
