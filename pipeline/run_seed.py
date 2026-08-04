@@ -25,6 +25,7 @@ from daullim_data.scoring import assign_order, basis_text, rx_code
 from daullim_data.seed_out import (
     build_buildings_csv,
     build_grid_geojson,
+    build_regions_csv,
     build_units_csv,
     validate_seed,
     write_seed,
@@ -56,6 +57,27 @@ def load_units() -> pd.DataFrame:
         )
         frames.append(u)
     return pd.concat(frames, ignore_index=True)
+
+
+def load_region_names() -> dict[str, tuple[str, str, str]]:
+    """지오코딩 캐시 → `admin_dong_cd` → (시도명, 시군구명, 행정동명).
+
+    VWorld 도로명 검색 응답에 `level1`·`level2`·`level4A`가 코드(`level4AC`)와 함께 온다.
+    `buildings`에는 명칭 컬럼이 없으므로 이 캐시가 유일한 원천이며, 이미 받아 둔 것이라
+    추가 호출이 0이다.
+    """
+    cache = JsonlCache(GEOCODE_CACHE)
+    out: dict[str, tuple[str, str, str]] = {}
+    for key in cache._data:
+        try:
+            st = cache.get(key)["response"]["refined"]["structure"]
+        except (KeyError, TypeError):
+            continue
+        code = st.get("level4AC")
+        sido, sigungu, dong = st.get("level1"), st.get("level2"), st.get("level4A")
+        if code and sido and sigungu and dong:
+            out.setdefault(str(code), (sido, sigungu, dong))
+    return out
 
 
 def load_boundaries(grid_ids: set[str]) -> dict[str, list]:
@@ -99,7 +121,8 @@ def main() -> int:
 
     buildings = build_buildings_csv(ordered)
     units = build_units_csv(load_units(), keep_keys=set(buildings["bld_key"]))
-    print(f"  buildings {len(buildings):,}행 · units {len(units):,}행")
+    regions = build_regions_csv(buildings, names=load_region_names())
+    print(f"  buildings {len(buildings):,}행 · units {len(units):,}행 · regions {len(regions):,}행")
 
     # 격자 GeoJSON — 건물이 있는 격자만
     per_grid = (
@@ -113,14 +136,14 @@ def main() -> int:
     geojson = build_grid_geojson(per_grid, boundaries=bounds)
     print(f"  격자 {len(per_grid):,}개 중 경계 확보 {len(geojson['features']):,}개")
 
-    errs = validate_seed(buildings, units, geojson)
+    errs = validate_seed(buildings, units, geojson, regions)
     if errs:
         print("\n  [seed 검증 실패]")
         for e in errs:
             print(f"    · {e}")
         return 1
 
-    written = write_seed(SEED_ROOT, buildings, units, geojson)
+    written = write_seed(SEED_ROOT, buildings, units, geojson, regions)
     (SEED_ROOT / "score_params.json").write_text(
         json.dumps(params.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -134,6 +157,8 @@ def main() -> int:
     print("    위험: " + " · ".join(f"{k} {v:,}" for k, v in buildings["risk_level_cd"].value_counts().items()))
     print("    지역: " + " · ".join(f"{k} {v:,}" for k, v in buildings["region_type_cd"].value_counts().items()))
     print("    호수 출처: " + " · ".join(f"{k} {v:,}" for k, v in units["ho_nm_source_cd"].value_counts().items()))
+    print("    지역 사전: " + " · ".join(
+        f"{k} {v}" for k, v in regions["level"].value_counts().reindex(["sido", "sigungu", "dong"]).items()))
     return 0
 
 

@@ -27,6 +27,12 @@ BUILDING_COLUMNS = [
 # `units`는 정적 4컬럼 + 조인키. `building_id`는 적재 시 `bld_key`로 해석한다(ADR-015).
 UNIT_COLUMNS = ["bld_key", "unit_seq", "ho_nm", "flr_no", "ho_nm_source_cd"]
 
+# 지역 코드↔명칭 사전. **DB에 적재하지 않는다** — BE가 리소스 파일로 읽는 조회 전용 상수다.
+# `buildings`에는 코드만 있고 명칭 컬럼이 없어서, 이름 없이는 지역 셀렉터를 그릴 수 없다.
+# 원천은 지오코딩 응답(VWorld `level1`·`level2`·`level4A`)이라 추가 API 호출이 0이다.
+REGION_COLUMNS = ["level", "code", "name", "parent_code"]
+REGION_LEVELS = ("sido", "sigungu", "dong")
+
 
 def build_buildings_csv(scored: pd.DataFrame) -> pd.DataFrame:
     """점수까지 끝난 프레임 → DDL 컬럼만 남긴 적재용 표."""
@@ -53,6 +59,36 @@ def build_units_csv(units: pd.DataFrame, *, keep_keys: set[str]) -> pd.DataFrame
     out["unit_seq"] = out["unit_seq"].astype("int64")
     out["flr_no"] = out["flr_no"].astype("Int64")
     return out
+
+
+def build_regions_csv(buildings: pd.DataFrame, *, names: dict[str, tuple[str, str, str]]) -> pd.DataFrame:
+    """지역 코드↔명칭 3계층 사전.
+
+    `names`는 `admin_dong_cd` → (시도명, 시군구명, 행정동명). 코드 계층은 **접두사 관계**가
+    성립함을 실측으로 확인했다 — `admin_dong_cd[:5] == sigungu_cd`, `[:2] == sido_cd`.
+
+    건물이 실제로 존재하는 지역만 낸다 — 쓰지 않을 전국 사전을 만들 이유가 없다.
+    """
+    rows: dict[tuple[str, str], dict] = {}
+    for dong_cd, sido_cd, sigungu_cd in zip(
+        buildings["admin_dong_cd"], buildings["sido_cd"], buildings["sigungu_cd"]
+    ):
+        got = names.get(str(dong_cd))
+        if not got:
+            continue
+        sido_nm, sigungu_nm, dong_nm = got
+        rows.setdefault(("sido", str(sido_cd)), {
+            "level": "sido", "code": str(sido_cd), "name": sido_nm, "parent_code": None})
+        rows.setdefault(("sigungu", str(sigungu_cd)), {
+            "level": "sigungu", "code": str(sigungu_cd), "name": sigungu_nm, "parent_code": str(sido_cd)})
+        rows.setdefault(("dong", str(dong_cd)), {
+            "level": "dong", "code": str(dong_cd), "name": dong_nm, "parent_code": str(sigungu_cd)})
+
+    out = pd.DataFrame(list(rows.values()), columns=REGION_COLUMNS)
+    order = {lv: i for i, lv in enumerate(REGION_LEVELS)}
+    return out.sort_values(
+        ["level", "code"], key=lambda s: s.map(order) if s.name == "level" else s, ignore_index=True
+    )
 
 
 def build_grid_geojson(grids: pd.DataFrame, *, boundaries: dict[str, list]) -> dict:
@@ -82,19 +118,26 @@ def build_grid_geojson(grids: pd.DataFrame, *, boundaries: dict[str, list]) -> d
 
 
 def write_seed(
-    seed_root: Path, buildings: pd.DataFrame, units: pd.DataFrame, geojson: dict
+    seed_root: Path, buildings: pd.DataFrame, units: pd.DataFrame, geojson: dict,
+    regions: pd.DataFrame | None = None,
 ) -> list[Path]:
-    """세 산출물을 원자적으로 낸다 — 하나라도 실패하면 기존 파일이 그대로 남는다."""
-    return write_outputs_atomic({
+    """산출물을 원자적으로 낸다 — 하나라도 실패하면 기존 파일이 그대로 남는다."""
+    writers = {
         seed_root / "buildings.csv": lambda p: write_csv_kr(buildings, p),
         seed_root / "units.csv": lambda p: write_csv_kr(units, p),
         seed_root / "grids.geojson": lambda p: p.write_text(
             json.dumps(geojson, ensure_ascii=False), encoding="utf-8"
         ),
-    })
+    }
+    if regions is not None:
+        writers[seed_root / "regions.csv"] = lambda p: write_csv_kr(regions, p)
+    return write_outputs_atomic(writers)
 
 
-def validate_seed(buildings: pd.DataFrame, units: pd.DataFrame, geojson: dict) -> list[str]:
+def validate_seed(
+    buildings: pd.DataFrame, units: pd.DataFrame, geojson: dict,
+    regions: pd.DataFrame | None = None,
+) -> list[str]:
     """ADR-009 seed 산출 검증 — 적재 전에 여기서 막는다."""
     errs: list[str] = []
     if buildings.empty:
@@ -132,4 +175,17 @@ def validate_seed(buildings: pd.DataFrame, units: pd.DataFrame, geojson: dict) -
 
     if not geojson.get("features"):
         errs.append("GeoJSON에 feature가 없다")
+
+    if regions is not None:
+        # 지역 셀렉터는 이름 없이 못 그린다 — 건물이 있는 지역은 전부 사전에 있어야 한다.
+        for level, col in (("sido", "sido_cd"), ("sigungu", "sigungu_cd"), ("dong", "admin_dong_cd")):
+            have = set(regions.loc[regions["level"] == level, "code"])
+            need = set(buildings[col].astype(str))
+            missing = need - have
+            if missing:
+                errs.append(f"regions에 {level} 명칭 누락 {len(missing)}건: {sorted(missing)[:3]}")
+        if regions["name"].isna().any() or (regions["name"].astype(str).str.strip() == "").any():
+            errs.append("regions에 빈 명칭이 있다")
+        if regions.duplicated(["level", "code"]).any():
+            errs.append("regions (level, code) 중복")
     return errs

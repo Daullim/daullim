@@ -307,8 +307,14 @@ order_key 1..30,593 유일·연속 · 탐사 쿼터 7.0%
 seed/buildings.csv  8,200 KB · 30,593행
 seed/units.csv      2,450 KB · 94,074행
 seed/grids.geojson    157 KB · 485격자 (경계 확보 485/485)
+seed/regions.csv        1 KB · 37행 (시도 2 · 시군구 2 · 행정동 33)
 seed/score_params.json         v0-20260805
 ```
+
+**`regions.csv`는 DB에 적재하지 않는다** — BE가 리소스 파일로 읽는 조회 전용 상수다.
+`buildings`에 명칭 컬럼이 없어 이름 없이는 지역 셀렉터를 그릴 수 없는데, 원천은
+지오코딩 응답(VWorld `level1`·`level2`·`level4A`)이라 추가 API 호출이 0이다.
+코드 계층은 접두사 관계가 성립함을 실측으로 확인했다(`admin_dong_cd[:5] == sigungu_cd`).
 
 세 산출물은 **한 실행에서 임시 파일에 쓴 뒤 일괄 rename**한다(ADR-008 §9) — 중간에 실패하면
 '버전이 어긋난 CSV와 GeoJSON'이 남는 게 가장 위험하다.
