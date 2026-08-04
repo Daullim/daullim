@@ -35,6 +35,8 @@ def build(sido: str) -> pd.DataFrame:
         fires=("GRID_ID", "size"),
         residential_fires=("is_residential", "sum"),
         deaths=("DCSD_CNT", "sum"),
+        # 농촌 가구 정렬키 3순위 — 소방서-현장 거리(km). 건물 단위 값이 없어 격자 중앙값으로 근사한다.
+        fire_distance=("FRSTN_GRNDS_DSTNC", "median"),
     )
     # 격자당 플랫폼 라벨은 최빈값 — 한 격자에 여러 화재가 있을 수 있다.
     label = fires.groupby("grid1k")["CTY_FRMVL_SE_NM"].agg(
