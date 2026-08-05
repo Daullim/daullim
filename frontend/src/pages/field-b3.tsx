@@ -16,6 +16,7 @@ import { InspectionOverlay } from "@/pages/inspection-overlay";
 import { CONSENT_TO_UNIT_STATUS, HOUSE_TYPE } from "@/config/domain";
 import { formatDay } from "@/lib/inspection";
 import { isQueueItemDone, todayDay, unitLabel } from "@/lib/units";
+import { useBuildingPins } from "@/lib/use-building-pins";
 import { ApiError } from "@/api/client";
 import { getBuilding, getBuildingQueue, getUnits, renameUnit } from "@/api/queries";
 import { useApiQuery } from "@/api/use-api-query";
@@ -50,6 +51,7 @@ export default function FieldUnitsPage() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [renameError, setRenameError] = useState<string>();
+  const [map, setMap] = useState<naver.maps.Map | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), SEARCH_DEBOUNCE_MS);
@@ -83,6 +85,9 @@ export default function FieldUnitsPage() {
   const focused = items.find((i) => i.buildingId === (openId ?? selectedId)) ?? items[0];
   const mapCenter = focused ? { lat: focused.lat, lng: focused.lng } : undefined;
   const doneBuildings = items.filter(isQueueItemDone).length;
+
+  /* 핀 ↔ 큐 양방향 — 핀을 누르면 그 행이 열리고, 행을 고르면 그 핀이 강조된다 */
+  useBuildingPins(map, items, { selectedId: selectedId ?? openId, onSelect: setSelectedId });
   const inspectUnit = mergedUnits.find((u) => u.unitId === inspecting?.unitId);
   const inspectItem = items.find((i) => i.buildingId === inspecting?.buildingId) ?? null;
 
@@ -140,6 +145,7 @@ export default function FieldUnitsPage() {
             }
             center={mapCenter}
             zoom={16}
+            onMapReady={setMap}
             className="min-w-0"
           >
             {/* 범례는 우상단 — 하단은 줌(좌)·현재 위치(중앙) 차지 (B1과 동일 배치) */}
