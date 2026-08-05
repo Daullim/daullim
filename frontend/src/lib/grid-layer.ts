@@ -52,6 +52,21 @@ export function filterToDong(
   };
 }
 
+/**
+ * 격자 중심 — 거리순 정렬의 기준점.
+ *
+ * 1km 사각형이라 꼭짓점 평균이 곧 중심이다(마지막 점이 첫 점과 겹치는 GeoJSON 관례를 빼고 센다).
+ * 정확한 무게중심을 구할 이유가 없다 — 격자 간 거리 비교에 1km 격자 안의 오차는 순위를 바꾸지 않는다.
+ */
+export function centerOf(feature: GridFeatureCollection["features"][number]) {
+  const ring = feature.geometry.coordinates[0].slice(0, -1);
+  const sum = ring.reduce((acc, [lng, lat]) => ({ lat: acc.lat + lat, lng: acc.lng + lng }), {
+    lat: 0,
+    lng: 0,
+  });
+  return { lat: sum.lat / ring.length, lng: sum.lng / ring.length };
+}
+
 /** 폴리곤 전체를 담는 경계 — 동에 진입하면 격자가 다 보이도록 맞춘다. */
 export function boundsOf(collection: GridFeatureCollection): naver.maps.LatLngBounds | null {
   const ring = collection.features[0]?.geometry.coordinates[0]?.[0];

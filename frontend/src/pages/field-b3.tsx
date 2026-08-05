@@ -17,6 +17,7 @@ import { CONSENT_TO_UNIT_STATUS, HOUSE_TYPE } from "@/config/domain";
 import { formatDay } from "@/lib/inspection";
 import { isQueueItemDone, todayDay, unitLabel } from "@/lib/units";
 import { useBuildingPins } from "@/lib/use-building-pins";
+import { useCurrentPosition } from "@/lib/use-current-position";
 import { ApiError } from "@/api/client";
 import { getBuilding, getBuildingQueue, getUnits, renameUnit } from "@/api/queries";
 import { useApiQuery } from "@/api/use-api-query";
@@ -52,6 +53,7 @@ export default function FieldUnitsPage() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [renameError, setRenameError] = useState<string>();
   const [map, setMap] = useState<naver.maps.Map | null>(null);
+  const position = useCurrentPosition(map);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), SEARCH_DEBOUNCE_MS);
@@ -151,7 +153,11 @@ export default function FieldUnitsPage() {
             {/* 범례는 우상단 — 하단은 줌(좌)·현재 위치(중앙) 차지 (B1과 동일 배치) */}
             <Legend className="absolute top-3 right-3" />
             <MapZoomControls />
-            <LocateButton />
+            <LocateButton
+              status={position.status}
+              message={position.message}
+              onLocate={position.locate}
+            />
           </MapCanvas>
 
           {/* 세대 목록 — right-3이 큐 패널 접기 탭 pill 바로 앞이라 탭을 가리지 않는다 */}
