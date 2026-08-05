@@ -40,6 +40,7 @@ export function MapCanvas({
   children?: ReactNode;
   className?: string;
 }) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<naver.maps.Map | null>(null);
   const [ready, setReady] = useState(false);
@@ -104,9 +105,10 @@ export function MapCanvas({
   /* 인증 실패는 로드 성공 뒤에 따로 온다 — 구독하지 않으면 빈 지도만 남는다 */
   useEffect(() => onAuthFailure(() => fail(authFailureMessage())), []);
 
-  /* 컨테이너 크기 추적 — 이게 없으면 패널 리사이즈에서 지도가 깨진다 */
+  /* 래퍼 크기 추적 — 패널 드래그·접기·창 리사이즈를 지도에 전달한다.
+     초기 관찰에서도 한 번 발화하므로, 초기화 시점 크기가 어긋났어도 여기서 바로잡힌다. */
   useEffect(() => {
-    const el = containerRef.current;
+    const el = wrapperRef.current;
     if (!el || !ready) return;
 
     const observer = new ResizeObserver(([entry]) => {
@@ -121,16 +123,19 @@ export function MapCanvas({
 
   return (
     <div
+      ref={wrapperRef}
       className={cn(
-        "relative flex min-h-0 flex-1 rounded-md border border-hairline bg-surface",
+        "relative min-h-0 flex-1 rounded-md border border-hairline bg-surface",
         className,
       )}
     >
-      {/* 지도 본체 — 둥근 모서리 클리핑은 여기까지만 걸어 오버레이가 잘리지 않게 한다 */}
+      {/*
+        지도 본체. `absolute inset-0`을 쓰지 않는다
+      */}
       <div
         ref={containerRef}
         aria-label={ariaLabel}
-        className="absolute inset-0 overflow-hidden rounded-md"
+        className="size-full overflow-hidden rounded-md"
       />
 
       {failed && (
