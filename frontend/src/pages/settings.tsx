@@ -13,6 +13,7 @@ import { Button } from "@/components/core/button";
 import { ChoiceGroup, InfoNote } from "@/components/inspection/form-controls";
 import { MAP_TYPE, type MapType } from "@/config/domain";
 import { loadMapType, saveMapType } from "@/lib/prefs";
+import { clearToken } from "@/api/token";
 import { INSPECTOR } from "@/mock/sample";
 
 /** 설정 카드 — 제목 + 내용 */
@@ -77,7 +78,15 @@ export default function SettingsPage() {
 
           <Card title="계정 관리">
             <div className="flex flex-wrap gap-3">
-              <Button variant="secondary" size="field-lg" onClick={() => navigate("/login")}>
+              {/* 토큰을 지우지 않으면 /control로 직접 들어갈 때 세션이 그대로 살아 있다 */}
+              <Button
+                variant="secondary"
+                size="field-lg"
+                onClick={() => {
+                  clearToken();
+                  navigate("/login", { replace: true });
+                }}
+              >
                 로그아웃
               </Button>
               {/* 비가역 행동 — 원탭 금지, 확인 다이얼로그를 거친다 */}
@@ -102,7 +111,14 @@ export default function SettingsPage() {
             <Button variant="secondary" onClick={() => setWithdrawOpen(false)}>
               취소
             </Button>
-            <Button variant="danger" onClick={() => navigate("/login")}>
+            {/* 서버 탈퇴(DELETE /auth/me)는 미구현이라 지금은 이 기기의 세션만 끊는다 */}
+            <Button
+              variant="danger"
+              onClick={() => {
+                clearToken();
+                navigate("/login", { replace: true });
+              }}
+            >
               탈퇴하기
             </Button>
           </DialogFooter>
