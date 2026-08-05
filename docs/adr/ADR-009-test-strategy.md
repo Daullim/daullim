@@ -27,8 +27,12 @@
 1. **pipeline (pytest 2종)**
    - D8 유틸 단위 테스트 — 함정 재현 케이스 그대로(cp949 파일, NFD 문자열, 스왑 값, 비패딩 월).
    - seed 산출 검증 — 스키마 컬럼·NOT NULL·score 내림차순=order_key 정합·탐사쿼터 5~10%·region_type 분포 sanity·시연 시군구 행수 범위.
-2. **BE**: 통합 테스트만 — 7 엔드포인트 happy path + 엣지 3종(중복 회신, 빈 큐 발행, 역할 외 접근). Testcontainers로 실제 Postgres 대상.
-3. **FE**: 자동 테스트 0.
+2. **BE**: 통합 테스트만 — 엔드포인트 happy path + 엣지. Testcontainers로 실제 Postgres 대상.
+   **(2026-08-05 현황)** 조회 API는 도메인별 IT 6종으로 커버된다 — `RegionApiIT`·`BuildingApiIT`·`UnitApiIT`·
+   `GridSummaryApiIT`·`GridGeoJsonApiIT`·`DashboardApiIT`가 공용 픽스처 `QueryApiSupport`를 상속한다.
+   설정이 같아 스프링 컨텍스트·컨테이너는 한 벌만 뜬다. 엣지는 403(대장 호수 수정)·409(호수 중복)·
+   400(size 초과·깨진 커서)·404·401로 실제 잡혀 있다. 점검 저장은 API가 없어 미커버.
+3. **FE**: 자동 테스트 0. **(2026-08-05)** 그대로 유지 — API 계층이 생겼지만 Vitest를 들이지 않았다.
 4. **E2E**: Playwright 스모크 1본 — 데모 시나리오 그대로(로그인→관제 큐→발행→모바일 회신→관제 반영·카운터 증가). D13부터 배포 URL 대상 실행.
 5. **수동 QA**: D12 체크리스트(빈값/로딩/오류 상태, 모바일 뷰포트) — WBS 유지.
 
