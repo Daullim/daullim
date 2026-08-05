@@ -160,5 +160,13 @@ export interface DashboardSummary {
 export interface LoginResponse {
   accessToken: string;
   tokenType: string;
+  /** 초 단위. 서버가 1시간으로 강제한다 */
   expiresIn: number;
+}
+
+export interface SignupResponse {
+  id: number;
+  loginId: string;
+  name: string;
+  createdAt: string;
 }

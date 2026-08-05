@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { AuthCard } from "@/components/layout/auth-card";
 import { Button } from "@/components/core/button";
 import { TextField } from "@/components/core/text-field";
+import { ApiError } from "@/api/client";
+import { signup } from "@/api/queries";
 
 /** 010-1234-5678 — 숫자만 남기고 11자리까지 하이픈 삽입 */
 function formatPhone(raw: string): string {
@@ -13,8 +15,8 @@ function formatPhone(raw: string): string {
 }
 
 /**
- * 회원가입 — 로그인과 같은 카드 셸. 백엔드가 없어 제출은 목업(저장 없음)이다.
- * 비밀번호 확인은 오타를 잡는 유일한 장치라 필수로 둔다.
+ * 회원가입 — 로그인과 같은 카드 셸.
+ * 비밀번호 확인은 오타를 잡는 유일한 장치라 필수로 둔다. 비밀번호는 요청 본문으로만 쓰고 저장·로깅하지 않는다.
  */
 export default function SignupPage() {
   const navigate = useNavigate();
@@ -26,6 +28,8 @@ export default function SignupPage() {
     phone: "",
     birth: "",
   });
+  const [error, setError] = useState<string>();
+  const [submitting, setSubmitting] = useState(false);
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
   const mismatch = form.passwordConfirm !== "" && form.password !== form.passwordConfirm;
@@ -54,35 +58,29 @@ export default function SignupPage() {
         className="space-y-4"
         onSubmit={async (e) => {
           e.preventDefault();
-          if (!canSubmit) return;
+          if (!canSubmit || submitting) return;
+          setError(undefined);
+          setSubmitting(true);
 
           try {
-            const response = await fetch("http://localhost:8080/api/v1/auth/signup", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                loginId: form.userId.trim(),
-                password: form.password,
-                name: form.name.trim(),
-                phone: form.phone,
-                birthOn: form.birth,
-              }),
+            await signup({
+              loginId: form.userId.trim(),
+              password: form.password,
+              name: form.name.trim(),
+              phone: form.phone,
+              birthOn: form.birth,
             });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-              throw new Error(result.message ?? "회원가입에 실패했습니다.");
-            }
-
             navigate("/login");
-          } catch (error) {
-            const message =
-              error instanceof Error ? error.message : "회원가입에 실패했습니다.";
-
-            alert(message);
+          } catch (caught) {
+            setError(
+              caught instanceof ApiError && caught.status === 409
+                ? "이미 사용 중인 아이디입니다."
+                : caught instanceof ApiError
+                  ? caught.message
+                  : "회원가입에 실패했습니다.",
+            );
+          } finally {
+            setSubmitting(false);
           }
         }}
       >
@@ -93,6 +91,8 @@ export default function SignupPage() {
           onChange={(e) => set("userId", e.target.value)}
           autoComplete="username"
           placeholder="사용할 아이디"
+          /* 서버가 되돌리는 사유는 대부분 아이디 중복이라 여기에 붙인다 */
+          error={error}
         />
         <TextField
           id="signup-pw"
@@ -140,8 +140,14 @@ export default function SignupPage() {
           autoComplete="bday"
         />
 
-        <Button type="submit" variant="primary" size="field-lg" className="w-full" disabled={!canSubmit}>
-          가입하기
+        <Button
+          type="submit"
+          variant="primary"
+          size="field-lg"
+          className="w-full"
+          disabled={!canSubmit || submitting}
+        >
+          {submitting ? "가입 중..." : "가입하기"}
         </Button>
       </form>
     </AuthCard>

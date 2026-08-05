@@ -11,6 +11,7 @@ import type {
   Sigungu,
   UnitItem,
   LoginResponse,
+  SignupResponse,
 } from "@/api/types";
 
 /* 지역 — 코드는 행정표준코드 (docs/openapi.yaml C-1~C-3) */
@@ -69,3 +70,16 @@ export const getDashboardSummary = (sigunguCd?: string, signal?: AbortSignal) =>
 
 export const login = (loginId: string, password: string, signal?: AbortSignal) =>
   apiSend<LoginResponse>("POST", "/auth/login", { loginId, password }, signal);
+
+export interface SignupParams {
+  loginId: string;
+  password: string;
+  name: string;
+  /** `010-1234-5678` 정규형 — 서버 CHECK가 형식을 강제한다 */
+  phone: string;
+  /** ISO 날짜 (YYYY-MM-DD) */
+  birthOn: string;
+}
+
+export const signup = (params: SignupParams, signal?: AbortSignal) =>
+  apiSend<SignupResponse>("POST", "/auth/signup", params, signal);
