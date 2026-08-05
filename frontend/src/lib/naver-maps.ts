@@ -79,9 +79,12 @@ export const REGION_CENTER: Record<string, { lat: number; lng: number }> = {
 export const DEFAULT_CENTER = REGION_CENTER["11620"];
 
 /**
- * 화면 설정값(`MAP_TYPE`) → SDK `mapTypeId`. 키를 1:1로 맞춰 둬서 변환표가 필요 없다.
- * **SDK 로드 후에만 부를 수 있다** — `naver.maps`가 있어야 상수를 읽는다.
+ * 화면 설정값(`MAP_TYPE`) → SDK `mapTypeId`.
+ *
+ * **변환이 없다.** SDK의 `MapTypeId`가 `"normal"`·`"satellite"`·`"terrain"` 소문자 리터럴이라
+ * `MAP_TYPE` 키와 이미 같은 값이다(`domain.ts` 주석의 "1:1"이 문자열 수준에서도 성립).
+ * 타입만 좁혀 잘못된 키가 들어오는 것을 막는다.
  */
-export function toMapTypeId(mapType: MapType): string {
-  return naver.maps.MapTypeId[mapType.toUpperCase() as "NORMAL" | "SATELLITE" | "TERRAIN"];
+export function toMapTypeId(mapType: MapType): naver.maps.MapTypeIdLiteral {
+  return mapType;
 }
