@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import {
   Select,
   SelectContent,
@@ -5,7 +6,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DONG, SIDO, SIGUNGU, type RegionOption } from "@/mock/sample";
+import { getDongs, getSidos, getSigungus } from "@/api/queries";
+import { useApiQuery } from "@/api/use-api-query";
 import { cn } from "@/lib/utils";
 
 type Density = "control" | "field";
@@ -17,6 +19,10 @@ const TRIGGER_CLASS: Record<Density, string> = {
     "min-w-44 rounded-sm border-hairline-strong bg-surface text-body-md data-[size=default]:h-11",
 };
 
+/**
+ * 값은 **행정표준코드**다 — 시도 2자리(`11`) · 시군구 5자리(`11620`) · 행정동 10자리(`1162069500`).
+ * 접두사 관계가 성립해(`dong[:5] === sigungu`) 서버도 별도 매핑 없이 계층을 푼다.
+ */
 export interface RegionValue {
   sido?: string;
   sigungu?: string;
@@ -27,7 +33,17 @@ export interface RegionSelectorProps {
   value: RegionValue;
   onChange: (next: RegionValue) => void;
   density?: Density;
+  /**
+   * 목록이 도착하면 비어 있는 단계를 첫 항목으로 채워 내려간다 — 화면 진입 즉시 데이터가 뜨도록.
+   * `"none"`이면 사용자가 전부 고른다.
+   */
+  autoSelect?: "none" | "sigungu" | "dong";
   className?: string;
+}
+
+interface Option {
+  value: string;
+  label: string;
 }
 
 function LevelSelect({
@@ -41,7 +57,7 @@ function LevelSelect({
 }: {
   ariaLabel: string;
   placeholder: string;
-  options: RegionOption[];
+  options: Option[];
   value?: string;
   disabled?: boolean;
   onChange: (v: string) => void;
@@ -68,15 +84,42 @@ export function RegionSelector({
   value,
   onChange,
   density = "control",
+  autoSelect = "sigungu",
   className,
 }: RegionSelectorProps) {
   const triggerClass = TRIGGER_CLASS[density];
+
+  const sidos = useApiQuery("sidos", (s) => getSidos(s));
+  /* 상위가 비면 조회하지 않는다 — key가 null이면 훅이 호출을 건너뛴다 */
+  const sigungus = useApiQuery(value.sido ? `sigungus:${value.sido}` : null, (s) =>
+    getSigungus(value.sido!, s),
+  );
+  const dongs = useApiQuery(value.sigungu ? `dongs:${value.sigungu}` : null, (s) =>
+    getDongs(value.sigungu!, s),
+  );
+
+  /* 목록 도착 순서대로 한 단계씩 채운다 — 각 효과는 자기 단계가 빌 때만 움직인다 */
+  useEffect(() => {
+    if (autoSelect === "none" || value.sido || !sidos.data?.length) return;
+    onChange({ sido: sidos.data[0].sidoCd });
+  }, [autoSelect, value.sido, sidos.data, onChange]);
+
+  useEffect(() => {
+    if (autoSelect === "none" || !value.sido || value.sigungu || !sigungus.data?.length) return;
+    onChange({ sido: value.sido, sigungu: sigungus.data[0].sigunguCd });
+  }, [autoSelect, value.sido, value.sigungu, sigungus.data, onChange]);
+
+  useEffect(() => {
+    if (autoSelect !== "dong" || !value.sigungu || value.dong || !dongs.data?.length) return;
+    onChange({ ...value, dong: dongs.data[0].dongCd });
+  }, [autoSelect, value, dongs.data, onChange]);
+
   return (
     <div className={cn("flex flex-wrap items-center gap-2", className)}>
       <LevelSelect
         ariaLabel="시·도 선택"
         placeholder="시·도"
-        options={SIDO}
+        options={(sidos.data ?? []).map((r) => ({ value: r.sidoCd, label: r.sidoNm }))}
         value={value.sido}
         onChange={(sido) => onChange({ sido })}
         triggerClass={triggerClass}
@@ -84,7 +127,10 @@ export function RegionSelector({
       <LevelSelect
         ariaLabel="시·군·구 선택"
         placeholder="시·군·구"
-        options={value.sido ? (SIGUNGU[value.sido] ?? []) : []}
+        options={(sigungus.data ?? []).map((r) => ({
+          value: r.sigunguCd,
+          label: r.sigunguNm,
+        }))}
         value={value.sigungu}
         disabled={!value.sido}
         onChange={(sigungu) => onChange({ sido: value.sido, sigungu })}
@@ -93,7 +139,7 @@ export function RegionSelector({
       <LevelSelect
         ariaLabel="읍·면·동 선택"
         placeholder="읍·면·동"
-        options={value.sigungu ? (DONG[value.sigungu] ?? []) : []}
+        options={(dongs.data ?? []).map((r) => ({ value: r.dongCd, label: r.dongNm }))}
         value={value.dong}
         disabled={!value.sigungu}
         onChange={(dong) => onChange({ ...value, dong })}

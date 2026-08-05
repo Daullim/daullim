@@ -7,7 +7,9 @@ import { Button } from "@/components/core/button";
 import { DataText } from "@/components/core/data-text";
 import { RiskBadge } from "@/components/core/risk-badge";
 import { RegionSelector, type RegionValue } from "@/components/core/region-selector";
-import { DONG, DONG_SUMMARY, RURAL_SIGUNGU, SIGUNGU } from "@/mock/sample";
+import { EmptyState, ErrorInline, RowSkeleton } from "@/components/core/system-states";
+import { getDongs, getSigungus } from "@/api/queries";
+import { useApiQuery } from "@/api/use-api-query";
 import { cn } from "@/lib/utils";
 
 /**
@@ -17,14 +19,21 @@ import { cn } from "@/lib/utils";
  */
 export default function FieldDongPage() {
   const navigate = useNavigate();
-  const [region, setRegion] = useState<RegionValue>({
-    sido: "seoul",
-    sigungu: "gwanak",
-    dong: "eunhcheon",
-  });
-  const isRural = region.sigungu ? RURAL_SIGUNGU.has(region.sigungu) : false;
+  /* 값은 행정표준코드다. 빈 상태로 시작하고 셀렉터가 첫 시도·시군구를 채운다 */
+  const [region, setRegion] = useState<RegionValue>({});
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const stripRef = useRef<HTMLDivElement>(null);
+
+  const sigungus = useApiQuery(region.sido ? `sigungus:${region.sido}` : null, (s) =>
+    getSigungus(region.sido!, s),
+  );
+  const dongs = useApiQuery(region.sigungu ? `dongs:${region.sigungu}` : null, (s) =>
+    getDongs(region.sigungu!, s),
+  );
+
+  const sigungu = sigungus.data?.find((r) => r.sigunguCd === region.sigungu);
+  /* 도농은 시군구 대표값이다 — 격자 단계를 건너뛸지 정하는 화면 모드 분기 */
+  const isRural = sigungu?.regionTypeCd === "RURAL";
 
   /* 드롭다운·카드 탭 어느 쪽이든 선택된 동 카드가 좌/우 이동 모션과 함께
      가운데로 오도록 스크롤. 네이티브 smooth(컴포지터 구동 — JS 부하와 무관하게
@@ -55,21 +64,18 @@ export default function FieldDongPage() {
     };
   }, [region.dong]);
 
-  const sigunguLabel = region.sido
-    ? SIGUNGU[region.sido]?.find((o) => o.value === region.sigungu)?.label
-    : undefined;
-  const dongLabel = region.sigungu
-    ? DONG[region.sigungu]?.find((o) => o.value === region.dong)?.label
-    : undefined;
+  const sigunguLabel = sigungu?.sigunguNm;
+  const dongLabel = dongs.data?.find((d) => d.dongCd === region.dong)?.dongNm;
 
-  const dongCards = (region.sigungu ? (DONG[region.sigungu] ?? []) : [])
-    .map((d) => ({ ...d, summary: DONG_SUMMARY[d.value] }))
-    .filter((d) => d.summary)
-    .sort((a, b) => b.summary.avgRisk.score - a.summary.avgRisk.score);
+  /* 평균 위험도 내림차순 정렬은 화면 몫이다(서버는 코드순으로 준다) */
+  const dongCards = [...(dongs.data ?? [])].sort((a, b) => b.avgRiskScore - a.avgRiskScore);
 
-  const enterDong = (dong: string) => {
-    setRegion({ ...region, dong });
-    navigate(isRural ? "/field/units?rural=1" : "/field/grid");
+  /* 다음 화면은 URL의 dongCd만으로 지역을 복원한다 — 코드가 접두사 관계라 상위가 따라온다 */
+  const enterDong = (dongCd: string) => {
+    setRegion({ ...region, dong: dongCd });
+    navigate(
+      isRural ? `/field/units?dongCd=${dongCd}&rural=1` : `/field/grid?dongCd=${dongCd}`,
+    );
   };
 
   return (
@@ -96,14 +102,29 @@ export default function FieldDongPage() {
           ref={stripRef}
           className="absolute inset-x-0 bottom-0 flex snap-x gap-3 overflow-x-auto px-5 py-3 scroll-px-5"
         >
+          {dongs.loading && !dongs.data && (
+            <div className="w-64 shrink-0 rounded-md border border-hairline bg-surface p-3 shadow-e2">
+              <RowSkeleton density="field" rows={2} />
+            </div>
+          )}
+          {dongs.error && (
+            <div className="w-full rounded-md border border-hairline bg-surface p-3 shadow-e2">
+              <ErrorInline onRetry={dongs.reload} />
+            </div>
+          )}
+          {!dongs.loading && !dongs.error && dongCards.length === 0 && (
+            <div className="w-full rounded-md border border-hairline bg-surface shadow-e2">
+              <EmptyState message="이 시·군·구의 산출 결과가 없습니다" onAction={dongs.reload} />
+            </div>
+          )}
           {dongCards.map((d) => {
-            const selected = region.dong === d.value;
+            const selected = region.dong === d.dongCd;
             return (
               <section
-                key={d.value}
+                key={d.dongCd}
                 ref={(el) => {
-                  if (el) cardRefs.current.set(d.value, el);
-                  else cardRefs.current.delete(d.value);
+                  if (el) cardRefs.current.set(d.dongCd, el);
+                  else cardRefs.current.delete(d.dongCd);
                 }}
                 className={cn(
                   "flex w-64 shrink-0 snap-center flex-col gap-3 rounded-md border bg-surface p-3 shadow-e2",
@@ -113,16 +134,16 @@ export default function FieldDongPage() {
                 <button
                   type="button"
                   aria-pressed={selected}
-                  onClick={() => setRegion({ ...region, dong: d.value })}
+                  onClick={() => setRegion({ ...region, dong: d.dongCd })}
                   className="space-y-2 text-left"
                 >
                   <h3 className="text-title text-ink">
-                    {sigunguLabel} {d.label}
+                    {sigunguLabel} {d.dongNm}
                   </h3>
                   <p className="flex items-baseline justify-between text-body-md text-body">
                     <span className="text-caption text-subtle">총 대상 가구 수</span>
                     <span>
-                      <DataText>{d.summary.households}</DataText>가구
+                      <DataText>{d.householdCount.toLocaleString()}</DataText>가구
                     </span>
                   </p>
                   <p className="flex items-baseline justify-between text-body-md text-body">
@@ -131,17 +152,16 @@ export default function FieldDongPage() {
                   </p>
                   <p className="flex items-center justify-between">
                     <span className="text-caption text-subtle">평균 위험도</span>
-                    <RiskBadge
-                      level={d.summary.avgRisk.level}
-                      score={d.summary.avgRisk.score}
-                    />
+                    {d.avgRiskLevelCd && (
+                      <RiskBadge level={d.avgRiskLevelCd} score={d.avgRiskScore} />
+                    )}
                   </p>
                 </button>
                 <Button
                   variant="primary"
                   size="field-lg"
                   className="w-full"
-                  onClick={() => enterDong(d.value)}
+                  onClick={() => enterDong(d.dongCd)}
                 >
                   이 동 점검 시작
                 </Button>
