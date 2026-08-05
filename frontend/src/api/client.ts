@@ -25,6 +25,17 @@ export class ApiError extends Error {
 /** 네트워크 자체가 안 될 때 — 화면은 이걸 "연결 실패"로 표시한다 */
 export const NETWORK_ERROR_CODE = "NETWORK_ERROR";
 
+/**
+ * 세션 만료 통지
+ */
+type UnauthorizedHandler = () => void;
+
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  unauthorizedHandler = handler;
+}
+
 interface Envelope<T> {
   code: string;
   message: string;
@@ -47,7 +58,12 @@ async function send(path: string, init: RequestInit): Promise<Response> {
 
 /** 실패 응답을 ApiError로 — 봉투가 아니어도(프록시 오류 등) 상태코드는 살린다. */
 async function toError(res: Response): Promise<ApiError> {
-  if (res.status === 401) clearToken();
+  if (res.status === 401) {
+    // 토큰을 들고 갔는데 거절당했으면 만료다. 없이 갔으면 로그인 시도 실패라 화면을 옮기지 않는다.
+    const sessionExpired = loadToken() !== null;
+    clearToken();
+    if (sessionExpired) unauthorizedHandler?.();
+  }
   try {
     const body = (await res.json()) as Partial<Envelope<unknown>>;
     return new ApiError(body.code ?? "UNKNOWN", body.message ?? res.statusText, res.status);

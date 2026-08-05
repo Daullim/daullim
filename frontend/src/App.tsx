@@ -1,4 +1,5 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
+import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import ControlPage from "@/pages/control";
 import FieldDongPage from "@/pages/field-b1";
 import FieldGridPage from "@/pages/field-b2";
@@ -8,10 +9,26 @@ import DemoPage from "@/pages/demo";
 import LoginPage from "@/pages/login";
 import SignupPage from "@/pages/signup";
 import SettingsPage from "@/pages/settings";
+import { setUnauthorizedHandler } from "@/api/client";
+
+/**
+ * 세션이 만료되면 로그인으로 돌려보냄.
+ */
+function SessionExpiryRedirect() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => navigate("/login", { replace: true }));
+    return () => setUnauthorizedHandler(null);
+  }, [navigate]);
+
+  return null;
+}
 
 export default function App() {
   return (
     <BrowserRouter>
+      <SessionExpiryRedirect />
       <Routes>
         {/* 진입점 = 로그인 (ADR-004 §1 v1.3). 가드는 두지 않아 /control 직접 진입도 된다 */}
         <Route path="/" element={<Navigate to="/login" replace />} />
