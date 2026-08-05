@@ -21,7 +21,6 @@ import {
   type RxCode,
   type RxDone,
 } from "@/config/domain";
-import type { HouseholdItem } from "@/mock/sample";
 
 /** 교체 대상 1건 — 사유와 그 후속 입력을 함께 담는다 */
 export interface ReplacementItem {
@@ -67,7 +66,8 @@ export interface InspectionFormState {
 }
 
 export function createInitialState(
-  item: HouseholdItem,
+  /** 세대수만 본다 — 건물 타입 전체를 끌고 오지 않는다 */
+  item: { unitCount: number },
   /** 세대 목록에서 고른 호수 — 미전달 시 기존 규칙(단독은 "본가구", 그 외 공란) */
   unitLabel?: string,
 ): InspectionFormState {

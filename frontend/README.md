@@ -12,6 +12,11 @@ npm run lint     # oxlint
 npm run preview  # 빌드 결과 미리보기
 ```
 
+**백엔드가 떠 있어야 화면에 데이터가 뜬다.** dev 서버가 `/api`를 `localhost:8080`으로 프록시하고
+(`vite.config.ts`, 주소는 `VITE_API_TARGET`으로 변경) `Origin` 헤더를 떼어 CORS를 만들지 않는다 —
+그래서 vite가 5173이 아닌 포트를 잡아도 그대로 동작한다. 조회 API 전부가 토큰을 요구하므로
+`/login`으로 먼저 로그인한다.
+
 자동 테스트는 두지 않는다(ADR-009). 검증은 `/demo` 페이지 + 수동 QA.
 `ui/` 벤더 파일의 `only-export-components` warning은 기존값 — **에러 0이면 통과**.
 
@@ -30,6 +35,7 @@ npm run preview  # 빌드 결과 미리보기
 
 ```
 src/
+├─ api/                   # 서버 호출 한 곳 (client·queries·types·use-api-query)
 ├─ components/ui/         # shadcn(Radix) 프리미티브 — 직접 수정 최소화
 ├─ components/core/       # 그 위의 도메인 래퍼 (QueueRow·StatusTag·RiskBadge …)
 ├─ components/layout/     # 화면 골격 조각 (TopBar·Drawer·Legend)
@@ -37,9 +43,16 @@ src/
 ├─ components/records/    # 점검 기록 표 — 폼의 세대 방문 이력과 공용
 ├─ config/domain.ts       # 도메인 열거값 주입 지점
 ├─ lib/                   # 순수 함수 (inspection·units·prefs·utils)
-├─ mock/                  # 시연용 고정 데이터 — BE 연동 시 교체 지점
+├─ mock/                  # 아직 서버가 답할 수 없는 것만 남았다 (아래 참조)
 └─ pages/                 # 라우트 단위 화면
 ```
+
+**`api/` 규칙** — 화면은 `fetch`를 직접 부르지 않는다. `client.ts`가 공통 봉투 해제·토큰 부착·401
+처리를 혼자 맡고, `queries.ts`가 엔드포인트를, `use-api-query.ts`가 조회 훅을 준다.
+`types.ts`는 `docs/openapi.yaml`의 **손 사본**이라 계약이 바뀌면 같은 커밋에서 고친다(ADR-005 v1.1).
+
+**`mock/`에 남은 것** — `INSPECTOR`(`GET /auth/me` 미머지) · `DEMO_QUEUE_ITEMS`(`/demo`는 서버 없이
+떠야 하는 하네스) · `records.ts`(`GET /visits` 미구현). 나머지 화면 데이터는 전부 API로 옮겼다.
 
 ## 주의
 

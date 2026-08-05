@@ -1,9 +1,10 @@
 import type * as React from "react";
 import { RX } from "@/config/domain";
-import type { HouseholdItem } from "@/mock/sample";
+import type { BuildingQueueItem } from "@/api/types";
 import { DataText } from "@/components/core/data-text";
 import { RiskBadge } from "@/components/core/risk-badge";
 import { StatusTag } from "@/components/core/status-tag";
+import { isQueueItemDone } from "@/lib/units";
 import { cn } from "@/lib/utils";
 
 type Density = "control" | "field";
@@ -15,7 +16,12 @@ const DENSITY_CLASS: Record<Density, string> = {
 };
 
 export interface QueueRowProps {
-  item: HouseholdItem;
+  item: BuildingQueueItem;
+  /**
+   * 좌측 번호 — **목록 안에서 몇 번째인지**(index + 1)이지 `orderKey`가 아니다.
+   * `orderKey`는 전역 순번이라 동을 걸러 보면 5407 같은 값이 튀어나와 화면에서 뜻을 잃는다.
+   */
+  rank: number;
   density?: Density;
   selected?: boolean;
   /** 완료 항목 흐리게 (B3 방문 큐) */
@@ -34,6 +40,7 @@ export interface QueueRowProps {
 
 export function QueueRow({
   item,
+  rank,
   density = "control",
   selected,
   dimmed,
@@ -46,11 +53,16 @@ export function QueueRow({
   /* /field는 보조줄이 길어(점검일·보급일·주택유형) 가운데 열에 가두면 잘린다 →
      주소 아래 전체 폭 한 줄로 뺀다. 행 높이는 64px 그대로. */
   const captionFullWidth = density === "field";
-  const captionNode = caption ?? (
-    <>
-      {item.basis} · <DataText>{item.rx}</DataText> {RX[item.rx].label}
-    </>
-  );
+  const captionNode =
+    caption ??
+    (item.rxCodeCd ? (
+      <>
+        {item.basis} · <DataText>{item.rxCodeCd}</DataText> {RX[item.rxCodeCd].label}
+      </>
+    ) : (
+      /* 처방 코드가 없는 건물도 있다 — 근거만 남긴다 */
+      item.basis
+    ));
 
   return (
     <button
@@ -67,9 +79,7 @@ export function QueueRow({
         className,
       )}
     >
-      <DataText className={cn("text-subtle", captionFullWidth && "row-span-2")}>
-        {item.rank}
-      </DataText>
+      <DataText className={cn("text-subtle", captionFullWidth && "row-span-2")}>{rank}</DataText>
       <span className="min-w-0">
         <span className="block truncate text-ink">{item.address}</span>
         {!captionFullWidth && (
@@ -78,8 +88,13 @@ export function QueueRow({
           </span>
         )}
       </span>
-      {trailing === undefined ? <StatusTag status={item.status} /> : trailing}
-      <RiskBadge level={item.level} score={item.riskScore} estimated={item.estimated} />
+      {/* 건물 상태는 저장값이 아니라 세대 집계에서 나온다 — 거부는 세대 축이라 여기선 2종뿐 */}
+      {trailing === undefined ? (
+        <StatusTag status={isQueueItemDone(item) ? "done" : "pending"} />
+      ) : (
+        trailing
+      )}
+      <RiskBadge level={item.riskLevelCd} score={item.score} estimated={item.isEstimated} />
       {captionFullWidth && (
         <span className="col-span-3 col-start-2 block truncate text-caption font-normal text-subtle">
           {captionNode}

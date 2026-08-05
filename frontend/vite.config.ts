@@ -8,6 +8,15 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: Number(process.env.PORT) || 5173,
+    proxy: {
+      '/api': {
+        target: process.env.VITE_API_TARGET || 'http://localhost:8080',
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => proxyReq.removeHeader('origin'))
+        },
+      },
+    },
   },
   resolve: {
     alias: {

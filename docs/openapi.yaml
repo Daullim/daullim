@@ -322,6 +322,31 @@ paths:
               schema: { $ref: "#/components/schemas/ApiError" }
               example: { code: CONFLICT, message: 같은 건물에 이미 있는 호수입니다., data: null }
 
+  /grids:
+    get:
+      tags: [지도]
+      summary: 격자 위험지도 조회
+      operationId: getGrids
+      description: |
+        1km 격자 경계·평균 점수의 **정적 GeoJSON**. pipeline이 산출한 `seed/grids.geojson`을 그대로 서빙하며
+        **DB를 타지 않는다**(ADR-003 §4) — 그래서 통째로 캐시할 수 있다(`Cache-Control: max-age=86400`).
+
+        파일에 행정동 속성이 없어 서버가 동으로 거르지 않는다. 화면은 `GET /grids/summary`가 내려주는
+        동별 `gridId`로 조인해 거른다. 실시간 방문 현황도 그쪽에 있다.
+
+        응답은 공통 봉투로 감싸지 않는다 — GeoJSON은 그 자체가 표준 문서 형식이다.
+      responses:
+        "200":
+          description: 485격자 FeatureCollection
+          headers:
+            Cache-Control:
+              schema: { type: string }
+              example: max-age=86400, public
+          content:
+            application/geo+json:
+              schema: { $ref: "#/components/schemas/GridFeatureCollection" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /grids/summary:
     get:
       tags: [지도]
@@ -662,6 +687,43 @@ components:
         lastInspectedDay:
           type: [string, "null"]
           pattern: "^\\d{8}$"
+
+    GridFeatureCollection:
+      type: object
+      description: |
+        pipeline `run_seed.py` 산출물. 485격자 전량이며 시연 시군구로 클리핑되고 좌표는 5자리 반올림돼 있다.
+        속성은 snake_case다 — GeoJSON 원본을 그대로 서빙하므로 camelCase 규약을 적용하지 않는다.
+      required: [type, features]
+      properties:
+        type: { const: FeatureCollection }
+        features:
+          type: array
+          items:
+            type: object
+            required: [type, geometry, properties]
+            properties:
+              type: { const: Feature }
+              geometry:
+                type: object
+                properties:
+                  type: { const: Polygon }
+                  coordinates: { type: array, items: {} }
+              properties:
+                type: object
+                required:
+                  [grid_id, region_type_cd, households, buildings, avg_score, risk_level_cd]
+                properties:
+                  grid_id: { type: string, description: 1km 격자 코드, example: 다마6231 }
+                  region_type_cd:
+                    type: string
+                    enum: [URBAN, RURAL, BUFFER, NO_POP]
+                    description: 격자 단위 도농 판별값. 시군구 대표값과 달리 여기서는 실제 클래스 그대로다.
+                  households:
+                    type: integer
+                    description: SGIS 격자 통계의 **가구 수**. `/grids/summary`의 `targetCount`(건물 수)와 축이 다르다.
+                  buildings: { type: integer, description: 격자 안의 대상 건물 수 }
+                  avg_score: { type: number, description: 격자 내 건물 평균 점수 }
+                  risk_level_cd: { $ref: "#/components/schemas/RiskLevelCd" }
 
     GridSummary:
       type: object
