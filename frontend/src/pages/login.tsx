@@ -3,10 +3,13 @@ import { Link, useNavigate } from "react-router-dom";
 import { AuthCard } from "@/components/layout/auth-card";
 import { Button } from "@/components/core/button";
 import { TextField } from "@/components/core/text-field";
+import { ApiError } from "@/api/client";
+import { login } from "@/api/queries";
+import { saveToken } from "@/api/token";
 
 /**
- * 로그인 — 백엔드 인증이 없어(ADR-005에 인증 엔드포인트 없음) 형식만 확인하고 통과시킨다.
- * 비밀번호는 이 컴포넌트 state 밖으로 나가지 않는다 — 저장·전송·로깅 없음.
+ * 로그인 — 발급받은 액세스 토큰이 이후 모든 조회 API의 입장권이다.
+ * 비밀번호는 이 컴포넌트 state 밖으로 나가지 않는다 — 저장·로깅 없이 요청 본문으로만 쓴다.
  */
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -37,25 +40,18 @@ export default function LoginPage() {
           setSubmitting(true);
 
           try {
-            const response = await fetch("http://localhost:8080/api/v1/auth/login", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ loginId: userId.trim(), password }),
-            });
-            const result = await response.json();
-
-            if (!response.ok) {
-              throw new Error(
-                response.status === 401
-                  ? "아이디 또는 비밀번호가 올바르지 않습니다."
-                  : (result.message ?? "로그인에 실패했습니다."),
-              );
-            }
-
-            localStorage.setItem("accessToken", result.data.accessToken);
+            const { accessToken } = await login(userId.trim(), password);
+            saveToken(accessToken);
             navigate("/control");
           } catch (caught) {
-            setError(caught instanceof Error ? caught.message : "로그인에 실패했습니다.");
+            /* 계정 존재 여부를 노출하지 않기 위해 서버가 401 하나로 답한다 */
+            setError(
+              caught instanceof ApiError && caught.status === 401
+                ? "아이디 또는 비밀번호가 올바르지 않습니다."
+                : caught instanceof ApiError
+                  ? caught.message
+                  : "로그인에 실패했습니다.",
+            );
           } finally {
             setSubmitting(false);
           }
