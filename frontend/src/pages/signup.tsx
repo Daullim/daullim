@@ -28,7 +28,10 @@ export default function SignupPage() {
     phone: "",
     birth: "",
   });
-  const [error, setError] = useState<string>();
+  /** 아이디 중복처럼 특정 입력이 원인인 것만 필드에 붙인다 */
+  const [idError, setIdError] = useState<string>();
+  /** 서버·네트워크 문제처럼 입력과 무관한 것은 폼 전체 오류다 */
+  const [formError, setFormError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
   const set = (k: keyof typeof form, v: string) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -59,7 +62,8 @@ export default function SignupPage() {
         onSubmit={async (e) => {
           e.preventDefault();
           if (!canSubmit || submitting) return;
-          setError(undefined);
+          setIdError(undefined);
+          setFormError(undefined);
           setSubmitting(true);
 
           try {
@@ -72,13 +76,15 @@ export default function SignupPage() {
             });
             navigate("/login");
           } catch (caught) {
-            setError(
-              caught instanceof ApiError && caught.status === 409
-                ? "이미 사용 중인 아이디입니다."
-                : caught instanceof ApiError
-                  ? caught.message
-                  : "회원가입에 실패했습니다.",
-            );
+            /* 409만 아이디가 원인이다 — 서버가 죽었을 때의 문구를 아이디 옆에 붙이면
+               사용자는 아이디를 고치려 든다. 원인이 아닌 곳에 오류를 두지 않는다. */
+            if (caught instanceof ApiError && caught.status === 409) {
+              setIdError("이미 사용 중인 아이디입니다.");
+            } else {
+              setFormError(
+                caught instanceof ApiError ? caught.message : "회원가입에 실패했습니다.",
+              );
+            }
           } finally {
             setSubmitting(false);
           }
@@ -91,8 +97,7 @@ export default function SignupPage() {
           onChange={(e) => set("userId", e.target.value)}
           autoComplete="username"
           placeholder="사용할 아이디"
-          /* 서버가 되돌리는 사유는 대부분 아이디 중복이라 여기에 붙인다 */
-          error={error}
+          error={idError}
         />
         <TextField
           id="signup-pw"
@@ -139,6 +144,13 @@ export default function SignupPage() {
           onChange={(e) => set("birth", e.target.value)}
           autoComplete="bday"
         />
+
+        {/* 특정 입력이 원인이 아닌 실패 — 필드가 아니라 폼 단위로 알린다 */}
+        {formError && (
+          <p role="alert" className="text-caption text-risk-danger">
+            {formError}
+          </p>
+        )}
 
         <Button
           type="submit"

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
 import { LocateButton } from "@/components/layout/locate-button";
-import { MapPlaceholder } from "@/components/layout/map-placeholder";
+import { MapCanvas } from "@/components/layout/map-canvas";
 import { MapZoomControls } from "@/components/layout/map-zoom-controls";
 import { MapSidePanel } from "@/components/layout/map-side-panel";
 import { Button } from "@/components/core/button";
@@ -80,6 +80,13 @@ export default function FieldGridPage() {
   const error = summary.error ?? grids.error;
   const current = selected ?? rows[0]?.gridId ?? null;
 
+  /* 선택한 격자의 경계 첫 좌표로 시점을 잡는다 — 폴리곤은 3단계에서 그린다 */
+  const mapCenter = useMemo(() => {
+    const target = grids.data?.features.find((f) => f.properties.grid_id === current);
+    const ring = target?.geometry.coordinates[0];
+    return ring?.[0] ? { lat: ring[0][1], lng: ring[0][0] } : undefined;
+  }, [grids.data, current]);
+
   return (
     <div className="flex h-dvh flex-col">
       <TopBar
@@ -89,15 +96,17 @@ export default function FieldGridPage() {
 
       {/* 좌 지도 + 우 리사이즈 패널 2열 (접기 가능) — relative는 접힘 탭 앵커용 */}
       <main className="relative flex min-h-0 flex-1 gap-3 p-3">
-        <MapPlaceholder
-          label={`${region.dongNm ?? "선택한 동"} — 1km 격자 (옅은 실선 경계)`}
+        <MapCanvas
+          ariaLabel={`${region.dongNm ?? "선택한 동"} 1km 격자`}
+          center={mapCenter}
+          zoom={14}
           className="min-w-0"
         >
           {/* 범례는 우상단 — 하단은 줌(좌)·현재 위치(중앙) 차지 (B1과 동일 배치) */}
           <Legend className="absolute top-3 right-3" />
           <MapZoomControls />
           <LocateButton />
-        </MapPlaceholder>
+        </MapCanvas>
 
         {/* 격자 우선순위 리스트 — 리스트↔지도 양방향 연동 */}
         <MapSidePanel ariaLabel="격자 우선순위 패널">

@@ -2,13 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
-import { MapPlaceholder } from "@/components/layout/map-placeholder";
+import { MapCanvas } from "@/components/layout/map-canvas";
 import { Button } from "@/components/core/button";
 import { DataText } from "@/components/core/data-text";
 import { RiskBadge } from "@/components/core/risk-badge";
 import { RegionSelector, type RegionValue } from "@/components/core/region-selector";
 import { EmptyState, ErrorInline, RowSkeleton } from "@/components/core/system-states";
 import { getDongs, getSigungus } from "@/api/queries";
+import { REGION_CENTER } from "@/lib/naver-maps";
 import { useApiQuery } from "@/api/use-api-query";
 import { cn } from "@/lib/utils";
 
@@ -84,8 +85,10 @@ export default function FieldDongPage() {
 
       {/* 전면 지도 — 오버레이는 전부 플로팅 (인라인 메뉴 줄 금지) */}
       <main className="relative min-h-0 flex-1">
-        <MapPlaceholder
-          label={dongLabel ? `${dongLabel} — 동 경계` : "동을 선택하세요"}
+        <MapCanvas
+          ariaLabel={dongLabel ? `${dongLabel} 동 경계` : "점검할 동 선택"}
+          center={region.sigungu ? REGION_CENTER[region.sigungu] : undefined}
+          zoom={13}
           className="h-full rounded-none border-none"
         />
 

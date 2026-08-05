@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { RotateCw } from "lucide-react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
-import { MapPlaceholder } from "@/components/layout/map-placeholder";
+import { MapCanvas } from "@/components/layout/map-canvas";
 import { Button } from "@/components/core/button";
 import { DataText } from "@/components/core/data-text";
 import { QueueRow } from "@/components/core/queue-row";
@@ -50,6 +50,8 @@ export default function ControlPage() {
   }, [queue.data, summary.data]);
 
   const items = queue.data?.items ?? [];
+  /* 지도 시점은 큐 1등 좌표 — 화면이 가리키는 곳과 지도가 같은 곳을 보게 한다 */
+  const mapCenter = items[0] ? { lat: items[0].lat, lng: items[0].lng } : undefined;
 
   const reload = () => {
     queue.reload();
@@ -76,7 +78,10 @@ export default function ControlPage() {
 
       {/* 좌 지도 + 우 큐 테이블 — 지도 영역 크기 고정 (CLS 0) */}
       <main className="flex min-h-0 flex-1 gap-3 p-3">
-        <MapPlaceholder label={`${names.label ?? "지역 선택"} — 취약가구 위험지도`} />
+        <MapCanvas
+          ariaLabel={`${names.label ?? "지역"} 취약가구 위험지도`}
+          center={mapCenter}
+        />
         <aside className="flex w-100 shrink-0 flex-col overflow-hidden rounded-md border border-hairline bg-surface xl:w-120">
           <div className="flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
             <h2 className="text-title-sm text-ink">우선순위 큐</h2>
