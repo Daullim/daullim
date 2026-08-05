@@ -21,11 +21,12 @@ import {
   canAdvance,
   canSubmit,
   createInitialState,
+  formatDay,
   inspectionReducer,
   stepsFor,
 } from "@/lib/inspection";
-import type { ConsentStatus } from "@/config/domain";
-import type { HouseholdItem } from "@/mock/sample";
+import { HOUSE_TYPE, type ConsentStatus } from "@/config/domain";
+import type { BuildingQueueItem } from "@/api/types";
 import { recordsOfUnit } from "@/mock/records";
 
 /**
@@ -49,7 +50,7 @@ export function InspectionOverlay({
   onClose,
   onSaved,
 }: {
-  item: HouseholdItem | null;
+  item: BuildingQueueItem | null;
   /** 세대 목록에서 고른 호수 — 저장 payload의 세대 식별값 (폼에 입력란 없음) */
   unitLabel?: string;
   open: boolean;
@@ -64,7 +65,7 @@ export function InspectionOverlay({
       <DialogContent showCloseButton={false} className={FULLSCREEN_CLASS}>
         {/* key = 가구·세대 전환 시 폼 상태 리셋 (닫힘 언마운트의 이중 안전장치) */}
         <InspectionForm
-          key={`${item.rank}-${unitLabel ?? ""}`}
+          key={`${item.buildingId}-${unitLabel ?? ""}`}
           item={item}
           unitLabel={unitLabel}
           onClose={onClose}
@@ -81,7 +82,7 @@ function InspectionForm({
   onClose,
   onSaved,
 }: {
-  item: HouseholdItem;
+  item: BuildingQueueItem;
   unitLabel?: string;
   onClose: () => void;
   onSaved: (consent: ConsentStatus | null) => void;
@@ -90,7 +91,7 @@ function InspectionForm({
     createInitialState(item, unitLabel),
   );
   const sectionProps = { form, dispatch };
-  const history = recordsOfUnit(item.rank, form.unitLabel);
+  const history = recordsOfUnit(item.buildingId, form.unitLabel);
 
   /* 단계 배열은 승낙 여부에 따라 5개 ↔ 3개로 바뀐다 → 인덱스만 들고 나머지는 파생 */
   const [stepIndex, setStepIndex] = useState(0);
@@ -119,11 +120,14 @@ function InspectionForm({
           <DialogTitle className="truncate text-title text-ink">{item.address}</DialogTitle>
           <DialogDescription asChild>
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-body">
+              {/* 모델·보급연차는 감지기 보급 통합 대장이 없어 비어 있다 — 값이 생기면 다시 나타난다 */}
+              {item.installDay && (
+                <span>
+                  보급 <DataText>{formatDay(item.installDay)}</DataText>
+                </span>
+              )}
               <span>
-                모델 <DataText>{item.model}</DataText>
-              </span>
-              <span>
-                보급 <DataText>{item.installYear}</DataText>년
+                {HOUSE_TYPE[item.houseTypeCd].label} · <DataText>{item.unitCount}</DataText>세대
               </span>
               <span className="inline-flex items-center gap-1.5 rounded-full bg-status-info-tint px-2.5 py-0.5 text-caption text-status-info">
                 GPS 일치

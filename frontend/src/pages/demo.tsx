@@ -17,7 +17,7 @@ import {
 } from "@/components/core/system-states";
 import { Legend } from "@/components/layout/legend";
 import { VISIT_STATUS, type VisitStatus } from "@/config/domain";
-import { HOUSEHOLDS } from "@/mock/sample";
+import { DEMO_QUEUE_ITEMS } from "@/mock/sample";
 import { cn } from "@/lib/utils";
 
 /*
@@ -56,8 +56,8 @@ function StateMatrix({
 
 export default function DemoPage() {
   const [region, setRegion] = useState<RegionValue>({ sido: "seoul" });
-  const item = HOUSEHOLDS[0];
-  const estimatedItem = HOUSEHOLDS[1];
+  const item = DEMO_QUEUE_ITEMS[0];
+  const estimatedItem = DEMO_QUEUE_ITEMS[1];
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 p-6">
@@ -221,6 +221,7 @@ export default function DemoPage() {
               >
                 <QueueRow
                   item={s === "Active·Selected" ? item : estimatedItem}
+                  rank={1}
                   density="control"
                   selected={s === "Active·Selected"}
                   disabled={s === "Disabled"}
@@ -231,7 +232,7 @@ export default function DemoPage() {
           ))}
         </div>
         <div className="mt-4 overflow-hidden rounded-md border border-hairline">
-          <QueueRow item={item} density="field" />
+          <QueueRow item={item} rank={1} density="field" />
         </div>
       </Section>
 
