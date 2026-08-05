@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
@@ -15,6 +15,7 @@ import { getGridSummary, getGrids } from "@/api/queries";
 import { useApiQuery } from "@/api/use-api-query";
 import { useRegionNames } from "@/api/use-region";
 import type { GridFeatureProperties } from "@/api/types";
+import { boundsOf, filterToDong, gridStyles } from "@/lib/grid-layer";
 import { cn } from "@/lib/utils";
 
 /**
@@ -54,6 +55,7 @@ export default function FieldGridPage() {
 
   const [selected, setSelected] = useState<string | null>(null);
   const [sort, setSort] = useState<GridSort>("risk");
+  const [map, setMap] = useState<naver.maps.Map | null>(null);
 
   /* 실시간 집계가 이 동에 어떤 격자가 있는지도 알려준다 — GeoJSON에는 행정동 속성이 없다 */
   const summary = useApiQuery(dongCd ? `gridSummary:${dongCd}` : null, (s) =>
@@ -80,12 +82,50 @@ export default function FieldGridPage() {
   const error = summary.error ?? grids.error;
   const current = selected ?? rows[0]?.gridId ?? null;
 
-  /* 선택한 격자의 경계 첫 좌표로 시점을 잡는다 — 폴리곤은 3단계에서 그린다 */
-  const mapCenter = useMemo(() => {
-    const target = grids.data?.features.find((f) => f.properties.grid_id === current);
-    const ring = target?.geometry.coordinates[0];
-    return ring?.[0] ? { lat: ring[0][1], lng: ring[0][0] } : undefined;
-  }, [grids.data, current]);
+  /** 이 동의 격자만 추린 GeoJSON — 지도에 그릴 대상 */
+  const dongGrids = useMemo(() => {
+    if (!grids.data || !summary.data) return null;
+    return filterToDong(grids.data, new Set(summary.data.map((g) => g.gridId)));
+  }, [grids.data, summary.data]);
+
+  /* 폴리곤을 지도에 얹는다. 격자 집합이 바뀔 때만 다시 그린다 — 선택 강조는 아래에서 따로 덮어쓴다. */
+  useEffect(() => {
+    if (!map || !dongGrids?.features.length) return;
+
+    map.data.setStyle(gridStyles().base);
+    // autoStyle=false — 스타일은 위 setStyle이 정한다
+    map.data.addGeoJson(dongGrids, false);
+
+    /* 동에 들어오면 격자 전체가 보이게 맞춘다 — center/zoom 추정보다 정확하다 */
+    const bounds = boundsOf(dongGrids);
+    if (bounds) map.fitBounds(bounds);
+
+    return () => map.data.removeGeoJson(dongGrids);
+  }, [map, dongGrids]);
+
+  /* 지도 → 리스트: 격자를 누르면 그 행이 선택된다 */
+  useEffect(() => {
+    if (!map) return;
+    const listener = map.data.addListener("click", (e: naver.maps.FeatureEvent) => {
+      const gridId = e.feature.getProperty("grid_id");
+      if (typeof gridId === "string") setSelected(gridId);
+    });
+    return () => map.data.removeListener(listener);
+  }, [map]);
+
+  /* 리스트 → 지도: 선택된 격자만 강조한다 */
+  useEffect(() => {
+    if (!map || !dongGrids?.features.length) return;
+    const { selected: selectedStyle } = gridStyles();
+
+    /* revertStyle은 피처 단위라 전체 해제도 순회한다 */
+    for (const feature of map.data.getAllFeature()) {
+      map.data.revertStyle(feature);
+      if (feature.getProperty("grid_id") === current) {
+        map.data.overrideStyle(feature, selectedStyle);
+      }
+    }
+  }, [map, dongGrids, current]);
 
   return (
     <div className="flex h-dvh flex-col">
@@ -98,8 +138,8 @@ export default function FieldGridPage() {
       <main className="relative flex min-h-0 flex-1 gap-3 p-3">
         <MapCanvas
           ariaLabel={`${region.dongNm ?? "선택한 동"} 1km 격자`}
-          center={mapCenter}
           zoom={14}
+          onMapReady={setMap}
           className="min-w-0"
         >
           {/* 범례는 우상단 — 하단은 줌(좌)·현재 위치(중앙) 차지 (B1과 동일 배치) */}

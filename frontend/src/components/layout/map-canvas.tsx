@@ -29,6 +29,7 @@ export function MapCanvas({
   ariaLabel,
   center,
   zoom = 15,
+  onMapReady,
   children,
   className,
 }: {
@@ -37,6 +38,11 @@ export function MapCanvas({
   /** 데이터가 있는 화면은 실제 좌표를, 없으면 시연 유니버스 중심으로 첫 프레임을 잡는다 */
   center?: MapCenter;
   zoom?: number;
+  /**
+   * 레이어를 얹을 화면에 지도 인스턴스를 넘긴다. 지도가 사라질 때 `null`로 다시 부른다 —
+   * 받은 쪽이 정리 시점을 알 수 있어야 죽은 지도에 레이어를 그리지 않는다.
+   */
+  onMapReady?: (map: naver.maps.Map | null) => void;
   children?: ReactNode;
   className?: string;
 }) {
@@ -55,6 +61,10 @@ export function MapCanvas({
     console.error(`[지도] ${reason}`);
     setFailed(true);
   };
+
+  /* 콜백이 매 렌더 새로 만들어져도 지도를 다시 만들지 않도록 ref로 받는다 */
+  const onMapReadyRef = useRef(onMapReady);
+  onMapReadyRef.current = onMapReady;
 
   /* SDK 로드 + 지도 생성 — 마운트당 한 번. center 변경은 아래에서 따로 반영한다 */
   useEffect(() => {
@@ -76,6 +86,7 @@ export function MapCanvas({
         });
         setFailed(false);
         setReady(true);
+        onMapReadyRef.current?.(mapRef.current);
       },
       (e: unknown) => {
         if (!cancelled) fail(e instanceof Error ? e.message : "지도를 불러오지 못했습니다.");
@@ -84,6 +95,8 @@ export function MapCanvas({
 
     return () => {
       cancelled = true;
+      // 레이어를 얹은 화면이 먼저 정리하도록 파괴 전에 알린다
+      onMapReadyRef.current?.(null);
       mapRef.current?.destroy();
       mapRef.current = null;
       setReady(false);
