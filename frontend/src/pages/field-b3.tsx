@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { RotateCw, Search } from "lucide-react";
 import { TopBar } from "@/components/layout/top-bar";
@@ -26,6 +26,9 @@ import type { BuildingQueueItem, UnitItem } from "@/api/types";
 
 /** 주소 검색은 서버가 한다 — 타자마다 보내지 않도록 잠깐 묵힌다 */
 const SEARCH_DEBOUNCE_MS = 300;
+const QUEUE_SCROLL_TOP_PADDING = 16;
+
+const queueRowId = (buildingId: number) => `visit-queue-building-${buildingId}`;
 
 /**
  * 아키타입 B3 — /field 주택/가구 선택 (드릴다운 3/3).
@@ -53,6 +56,7 @@ export default function FieldUnitsPage() {
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [renameError, setRenameError] = useState<string>();
   const [map, setMap] = useState<naver.maps.Map | null>(null);
+  const queueListRef = useRef<HTMLDivElement>(null);
   const position = useCurrentPosition(map);
 
   useEffect(() => {
@@ -89,7 +93,21 @@ export default function FieldUnitsPage() {
   const doneBuildings = items.filter(isQueueItemDone).length;
 
   /* 핀 ↔ 큐 양방향 — 핀을 누르면 그 행이 열리고, 행을 고르면 그 핀이 강조된다 */
-  useBuildingPins(map, items, { selectedId: selectedId ?? openId, onSelect: setSelectedId });
+  const selectFromPin = (buildingId: number) => {
+    setSelectedId(buildingId);
+    requestAnimationFrame(() => {
+      const list = queueListRef.current;
+      const row = document.getElementById(queueRowId(buildingId));
+      if (!list || !row) return;
+      const listTop = list.getBoundingClientRect().top;
+      const rowTop = row.getBoundingClientRect().top;
+      list.scrollTo({
+        top: list.scrollTop + rowTop - listTop - QUEUE_SCROLL_TOP_PADDING,
+        behavior: "smooth",
+      });
+    });
+  };
+  useBuildingPins(map, items, { selectedId: selectedId ?? openId, onSelect: selectFromPin });
   const inspectUnit = mergedUnits.find((u) => u.unitId === inspecting?.unitId);
   const inspectItem = items.find((i) => i.buildingId === inspecting?.buildingId) ?? null;
 
@@ -152,7 +170,7 @@ export default function FieldUnitsPage() {
           >
             {/* 범례는 우상단 — 하단은 줌(좌)·현재 위치(중앙) 차지 (B1과 동일 배치) */}
             <Legend className="absolute top-3 right-3" />
-            <MapZoomControls />
+            <MapZoomControls map={map} />
             <LocateButton
               status={position.status}
               message={position.message}
@@ -222,7 +240,7 @@ export default function FieldUnitsPage() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={queueListRef} className="min-h-0 flex-1 overflow-y-auto">
             {queue.loading && items.length === 0 && <RowSkeleton density="field" rows={5} />}
             {queue.error && <ErrorInline onRetry={queue.reload} />}
             {!queue.loading && !queue.error && items.length === 0 && (
@@ -240,6 +258,7 @@ export default function FieldUnitsPage() {
               return (
                 <Fragment key={item.buildingId}>
                   <QueueRow
+                    id={queueRowId(item.buildingId)}
                     item={item}
                     rank={index + 1}
                     density="field"

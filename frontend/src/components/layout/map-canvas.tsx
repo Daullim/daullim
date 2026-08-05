@@ -7,7 +7,7 @@ import {
   onAuthFailure,
   toMapTypeId,
 } from "@/lib/naver-maps";
-import { loadMapType } from "@/lib/prefs";
+import { loadMapType, onMapTypeChange } from "@/lib/prefs";
 import { cn } from "@/lib/utils";
 
 export interface MapCenter {
@@ -114,6 +114,16 @@ export function MapCanvas({
     if (!ready || lat === undefined || lng === undefined) return;
     mapRef.current?.setCenter(new naver.maps.LatLng(lat, lng));
   }, [ready, lat, lng]);
+
+  /* 설정 화면의 MAP_TYPE은 SDK mapTypeId와 1:1이다 — 저장값 변경 즉시 살아 있는 지도에도 반영한다. */
+  useEffect(() => {
+    if (!ready) return;
+    const apply = (mapType = loadMapType()) => {
+      mapRef.current?.setMapTypeId(toMapTypeId(mapType));
+    };
+    apply();
+    return onMapTypeChange(apply);
+  }, [ready]);
 
   /* 인증 실패는 로드 성공 뒤에 따로 온다 — 구독하지 않으면 빈 지도만 남는다 */
   useEffect(() => onAuthFailure(() => fail(authFailureMessage())), []);

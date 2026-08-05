@@ -69,6 +69,7 @@ export function QueueRow({
 
   return (
     <button
+      id={id}
       type="button"
       onClick={onSelect}
       disabled={disabled}

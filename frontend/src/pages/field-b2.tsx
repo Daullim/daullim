@@ -166,7 +166,7 @@ export default function FieldGridPage() {
         >
           {/* 범례는 우상단 — 하단은 줌(좌)·현재 위치(중앙) 차지 (B1과 동일 배치) */}
           <Legend className="absolute top-3 right-3" />
-          <MapZoomControls />
+          <MapZoomControls map={map} />
           <LocateButton
             status={position.status}
             message={position.message}

@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { TopBar } from "@/components/layout/top-bar";
 import { Button } from "@/components/core/button";
-import { ChoiceGroup, InfoNote } from "@/components/inspection/form-controls";
+import { ChoiceGroup } from "@/components/inspection/form-controls";
 import { MAP_TYPE, type MapType } from "@/config/domain";
 import { loadMapType, saveMapType } from "@/lib/prefs";
 import { clearToken } from "@/api/token";
@@ -71,9 +71,6 @@ export default function SettingsPage() {
                 ariaPrefix="지도 유형"
               />
             </fieldset>
-            <InfoNote className="mt-4">
-              선택은 저장되지만 지도에는 아직 반영되지 않습니다 — 네이버 지도 연동 후 적용됩니다.
-            </InfoNote>
           </Card>
 
           <Card title="계정 관리">
