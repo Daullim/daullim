@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
 import { LocateButton } from "@/components/layout/locate-button";
@@ -10,21 +10,34 @@ import { Button } from "@/components/core/button";
 import { DataText } from "@/components/core/data-text";
 import { RiskBadge } from "@/components/core/risk-badge";
 import { HonestyLabel } from "@/components/core/honesty-label";
-import { GRIDS, type GridItem } from "@/mock/sample";
+import { EmptyState, ErrorInline, RowSkeleton } from "@/components/core/system-states";
+import { getGridSummary, getGrids } from "@/api/queries";
+import { useApiQuery } from "@/api/use-api-query";
+import { useRegionNames } from "@/api/use-region";
+import type { GridFeatureProperties } from "@/api/types";
 import { cn } from "@/lib/utils";
 
-/* 정렬 필터 — UI 로컬 개념 (도메인 열거값 아님) */
-type GridSort = "risk" | "unvisited" | "distance";
+/**
+ * 격자 1행 — 정적 GeoJSON(경계·평균 점수)과 실시간 집계(대상·방문)를 `gridId`로 붙인 것.
+ */
+interface GridRow {
+  gridId: string;
+  targetCount: number;
+  visitedCount: number;
+  props?: GridFeatureProperties;
+}
 
-const GRID_SORT: Record<GridSort, { label: string; compare: (a: GridItem, b: GridItem) => number }> = {
-  risk: { label: "위험순", compare: (a, b) => b.riskScore - a.riskScore },
-  unvisited: {
-    label: "미방문 가구 많은 순",
-    compare: (a, b) => b.households - b.visited - (a.households - a.visited),
+/* 정렬 필터 — UI 로컬 개념 (도메인 열거값 아님) */
+type GridSort = "risk" | "unvisited";
+
+const GRID_SORT: Record<GridSort, { label: string; compare: (a: GridRow, b: GridRow) => number }> = {
+  risk: {
+    label: "위험순",
+    compare: (a, b) => (b.props?.avg_score ?? -1) - (a.props?.avg_score ?? -1),
   },
-  distance: {
-    label: "현재 위치 기준 거리순",
-    compare: (a, b) => a.distanceKm - b.distanceKm,
+  unvisited: {
+    label: "미방문 주택 많은 순",
+    compare: (a, b) => b.targetCount - b.visitedCount - (a.targetCount - a.visitedCount),
   },
 };
 
@@ -35,22 +48,49 @@ const GRID_SORT: Record<GridSort, { label: string; compare: (a: GridItem, b: Gri
  */
 export default function FieldGridPage() {
   const navigate = useNavigate();
-  const [selected, setSelected] = useState<string>(GRIDS[0].gridId);
+  const [params] = useSearchParams();
+  const dongCd = params.get("dongCd") ?? undefined;
+  const region = useRegionNames(dongCd);
+
+  const [selected, setSelected] = useState<string | null>(null);
   const [sort, setSort] = useState<GridSort>("risk");
 
-  const grids = [...GRIDS].sort(GRID_SORT[sort].compare);
+  /* 실시간 집계가 이 동에 어떤 격자가 있는지도 알려준다 — GeoJSON에는 행정동 속성이 없다 */
+  const summary = useApiQuery(dongCd ? `gridSummary:${dongCd}` : null, (s) =>
+    getGridSummary(dongCd!, s),
+  );
+  /* 정적 자산이라 한 번 받아 캐시된다(Cache-Control: max-age=86400) */
+  const grids = useApiQuery("grids", (s) => getGrids(s));
+
+  const propsById = useMemo(() => {
+    const map = new Map<string, GridFeatureProperties>();
+    for (const f of grids.data?.features ?? []) map.set(f.properties.grid_id, f.properties);
+    return map;
+  }, [grids.data]);
+
+  const rows = useMemo(
+    () =>
+      (summary.data ?? [])
+        .map<GridRow>((g) => ({ ...g, props: propsById.get(g.gridId) }))
+        .sort(GRID_SORT[sort].compare),
+    [summary.data, propsById, sort],
+  );
+
+  const loading = summary.loading || grids.loading;
+  const error = summary.error ?? grids.error;
+  const current = selected ?? rows[0]?.gridId ?? null;
 
   return (
     <div className="flex h-dvh flex-col">
       <TopBar
         mode="field"
-        crumbs={[{ label: "관악구 은천동", to: "/field" }, { label: "격자 선택" }]}
+        crumbs={[{ label: region.label ?? "동 선택", to: "/field" }, { label: "격자 선택" }]}
       />
 
       {/* 좌 지도 + 우 리사이즈 패널 2열 (접기 가능) — relative는 접힘 탭 앵커용 */}
       <main className="relative flex min-h-0 flex-1 gap-3 p-3">
         <MapPlaceholder
-          label="은천동 — 500m 격자 (옅은 실선 경계)"
+          label={`${region.dongNm ?? "선택한 동"} — 1km 격자 (옅은 실선 경계)`}
           className="min-w-0"
         >
           {/* 범례는 우상단 — 하단은 줌(좌)·현재 위치(중앙) 차지 (B1과 동일 배치) */}
@@ -64,7 +104,7 @@ export default function FieldGridPage() {
           <h2 className="flex h-12 shrink-0 items-center gap-2 border-b border-hairline px-3 text-title-sm text-ink">
             격자 우선순위
             <span className="text-caption font-normal text-subtle">
-              총 <DataText>{GRIDS.length}</DataText>구역
+              총 <DataText>{rows.length}</DataText>구역
             </span>
           </h2>
 
@@ -86,47 +126,61 @@ export default function FieldGridPage() {
                 {GRID_SORT[key].label}
               </button>
             ))}
+            {/* 거리순은 현재 위치가 있어야 성립한다 — 지도 연동 전까지 누를 수 없다(ADR-004 보류) */}
+            <button
+              type="button"
+              disabled
+              title="지도 연동 후 활성화"
+              className="h-11 cursor-not-allowed rounded-md border border-hairline bg-surface px-3 text-body-sm text-subtle opacity-50"
+            >
+              현재 위치 기준 거리순
+            </button>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {grids.map((g) => (
+            {loading && rows.length === 0 && <RowSkeleton density="field" rows={4} />}
+            {error && <ErrorInline onRetry={() => (summary.error ? summary : grids).reload()} />}
+            {!loading && !error && rows.length === 0 && (
+              <EmptyState message="이 동의 격자 산출 결과가 없습니다" onAction={summary.reload} />
+            )}
+            {rows.map((g) => (
               <button
                 key={g.gridId}
                 type="button"
                 onClick={() => setSelected(g.gridId)}
-                aria-current={selected === g.gridId ? "true" : undefined}
+                aria-current={current === g.gridId ? "true" : undefined}
                 className={cn(
                   "grid h-16 w-full grid-cols-[1fr_auto] items-center gap-2 border-b border-hairline border-l-4 border-l-transparent px-3 text-left hover:bg-surface-muted",
-                  selected === g.gridId &&
-                    "border-l-brand bg-brand-tint hover:bg-brand-tint",
+                  current === g.gridId && "border-l-brand bg-brand-tint hover:bg-brand-tint",
                 )}
               >
                 <span>
+                  {/* 구역 번호 발번 규칙이 미정이라(DESIGN.md Known Gaps) 격자 코드를 그대로 식별자로 쓴다 */}
                   <span className="block text-body-md text-ink">
-                    은천동 {g.zone}구역
+                    {region.dongNm} <DataText>{g.gridId}</DataText>
                   </span>
                   <span className="text-caption text-subtle">
-                    <DataText>{g.gridId}</DataText> · <DataText>{g.households}</DataText>
-                    가구 · 방문{" "}
+                    <DataText>{g.targetCount}</DataText>주택 · 방문{" "}
                     <DataText>
-                      {g.visited}/{g.households}
+                      {g.visitedCount}/{g.targetCount}
                     </DataText>
                   </span>
                 </span>
-                <RiskBadge level={g.level} score={g.riskScore} />
+                {g.props && <RiskBadge level={g.props.risk_level_cd} score={g.props.avg_score} />}
               </button>
             ))}
           </div>
           <div className="shrink-0 space-y-3 border-t border-hairline p-3">
             <HonestyLabel>
-              위험도 = AI 예측 · 방문율 = 방문 가구/전체 · 거리·현재 위치는 지도 연동
-              후 활성
+              위험도 = AI 예측 · 방문율 = 전 세대를 마친 주택/전체 주택 · 거리·현재 위치는 지도
+              연동 후 활성
             </HonestyLabel>
             <Button
               variant="primary"
               size="field-xl"
               className="w-full"
-              onClick={() => navigate("/field/units")}
+              disabled={!current || !dongCd}
+              onClick={() => navigate(`/field/units?dongCd=${dongCd}&gridId=${current}`)}
             >
               이 구역 들어가기
             </Button>
