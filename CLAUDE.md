@@ -86,6 +86,7 @@ docker compose down -v && docker compose up -d
 - **조기 구조화 금지.** 지금은 루트 `CLAUDE.md` 하나로 충분하다. 분리가 필요해 보이면 제안만 하고 만들지 않는다.
 - **스키마는 마이그레이션이 정본이다.** 엔티티에 컬럼을 추가하고 `V1__init.sql`을 잊으면 `ddl-auto=validate`가 기동을 막는다. 반대로 `validate`는 길이·nullable·CHECK·인덱스를 보지 않으니, 제약을 바꿨으면 테스트로 확인한다.
 - **`domain.ts`를 고치면 Flyway seed도 같이 고친다.** `CodeLookupIT`가 둘의 일치를 지키지만, 대조는 사람이 시작해야 한다.
+- **`seed/`의 정적 자산은 사본이 있다 — 한 곳만 고치지 마라.** `regions.csv`·`grids.geojson`은 `backend/src/main/resources/`에, `admin-dong-boundaries.geojson`은 거기에 더해 `frontend/public/`(API 폴백)에도 있다. 이유와 목록은 `pipeline/README.md` § 사본 동기화. 자동 대조가 없어 어긋나도 아무도 알려주지 않는다.
 
 ## Known Gaps `[DAULLIM]`
 
@@ -97,5 +98,5 @@ docker compose down -v && docker compose up -d
 - **`GET /auth/me` 미머지** — 상단바·드로어·설정의 사용자 정보가 `mock/sample.ts`의 `INSPECTOR`다(#23).
 - **회원탈퇴가 서버에 반영되지 않는다** — `DELETE /auth/me`가 없어 이 기기의 세션만 끊는다.
 - **도시 격자 위험 밀집 표시 방식 결정 대기** — 지도는 Naver Maps로 실장됐고 격자 표시는 "옅은 실선 경계"까지만 구현됐다. 코로플레스나 중심 색 도트는 아직 정하지 않았다.
-- **동 경계 GeoJSON 미확보** — 행정동 외곽선 원본이 없어 동 경계는 그리지 않는다. 격자 경계(1km)는 `GET /grids`로 확보돼 있다.
+- ~~동 경계 GeoJSON 미확보~~ → **확보·실장됨**(2026-08-06). 출처는 [admdongkor](https://github.com/vuski/admdongkor) `ver20250701`이고 `seed/admin-dong-boundaries.geojson`(33개 행정동)이 정본이다. B1이 `GET /regions/boundaries`로 받아 시군구 단위로 그리고 폴리곤 클릭↔동 선택이 양방향으로 물린다. **이 파일은 사본이 3벌이다** — `pipeline/README.md` § 사본 동기화.
 - **격자 구역 번호 발번 규칙 미정** — 화면은 1km 격자 코드(`다사4941`)를 그대로 식별자로 쓴다. 규칙이 서면 표시명을 붙인다.

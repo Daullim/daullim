@@ -304,21 +304,34 @@ order_key 1..30,593 유일·연속 · 탐사 쿼터 7.0%
 ### 산출·적재 (`run_seed.py` → `load_seed.py`)
 
 ```
-seed/buildings.csv  8,200 KB · 30,593행
-seed/units.csv      2,450 KB · 94,074행
-seed/grids.geojson    157 KB · 485격자 (경계 확보 485/485)
-seed/regions.csv        1 KB · 37행 (시도 2 · 시군구 2 · 행정동 33)
-seed/score_params.json         v0-20260805
+seed/buildings.csv                8,200 KB · 30,593행
+seed/units.csv                    2,450 KB · 94,074행
+seed/grids.geojson                  157 KB · 485격자 (경계 확보 485/485)
+seed/regions.csv                      1 KB · 37행 (시도 2 · 시군구 2 · 행정동 33)
+seed/admin-dong-boundaries.geojson  225 KB · 33개 행정동 경계 (외부 원본 — 아래 참조)
+seed/score_params.json                       v0-20260805
 ```
 
-**`regions.csv`·`grids.geojson`은 DB에 적재하지 않는다** — BE가 리소스 파일로 읽어 그대로 서빙하는
-조회 전용 상수다(`GET /regions/*`·`GET /grids`). `buildings`에 명칭 컬럼이 없어 이름 없이는 지역
-셀렉터를 그릴 수 없는데, 원천은 지오코딩 응답(VWorld `level1`·`level2`·`level4A`)이라 추가 API 호출이 0이다.
-코드 계층은 접두사 관계가 성립함을 실측으로 확인했다(`admin_dong_cd[:5] == sigungu_cd`).
+**`regions.csv`·`grids.geojson`·`admin-dong-boundaries.geojson`은 DB에 적재하지 않는다** —
+BE가 리소스 파일로 읽어 그대로 서빙하는 조회 전용 상수다
+(`GET /regions/*`·`GET /grids`·`GET /regions/boundaries`). `buildings`에 명칭 컬럼이 없어
+이름 없이는 지역 셀렉터를 그릴 수 없는데, 원천은 지오코딩 응답(VWorld `level1`·`level2`·`level4A`)이라
+추가 API 호출이 0이다. 코드 계층은 접두사 관계가 성립함을 실측으로 확인했다(`admin_dong_cd[:5] == sigungu_cd`).
 
-⚠️ **이 둘은 `backend/src/main/resources/`에 사본이 있다.** `Dockerfile`의 빌드 컨텍스트가
-`backend/`뿐이라 컨테이너 빌드에서 상위 디렉터리가 보이지 않기 때문이다 —
-빌드 시점에 `../seed`를 끌어오면 배포가 깨진다. **재산출하면 두 사본도 같이 갱신한다.**
+**`admin-dong-boundaries.geojson`만 이 파이프라인의 산출이 아니다** —
+[admdongkor](https://github.com/vuski/admdongkor) `ver20250701`을 시연 지역으로 잘라
+`adm_cd2`를 `dong_cd`로 정규화한 외부 원본이다(`data/README.md` 참조). `run_seed.py`가 만들지 않으므로
+**재산출해도 갱신되지 않는다** — 원본 버전을 올릴 때는 손으로 바꾼다.
+
+### ⚠️ 사본 동기화 — 재산출 시 반드시 함께 갱신
+
+`seed/`가 정본이지만 같은 파일이 다른 곳에도 있다. **한 곳만 고치면 화면과 서버가 다른 데이터를 본다.**
+
+| 파일 | 사본 위치 | 왜 사본이 필요한가 |
+|---|---|---|
+| `regions.csv` | `backend/src/main/resources/` | `Dockerfile` 빌드 컨텍스트가 `backend/`뿐이라 컨테이너 빌드에서 `../seed`가 안 보인다 |
+| `grids.geojson` | `backend/src/main/resources/` | 위와 같음 |
+| `admin-dong-boundaries.geojson` | `backend/src/main/resources/`<br>`frontend/public/` | 위와 같음 + **FE 폴백** — `GET /regions/boundaries`가 실패하면 화면이 `/admin-dong-boundaries.geojson`을 직접 읽는다(인증 오류 401·403은 폴백하지 않는다). 이 사본은 `dist/`에도 그대로 실려 번들이 225KB 커진다 — 폴백을 접으면 `frontend/public/` 사본과 `queries.ts`의 폴백 분기를 함께 지운다 |
 
 세 산출물은 **한 실행에서 임시 파일에 쓴 뒤 일괄 rename**한다(ADR-008 §9) — 중간에 실패하면
 '버전이 어긋난 CSV와 GeoJSON'이 남는 게 가장 위험하다.
