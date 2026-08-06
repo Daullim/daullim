@@ -20,7 +20,11 @@ import org.springframework.context.annotation.Import;
  * 태우므로 ERROR 디스패치 재인가 같은 필터 체인 거동까지 검증된다.
  */
 @Import(TestcontainersConfiguration.class)
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    // 프로덕션 도메인 1개 + Vercel preview 패턴.
+    properties =
+        "app.cors.allowed-origins=http://localhost:5173,https://daullim-*-xyunals-projects.vercel.app")
 class SecurityIT {
 
   /** 아직 컨트롤러가 없어 보호 여부만 본다. 인가를 통과하면 핸들러가 없어 404가 된다. */
@@ -111,6 +115,27 @@ class SecurityIT {
   @DisplayName("허용하지 않은 오리진의 프리플라이트는 거절된다")
   void corsPreflightFromUnknownOriginIsRejected() throws Exception {
     HttpResponse<String> res = preflight("https://evil.example.com");
+
+    assertThat(res.statusCode()).isEqualTo(403);
+    assertThat(res.headers().firstValue("Access-Control-Allow-Origin")).isEmpty();
+  }
+
+  @Test
+  @DisplayName("Vercel preview 오리진은 패턴으로 통과한다")
+  void corsPreflightFromPreviewOriginPasses() throws Exception {
+    String preview = "https://daullim-3v5nvrn9d-xyunals-projects.vercel.app";
+
+    HttpResponse<String> res = preflight(preview);
+
+    assertThat(res.statusCode()).isEqualTo(200);
+    assertThat(res.headers().firstValue("Access-Control-Allow-Origin")).contains(preview);
+  }
+
+  @Test
+  @DisplayName("패턴을 흉내 낸 다른 도메인은 거절된다")
+  void corsPreflightFromLookalikeOriginIsRejected() throws Exception {
+    HttpResponse<String> res =
+        preflight("https://daullim-x-xyunals-projects.vercel.app.attacker.example");
 
     assertThat(res.statusCode()).isEqualTo(403);
     assertThat(res.headers().firstValue("Access-Control-Allow-Origin")).isEmpty();

@@ -15,7 +15,7 @@ public class CorsConfig {
   CorsConfigurationSource corsConfigurationSource(
       @Value("${app.cors.allowed-origins}") List<String> allowedOrigins) {
     CorsConfiguration config = new CorsConfiguration();
-    config.setAllowedOrigins(allowedOrigins);
+    config.setAllowedOriginPatterns(allowedOrigins);
     config.setAllowedMethods(List.of("GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"));
     config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key"));
     // 토큰을 헤더로 싣고 쿠키를 쓰지 않으므로 자격증명 전달이 필요 없다.
