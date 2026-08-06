@@ -20,6 +20,7 @@
 | 상태·처방·위험 등 도메인 열거값 | `frontend/src/config/domain.ts` |
 | 스타일링 스택 결정 근거 | `docs/adr/ADR-011-styling.md` |
 | 라우팅 | `frontend/src/App.tsx` |
+| **배포·CI·시연 절차** | `docs/DEPLOY.md` (운영 노트 — 환경변수·DB 적재·롤백) → 결정은 `docs/adr/ADR-006-deploy.md` |
 | **API 계약** | `docs/openapi.yaml` (정본 — ADR-005). FE 타입은 그 손 사본인 `frontend/src/api/types.ts` |
 | FE의 서버 호출 | `frontend/src/api/` — `client.ts`(봉투·토큰·401) · `queries.ts`(엔드포인트) · `use-api-query.ts`(조회 훅) |
 | **DB 스키마·제약** | `backend/src/main/resources/db/migration/V1__init.sql` (테이블·CHECK·seed 전부 여기) |
