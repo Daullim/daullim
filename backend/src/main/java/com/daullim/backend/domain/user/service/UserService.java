@@ -5,6 +5,7 @@ import com.daullim.backend.common.error.ErrorCode;
 import com.daullim.backend.common.security.JwtTokenProvider;
 import com.daullim.backend.domain.user.dto.LoginRequest;
 import com.daullim.backend.domain.user.dto.LoginResponse;
+import com.daullim.backend.domain.user.dto.MyInfoResponse;
 import com.daullim.backend.domain.user.dto.SignupRequest;
 import com.daullim.backend.domain.user.dto.SignupResponse;
 import com.daullim.backend.domain.user.entity.User;
@@ -48,6 +49,15 @@ public class UserService {
     String accessToken =
         jwtTokenProvider.issue(user.getId(), user.getLoginId(), user.getRoleCode());
     return LoginResponse.bearer(accessToken, jwtTokenProvider.getAccessTokenTtl().toSeconds());
+  }
+
+  public MyInfoResponse getMyInfo(Long userId) {
+    User user =
+        userRepository
+            .findById(userId)
+            .filter(User::isActive)
+            .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
+    return MyInfoResponse.from(user);
   }
 
   @Transactional
