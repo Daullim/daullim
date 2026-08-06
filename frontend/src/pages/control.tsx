@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { RotateCw } from "lucide-react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
-import { MapPlaceholder } from "@/components/layout/map-placeholder";
+import { MapCanvas } from "@/components/layout/map-canvas";
 import { Button } from "@/components/core/button";
 import { DataText } from "@/components/core/data-text";
 import { QueueRow } from "@/components/core/queue-row";
@@ -12,6 +12,7 @@ import { EmptyState, ErrorInline, LastUpdated, RowSkeleton } from "@/components/
 import { getBuildingQueue, getDashboardSummary } from "@/api/queries";
 import { useApiQuery } from "@/api/use-api-query";
 import { useRegionNames } from "@/api/use-region";
+import { useBuildingPins } from "@/lib/use-building-pins";
 
 /** 다크 요약 바의 카운터 — 유일한 다크 서피스 위 (DESIGN.md Colors/Surface) */
 function Counter({ label, value }: { label: string; value: number }) {
@@ -31,6 +32,7 @@ export default function ControlPage() {
   /* 값은 행정표준코드다. 셀렉터가 첫 시도·시군구·동까지 채워 화면 진입 즉시 큐가 뜬다 */
   const [region, setRegion] = useState<RegionValue>({});
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [map, setMap] = useState<naver.maps.Map | null>(null);
   const names = useRegionNames(region.dong);
 
   const queue = useApiQuery(region.dong ? `queue:${region.dong}` : null, (s) =>
@@ -50,6 +52,10 @@ export default function ControlPage() {
   }, [queue.data, summary.data]);
 
   const items = queue.data?.items ?? [];
+  /* 지도 시점은 큐 1등 좌표 — 화면이 가리키는 곳과 지도가 같은 곳을 보게 한다 */
+  const mapCenter = items[0] ? { lat: items[0].lat, lng: items[0].lng } : undefined;
+
+  useBuildingPins(map, items, { selectedId, onSelect: setSelectedId });
 
   const reload = () => {
     queue.reload();
@@ -76,7 +82,11 @@ export default function ControlPage() {
 
       {/* 좌 지도 + 우 큐 테이블 — 지도 영역 크기 고정 (CLS 0) */}
       <main className="flex min-h-0 flex-1 gap-3 p-3">
-        <MapPlaceholder label={`${names.label ?? "지역 선택"} — 취약가구 위험지도`} />
+        <MapCanvas
+          ariaLabel={`${names.label ?? "지역"} 취약가구 위험지도`}
+          center={mapCenter}
+          onMapReady={setMap}
+        />
         <aside className="flex w-100 shrink-0 flex-col overflow-hidden rounded-md border border-hairline bg-surface xl:w-120">
           <div className="flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
             <h2 className="text-title-sm text-ink">우선순위 큐</h2>

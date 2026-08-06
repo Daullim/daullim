@@ -6,6 +6,7 @@ import { MAP_TYPE, type MapType } from "@/config/domain";
  * 사파리 프라이빗 모드 등에서 storage 접근이 던질 수 있어 전부 try/catch.
  */
 const MAP_TYPE_KEY = "daullim.mapType";
+const MAP_TYPE_EVENT = "daullim:map-type";
 
 export function loadMapType(): MapType {
   try {
@@ -23,4 +24,13 @@ export function saveMapType(value: MapType): void {
   } catch {
     /* 저장 실패해도 화면 동작은 막지 않는다 */
   }
+  window.dispatchEvent(new CustomEvent<MapType>(MAP_TYPE_EVENT, { detail: value }));
+}
+
+export function onMapTypeChange(listener: (value: MapType) => void): () => void {
+  const handle = (event: Event) => {
+    listener((event as CustomEvent<MapType>).detail);
+  };
+  window.addEventListener(MAP_TYPE_EVENT, handle);
+  return () => window.removeEventListener(MAP_TYPE_EVENT, handle);
 }

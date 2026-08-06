@@ -56,7 +56,13 @@ async function send(path: string, init: RequestInit): Promise<Response> {
   }
 }
 
-/** 실패 응답을 ApiError로 — 봉투가 아니어도(프록시 오류 등) 상태코드는 살린다. */
+/**
+ * 실패 응답을 ApiError로.
+ *
+ * **HTTP 상태 텍스트를 그대로 message에 담지 않는다.** 화면이 그 값을 사용자에게 보이는데
+ * "Bad Gateway" 같은 문자열은 조치로 이어지지 않고, 필드 옆에 붙으면 입력이 틀린 것처럼 읽힌다
+ * (DESIGN.md — 기술 용어 노출 금지). 원문은 콘솔로 보내 개발자만 본다.
+ */
 async function toError(res: Response): Promise<ApiError> {
   if (res.status === 401) {
     // 토큰을 들고 갔는데 거절당했으면 만료다. 없이 갔으면 로그인 시도 실패라 화면을 옮기지 않는다.
@@ -64,12 +70,31 @@ async function toError(res: Response): Promise<ApiError> {
     clearToken();
     if (sessionExpired) unauthorizedHandler?.();
   }
+
+  let code = "UNKNOWN";
+  let serverMessage: string | undefined;
   try {
     const body = (await res.json()) as Partial<Envelope<unknown>>;
-    return new ApiError(body.code ?? "UNKNOWN", body.message ?? res.statusText, res.status);
+    code = body.code ?? code;
+    serverMessage = body.message;
   } catch {
-    return new ApiError("UNKNOWN", res.statusText || "요청을 처리하지 못했습니다.", res.status);
+    /* 봉투가 아니다 — 프록시·게이트웨이가 HTML이나 빈 본문을 돌려준 경우 */
   }
+
+  // 서버가 우리 봉투로 답했으면 그 문구는 사용자용으로 쓰라고 만든 것이다.
+  if (serverMessage) return new ApiError(code, serverMessage, res.status);
+
+  console.error(`[API] ${res.status} ${res.statusText || "(상태 텍스트 없음)"} — ${res.url}`);
+  return new ApiError(code, fallbackMessage(res.status), res.status);
+}
+
+/** 봉투가 없을 때의 사용자 문구 — 원인을 아는 만큼만 말한다. */
+function fallbackMessage(status: number): string {
+  if (status === 502 || status === 503 || status === 504) {
+    return "서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.";
+  }
+  if (status >= 500) return "서버에 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.";
+  return "요청을 처리하지 못했습니다.";
 }
 
 /** 공통 봉투를 벗겨 data만 돌려준다. */

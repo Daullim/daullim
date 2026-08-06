@@ -10,6 +10,7 @@
 | `platform/fire_2023/` | 화재발생 건별 격자 정보 2023 서울·부산·전북 (89컬럼) + 주택 화재발생·재발생(부산) + 소방청 화재발생 정보 전국(15컬럼, cp949) | 소방안전 빅데이터 플랫폼 `goods_mng_sn=476` | 2026-07-15 | ✅ |
 | `platform/call119/` | 119신고접수 건별 격자 정보 2019~2023 (46컬럼, 18파일 약 4.2GB) — 서울·부산·전북 5년 + 제주 2019~2021 | 같은 플랫폼 `goods_mng_sn=462` | 2026-07-15 | ✅ |
 | `sgis/` | SGIS 격자 통계(2024 인구·가구·주택 + 2023 사업체, 1km, long 포맷) + 경계 SHP(EPSG:5179) + 코드집 | 공공데이터포털 15141768 (국가데이터처, 2025-06-30판) | 2026-07-15 | ✅ |
+| `seed/admin-dong-boundaries.geojson` | 시연 지역 33개 행정동 경계(WGS84 GeoJSON). `adm_cd2`를 `dong_cd`로 정규화 | [admdongkor](https://github.com/vuski/admdongkor) `ver20250701` | 2026-08-06 | ✅ |
 | `codes/` | 국토교통부 법정동코드 (49,861행 = 존재 20,555 / 폐지 29,306, cp949) | [공공데이터포털 15123287](https://www.data.go.kr/data/15123287/fileData.do), 2025-08-05판 | 2026-08-04 | ✅ |
 | `eais/` | 건축물대장 표제부 — **API 수집분**(파일 다운로드 아님) | 건축HUB OpenAPI `BldRgstHubService/getBrTitleInfo`, [공공데이터포털 15134735](https://www.data.go.kr/data/15134735/openapi.do). 인증키는 `backend/.env` | 키 발급 2026-08-04 | 수집 대기 |
 | `geocode_cache/` | 지오코딩 응답 캐시 (JSONL) — 일 40,000건 한도 자원이라 재호출 금지 | VWorld Geocoder 2.0 (도로명 검색 → 좌표 + `level4AC` 행정동코드 동시 취득) | — | 키 대기 |

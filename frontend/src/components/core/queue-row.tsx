@@ -22,6 +22,8 @@ export interface QueueRowProps {
    * `orderKey`는 전역 순번이라 동을 걸러 보면 5407 같은 값이 튀어나와 화면에서 뜻을 잃는다.
    */
   rank: number;
+  /** 지도에서 고른 행을 목록에서 찾아 스크롤하기 위한 앵커 */
+  id?: string;
   density?: Density;
   selected?: boolean;
   /** 완료 항목 흐리게 (B3 방문 큐) */
@@ -41,6 +43,7 @@ export interface QueueRowProps {
 export function QueueRow({
   item,
   rank,
+  id,
   density = "control",
   selected,
   dimmed,
@@ -66,6 +69,7 @@ export function QueueRow({
 
   return (
     <button
+      id={id}
       type="button"
       onClick={onSelect}
       disabled={disabled}

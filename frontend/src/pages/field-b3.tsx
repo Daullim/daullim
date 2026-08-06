@@ -1,10 +1,10 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { RotateCw, Search } from "lucide-react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
 import { LocateButton } from "@/components/layout/locate-button";
-import { MapPlaceholder } from "@/components/layout/map-placeholder";
+import { MapCanvas } from "@/components/layout/map-canvas";
 import { MapZoomControls } from "@/components/layout/map-zoom-controls";
 import { MapSidePanel } from "@/components/layout/map-side-panel";
 import { UnitPanel } from "@/components/layout/unit-panel";
@@ -16,6 +16,8 @@ import { InspectionOverlay } from "@/pages/inspection-overlay";
 import { CONSENT_TO_UNIT_STATUS, HOUSE_TYPE } from "@/config/domain";
 import { formatDay } from "@/lib/inspection";
 import { isQueueItemDone, todayDay, unitLabel } from "@/lib/units";
+import { useBuildingPins } from "@/lib/use-building-pins";
+import { useCurrentPosition } from "@/lib/use-current-position";
 import { ApiError } from "@/api/client";
 import { getBuilding, getBuildingQueue, getUnits, renameUnit } from "@/api/queries";
 import { useApiQuery } from "@/api/use-api-query";
@@ -24,6 +26,9 @@ import type { BuildingQueueItem, UnitItem } from "@/api/types";
 
 /** 주소 검색은 서버가 한다 — 타자마다 보내지 않도록 잠깐 묵힌다 */
 const SEARCH_DEBOUNCE_MS = 300;
+const QUEUE_SCROLL_TOP_PADDING = 16;
+
+const queueRowId = (buildingId: number) => `visit-queue-building-${buildingId}`;
 
 /**
  * 아키타입 B3 — /field 주택/가구 선택 (드릴다운 3/3).
@@ -50,6 +55,9 @@ export default function FieldUnitsPage() {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [renameError, setRenameError] = useState<string>();
+  const [map, setMap] = useState<naver.maps.Map | null>(null);
+  const queueListRef = useRef<HTMLDivElement>(null);
+  const position = useCurrentPosition(map);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), SEARCH_DEBOUNCE_MS);
@@ -79,7 +87,27 @@ export default function FieldUnitsPage() {
   );
 
   const items = queue.data?.items ?? [];
+  /* 선택한 행이 있으면 그 건물로, 없으면 큐 1등으로 시점을 잡는다 */
+  const focused = items.find((i) => i.buildingId === (openId ?? selectedId)) ?? items[0];
+  const mapCenter = focused ? { lat: focused.lat, lng: focused.lng } : undefined;
   const doneBuildings = items.filter(isQueueItemDone).length;
+
+  /* 핀 ↔ 큐 양방향 — 핀을 누르면 그 행이 열리고, 행을 고르면 그 핀이 강조된다 */
+  const selectFromPin = (buildingId: number) => {
+    setSelectedId(buildingId);
+    requestAnimationFrame(() => {
+      const list = queueListRef.current;
+      const row = document.getElementById(queueRowId(buildingId));
+      if (!list || !row) return;
+      const listTop = list.getBoundingClientRect().top;
+      const rowTop = row.getBoundingClientRect().top;
+      list.scrollTo({
+        top: list.scrollTop + rowTop - listTop - QUEUE_SCROLL_TOP_PADDING,
+        behavior: "smooth",
+      });
+    });
+  };
+  useBuildingPins(map, items, { selectedId: selectedId ?? openId, onSelect: selectFromPin });
   const inspectUnit = mergedUnits.find((u) => u.unitId === inspecting?.unitId);
   const inspectItem = items.find((i) => i.buildingId === inspecting?.buildingId) ?? null;
 
@@ -127,22 +155,28 @@ export default function FieldUnitsPage() {
 
       {/* 좌 지도 + 우 리사이즈 패널 2열 (접기 가능) — relative는 접힘 탭 앵커용 */}
       <main className="relative flex min-h-0 flex-1 gap-3 p-3">
-        {/* 지도 열 — 세대 패널의 앵커. MapPlaceholder는 role="img"·overflow-hidden이라
-            대화형 패널을 그 안에 넣지 않고 이 래퍼에 절대배치한다. */}
+        {/* 지도 열 — 세대 패널의 앵커. 패널은 지도 위에 절대배치하므로 이 래퍼가 기준점이다 */}
         <div className="relative flex min-w-0 flex-1">
-          <MapPlaceholder
-            label={
+          <MapCanvas
+            ariaLabel={
               rural
-                ? `${region.dongNm ?? "선택한 동"} — 가구 색핀 (2단계 진입)`
-                : `격자 ${gridId ?? ""} 확대 — 주택 색핀 · 완료 체크`
+                ? `${region.dongNm ?? "선택한 동"} 가구 지도`
+                : `격자 ${gridId ?? ""} 주택 지도`
             }
+            center={mapCenter}
+            zoom={16}
+            onMapReady={setMap}
             className="min-w-0"
           >
             {/* 범례는 우상단 — 하단은 줌(좌)·현재 위치(중앙) 차지 (B1과 동일 배치) */}
             <Legend className="absolute top-3 right-3" />
-            <MapZoomControls />
-            <LocateButton />
-          </MapPlaceholder>
+            <MapZoomControls map={map} />
+            <LocateButton
+              status={position.status}
+              message={position.message}
+              onLocate={position.locate}
+            />
+          </MapCanvas>
 
           {/* 세대 목록 — right-3이 큐 패널 접기 탭 pill 바로 앞이라 탭을 가리지 않는다 */}
           {openId && building.data && (
@@ -206,7 +240,7 @@ export default function FieldUnitsPage() {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={queueListRef} className="min-h-0 flex-1 overflow-y-auto">
             {queue.loading && items.length === 0 && <RowSkeleton density="field" rows={5} />}
             {queue.error && <ErrorInline onRetry={queue.reload} />}
             {!queue.loading && !queue.error && items.length === 0 && (
@@ -224,6 +258,7 @@ export default function FieldUnitsPage() {
               return (
                 <Fragment key={item.buildingId}>
                   <QueueRow
+                    id={queueRowId(item.buildingId)}
                     item={item}
                     rank={index + 1}
                     density="field"
