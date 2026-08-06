@@ -136,6 +136,31 @@ export interface GridFeatureCollection {
   features: GridFeature[];
 }
 
+/** 행정동 경계 정적 GeoJSON — B1 지도에서 시군구 필터와 동 선택 강조에 쓴다 */
+export interface AdminDongBoundaryProperties {
+  /** 행정표준 행정동코드 10자리 */
+  dong_cd: string;
+  dong_nm: string;
+  sigungu_cd: string;
+  /** 경계 원본 버전. 화면 로직에는 쓰지 않는다 */
+  source: string;
+}
+
+export type AdminDongBoundaryGeometry =
+  | { type: "Polygon"; coordinates: number[][][] }
+  | { type: "MultiPolygon"; coordinates: number[][][][] };
+
+export interface AdminDongBoundaryFeature {
+  type: "Feature";
+  geometry: AdminDongBoundaryGeometry;
+  properties: AdminDongBoundaryProperties;
+}
+
+export interface AdminDongBoundaryFeatureCollection {
+  type: "FeatureCollection";
+  features: AdminDongBoundaryFeature[];
+}
+
 /** 실시간 집계 — targetCount·visitedCount 둘 다 **건물** 수다 */
 export interface GridSummary {
   gridId: string;

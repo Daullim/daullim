@@ -2,7 +2,7 @@ openapi: 3.1.0
 
 # 계약 정본 (ADR-005). 변경은 "계약 변경 PR"로만 한다.
 #
-# 범위: Issue #25 조회 API 9종. 인증(#20·#22·#23)·visits 저장/조회·GET /grids(정적 GeoJSON)·
+# 범위: Issue #25 조회 API 9종 + 지도 정적 GeoJSON. 인증(#20·#22·#23)·visits 저장/조회·
 # GET /codes·재방문은 이 파일에 없다 — 아직 구현되지 않았고, 지어내지 않는다.
 #
 # ⚠️ 값 규약은 실데이터에 맞춘다. Notion "API 명세서 v2" §4의 JSON 예시는 갱신되지 않아 값이 낡았고,
@@ -140,6 +140,28 @@ paths:
                     avgRiskScore: 53.1
                     avgRiskLevelCd: warn
         "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /regions/boundaries:
+    get:
+      tags: [지역]
+      summary: 행정동 경계 조회
+      operationId: getAdminDongBoundaries
+      description: |
+        B1 동 선택 지도에 그릴 행정동 경계 **정적 GeoJSON**. admdongkor 2025-07-01판에서
+        시연 지역 33개 동만 `adm_cd2`(행정표준 행정동코드 10자리)로 잘라 둔 파일이다.
+
+        응답은 공통 봉투로 감싸지 않는다 — GeoJSON은 그 자체가 표준 문서 형식이다.
+      responses:
+        "200":
+          description: 시연 지역 행정동 경계 FeatureCollection
+          headers:
+            Cache-Control:
+              schema: { type: string }
+              example: max-age=86400, public
+          content:
+            application/geo+json:
+              schema: { $ref: "#/components/schemas/AdminDongBoundaryFeatureCollection" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
   /buildings/queue:
@@ -724,6 +746,44 @@ components:
                   buildings: { type: integer, description: 격자 안의 대상 건물 수 }
                   avg_score: { type: number, description: 격자 내 건물 평균 점수 }
                   risk_level_cd: { $ref: "#/components/schemas/RiskLevelCd" }
+
+    AdminDongBoundaryFeatureCollection:
+      type: object
+      description: |
+        admdongkor 2025-07-01판에서 시연 지역 33개 동만 `adm_cd2`로 추출한 행정동 경계다.
+        속성은 snake_case다 — GeoJSON 원본 형식이므로 camelCase 규약을 적용하지 않는다.
+      required: [type, features]
+      properties:
+        type: { const: FeatureCollection }
+        features:
+          type: array
+          items:
+            type: object
+            required: [type, geometry, properties]
+            properties:
+              type: { const: Feature }
+              geometry:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    enum: [Polygon, MultiPolygon]
+                  coordinates: { type: array, items: {} }
+              properties:
+                type: object
+                required: [dong_cd, dong_nm, sigungu_cd, source]
+                properties:
+                  dong_cd:
+                    type: string
+                    pattern: "^\\d{10}$"
+                    description: 행정표준 행정동코드 10자리
+                    example: "1162069500"
+                  dong_nm: { type: string, example: 신림동 }
+                  sigungu_cd:
+                    type: string
+                    pattern: "^\\d{5}$"
+                    example: "11620"
+                  source: { type: string, example: admdongkor-ver20250701 }
 
     GridSummary:
       type: object

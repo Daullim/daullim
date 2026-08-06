@@ -1,5 +1,6 @@
-import { apiGet, apiGetRaw, apiSend, query } from "@/api/client";
+import { ApiError, apiGet, apiGetRaw, apiSend, query } from "@/api/client";
 import type {
+  AdminDongBoundaryFeatureCollection,
   BuildingDetail,
   BuildingQueueItem,
   CursorPage,
@@ -23,6 +24,20 @@ export const getSigungus = (sidoCd: string, signal?: AbortSignal) =>
 
 export const getDongs = (sigunguCd: string, signal?: AbortSignal) =>
   apiGet<Dong[]>(`/regions/dongs${query({ sigunguCd })}`, signal);
+
+/** B1 동 선택 지도용 행정동 경계 — 정적 GeoJSON이라 봉투 없이 온다 */
+export const getAdminDongBoundaries = async (signal?: AbortSignal) => {
+  try {
+    return await apiGetRaw<AdminDongBoundaryFeatureCollection>("/regions/boundaries", signal);
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    if (e instanceof ApiError && [401, 403].includes(e.status)) throw e;
+
+    const res = await fetch("/admin-dong-boundaries.geojson", { signal });
+    if (!res.ok) throw e;
+    return (await res.json()) as AdminDongBoundaryFeatureCollection;
+  }
+};
 
 /* 대상건물 (E-1·E-2) */
 

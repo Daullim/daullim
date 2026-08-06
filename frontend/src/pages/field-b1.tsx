@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
@@ -8,9 +8,15 @@ import { DataText } from "@/components/core/data-text";
 import { RiskBadge } from "@/components/core/risk-badge";
 import { RegionSelector, type RegionValue } from "@/components/core/region-selector";
 import { EmptyState, ErrorInline, RowSkeleton } from "@/components/core/system-states";
-import { getDongs, getSigungus } from "@/api/queries";
+import { getAdminDongBoundaries, getDongs, getSigungus } from "@/api/queries";
 import { REGION_CENTER } from "@/lib/naver-maps";
 import { useApiQuery } from "@/api/use-api-query";
+import {
+  adminBoundaryStyles,
+  boundsOfAdminBoundary,
+  filterToDong,
+  filterToSigungu,
+} from "@/lib/admin-boundary-layer";
 import { cn } from "@/lib/utils";
 
 /**
@@ -22,6 +28,7 @@ export default function FieldDongPage() {
   const navigate = useNavigate();
   /* 값은 행정표준코드다. 빈 상태로 시작하고 셀렉터가 첫 시도·시군구를 채운다 */
   const [region, setRegion] = useState<RegionValue>({});
+  const [map, setMap] = useState<naver.maps.Map | null>(null);
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const stripRef = useRef<HTMLDivElement>(null);
 
@@ -31,6 +38,7 @@ export default function FieldDongPage() {
   const dongs = useApiQuery(region.sigungu ? `dongs:${region.sigungu}` : null, (s) =>
     getDongs(region.sigungu!, s),
   );
+  const boundaries = useApiQuery("adminDongBoundaries", (s) => getAdminDongBoundaries(s));
 
   const sigungu = sigungus.data?.find((r) => r.sigunguCd === region.sigungu);
   /* 도농은 시군구 대표값이다 — 격자 단계를 건너뛸지 정하는 화면 모드 분기 */
@@ -71,6 +79,59 @@ export default function FieldDongPage() {
   /* 평균 위험도 내림차순 정렬은 화면 몫이다(서버는 코드순으로 준다) */
   const dongCards = [...(dongs.data ?? [])].sort((a, b) => b.avgRiskScore - a.avgRiskScore);
 
+  /** 선택한 시군구의 행정동 경계만 지도에 올린다 */
+  const sigunguBoundaries = useMemo(() => {
+    if (!region.sigungu || !boundaries.data) return null;
+    return filterToSigungu(boundaries.data, region.sigungu);
+  }, [boundaries.data, region.sigungu]);
+
+  const selectedBoundary = useMemo(() => {
+    if (!region.dong || !sigunguBoundaries) return null;
+    return filterToDong(sigunguBoundaries, region.dong);
+  }, [region.dong, sigunguBoundaries]);
+
+  /* 시군구가 바뀌면 해당 구/군의 행정동 경계를 전부 얹고 전체가 보이게 맞춘다 */
+  useEffect(() => {
+    if (!map || !sigunguBoundaries?.features.length) return;
+
+    map.data.setStyle(adminBoundaryStyles().base);
+    map.data.addGeoJson(sigunguBoundaries, false);
+
+    const bounds = boundsOfAdminBoundary(sigunguBoundaries);
+    if (bounds) map.fitBounds(bounds);
+
+    return () => map.data.removeGeoJson(sigunguBoundaries);
+  }, [map, sigunguBoundaries]);
+
+  /* 지도 → 카드/셀렉터: 경계 폴리곤을 누르면 그 동이 선택된다 */
+  useEffect(() => {
+    if (!map) return;
+    const listener = map.data.addListener("click", (e: naver.maps.FeatureEvent) => {
+      const dongCd = e.feature.getProperty("dong_cd");
+      if (typeof dongCd === "string") {
+        setRegion((current) => ({ ...current, dong: dongCd }));
+      }
+    });
+    return () => map.data.removeListener(listener);
+  }, [map]);
+
+  /* 카드/셀렉터 → 지도: 선택된 동만 더 진하게 강조하고 경계에 맞춰 내려앉는다 */
+  useEffect(() => {
+    if (!map || !sigunguBoundaries?.features.length) return;
+    const { selected: selectedStyle } = adminBoundaryStyles();
+
+    for (const feature of map.data.getAllFeature()) {
+      map.data.revertStyle(feature);
+      if (feature.getProperty("dong_cd") === region.dong) {
+        map.data.overrideStyle(feature, selectedStyle);
+      }
+    }
+
+    const target = selectedBoundary?.features.length ? selectedBoundary : sigunguBoundaries;
+    const bounds = boundsOfAdminBoundary(target);
+    if (bounds) map.fitBounds(bounds);
+  }, [map, region.dong, selectedBoundary, sigunguBoundaries]);
+
   /* 다음 화면은 URL의 dongCd만으로 지역을 복원한다 — 코드가 접두사 관계라 상위가 따라온다 */
   const enterDong = (dongCd: string) => {
     setRegion({ ...region, dong: dongCd });
@@ -89,6 +150,7 @@ export default function FieldDongPage() {
           ariaLabel={dongLabel ? `${dongLabel} 동 경계` : "점검할 동 선택"}
           center={region.sigungu ? REGION_CENTER[region.sigungu] : undefined}
           zoom={13}
+          onMapReady={setMap}
           className="h-full rounded-none border-none"
         />
 
