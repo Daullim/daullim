@@ -2,8 +2,8 @@ openapi: 3.1.0
 
 # 계약 정본 (ADR-005). 변경은 "계약 변경 PR"로만 한다.
 #
-# 범위: Issue #25 조회 API 9종 + 지도 정적 GeoJSON. 인증(#20·#22·#23)·visits 저장/조회·
-# GET /codes·재방문은 이 파일에 없다 — 아직 구현되지 않았고, 지어내지 않는다.
+# 범위: Issue #25 조회 API 9종 + 지도 정적 GeoJSON + 점검 결과 저장. 인증(#20·#22·#23)·
+# visits 조회·GET /codes·재방문은 이 파일에 없다 — 아직 구현되지 않았고, 지어내지 않는다.
 #
 # ⚠️ 값 규약은 실데이터에 맞춘다. Notion "API 명세서 v2" §4의 JSON 예시는 갱신되지 않아 값이 낡았고,
 # 구조는 v2를, 값은 아래 description을 따른다.
@@ -38,6 +38,8 @@ tags:
     description: 우선순위 큐와 대장 프리필
   - name: 세대
     description: 세대 목록과 현장 호수 입력
+  - name: 점검
+    description: 현장 점검 결과 저장
   - name: 지도
     description: 격자 집계
   - name: 관제
@@ -343,6 +345,87 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ApiError" }
               example: { code: CONFLICT, message: 같은 건물에 이미 있는 호수입니다., data: null }
+
+  /units/{unitId}/visits:
+    post:
+      tags: [점검]
+      summary: 점검 결과 저장
+      operationId: submitVisit
+      description: |
+        현장 점검 폼의 **원입력만** 받는다. 판정(`conditionCode`)·처방(`rxCode`)·
+        실효 교체 개수(`effectiveReplaceCount`)는 서버가 `JudgmentService`로 다시 계산한다.
+
+        `officerId`는 본문이 아니라 JWT `sub`에서 꺼낸다. 오프라인 재전송은 `Idempotency-Key`
+        헤더를 `visits.client_visit_id`로 저장해 같은 키 재전송 시 새 행을 만들지 않고 기존 결과를 돌려준다.
+
+        비승낙(`refused`·`vacant`·`unreachable`) 방문은 경보기·소화기 필드를 보내지 않는다.
+        서버도 저장 전 해당 필드를 지워 DB `ck_v_na`와 같은 신뢰 경계를 유지한다.
+      parameters:
+        - name: unitId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 오프라인 재전송 멱등 키. UUID 형식이어야 한다.
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VisitSubmitRequest" }
+            examples:
+              accepted:
+                summary: 승낙 저장
+                value:
+                  consentCd: accepted
+                  respondentTypeCd: owner
+                  roomCount: 2
+                  mfgYm: "2025-08"
+                  replaceCount: 1
+                  replacements:
+                    - { replaceReasonCd: battery-dead, batteryTypeCd: sealed, detectorFlagCds: [] }
+                  extinguisherInstalledCd: installed
+                  rxDoneCd: done
+                  revisitPlanCd: not-needed
+                  note: 현장 교체 완료
+              notInspected:
+                summary: 공가 저장
+                value:
+                  consentCd: vacant
+                  revisitPlanCd: revisit
+                  note: 부재
+      responses:
+        "201":
+          description: 새 점검 저장
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VisitSaveResult" }
+        "200":
+          description: 같은 Idempotency-Key 재전송 — 기존 결과 반환
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VisitSaveResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: lookup에 없는 도메인 코드
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+              example: { code: DOMAIN_CODE_INVALID, message: 정의되지 않은 도메인 코드입니다., data: null }
 
   /grids:
     get:
@@ -709,6 +792,104 @@ components:
         lastInspectedDay:
           type: [string, "null"]
           pattern: "^\\d{8}$"
+
+    VisitSubmitRequest:
+      type: object
+      description: |
+        현장 점검 폼의 원입력. `ageBandCd`는 ADR-013 결정 26으로 폐기됐고, 경과 판정 근거는
+        `mfgYm` 또는 `mfgUnmarked=true`다. 서버가 판정·처방·실효 교체 개수를 재계산하므로
+        해당 파생값은 요청에 없다.
+
+        승낙 방문은 `respondentTypeCd`, `roomCount`, `mfgYm` 또는 `mfgUnmarked`,
+        `extinguisherInstalledCd`, `revisitPlanCd`가 필요하다. 비승낙 방문은 `consentCd`와
+        `revisitPlanCd`만으로 저장할 수 있고, 거부(`refused`)만 `refusalReasonCd`가 추가로 필요하다.
+      required: [consentCd, revisitPlanCd]
+      properties:
+        consentCd:
+          type: string
+          enum: [accepted, refused, vacant, unreachable]
+        respondentTypeCd:
+          type: [string, "null"]
+          enum: [owner, tenant, family, etc, null]
+        refusalReasonCd:
+          type: [string, "null"]
+          enum: [no-need, distrust, no-time, etc, null]
+        refusalNote: { type: [string, "null"] }
+        roomCount:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 32767
+        mfgYm:
+          type: [string, "null"]
+          pattern: "^\\d{4}-(0[1-9]|1[0-2])$"
+          description: 제조년월 실측. `mfgUnmarked=true`와 공존할 수 없다.
+        mfgUnmarked:
+          type: [boolean, "null"]
+          description: 제조년월 표기 없음. true면 전량 교체 대상이다.
+        replaceCount:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 32767
+          description: 전량 자동 확정(경과·미표기)이 아니면 `replacements.length`와 같아야 한다.
+        replacements:
+          type: array
+          items: { $ref: "#/components/schemas/ReplacementSubmitItem" }
+        extinguisherInstalledCd:
+          type: [string, "null"]
+          enum: [installed, missing, null]
+        rxDoneCd:
+          type: [string, "null"]
+          enum: [done, advised-only, null]
+        revisitPlanCd:
+          type: string
+          enum: [not-needed, revisit]
+        noRevisitNote:
+          type: [string, "null"]
+          description: 전량 교체 대상인데 교체도 재방문도 없이 종료할 때 필수.
+        note: { type: [string, "null"] }
+        routeOrder: { type: [integer, "null"], maximum: 32767 }
+        dispatchedScore:
+          type: [number, "null"]
+          description: 배차 당시 점수 스냅샷.
+        dispatchedOrderKey:
+          type: [integer, "null"]
+          description: 배차 당시 큐 순서 스냅샷.
+        scoreVersion:
+          type: [string, "null"]
+          maxLength: 20
+        gpsLat: { type: [number, "null"] }
+        gpsLng: { type: [number, "null"] }
+
+    ReplacementSubmitItem:
+      type: object
+      required: [replaceReasonCd]
+      properties:
+        replaceReasonCd:
+          type: string
+          enum: [expired, battery-dead, appearance, detached, unmarked, etc]
+        batteryTypeCd:
+          type: [string, "null"]
+          enum: [replaceable, sealed, unknown, null]
+          description: "`replaceReasonCd=battery-dead`일 때만 허용·필수."
+        detectorFlagCds:
+          type: array
+          items:
+            type: string
+            enum: [stain, cover-damage, false-alarm, condensation]
+          description: "`replaceReasonCd=appearance`일 때만 허용·필수."
+
+    VisitSaveResult:
+      type: object
+      required: [visitId, visitedDay, replay]
+      properties:
+        visitId: { type: integer, format: int64 }
+        visitedDay:
+          type: string
+          pattern: "^\\d{8}$"
+          description: 서버가 KST 기준으로 기록한 방문일.
+        replay:
+          type: boolean
+          description: 같은 `Idempotency-Key`로 저장된 기존 결과면 true.
 
     GridFeatureCollection:
       type: object

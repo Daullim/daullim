@@ -7,8 +7,9 @@
 
 다울림 — 소방 취약가구 화재경보기 사후관리 **우선순위 처방 도구**(소방안전 빅데이터 경진대회 출품, 3주 MVP, 1인 개발). 주 사용자는 소방 점검원·예방담당자. 두 모드: `/control` 관제(데스크톱)·`/field` 현장(**태블릿 1024×768 가로 우선, 장갑 조작·명료함**).
 `frontend/` `backend/` `pipeline/` `data/` `seed/`가 전부 실물로 서 있다.
-파이프라인이 `buildings` 30,593행 · `units` 94,074행을 적재했고, API 10종(조회 9 + 쓰기 1)과
-`docs/openapi.yaml`이 붙어 **화면이 실데이터로 돈다**. 남은 큰 구멍은 **점검 결과 저장(`POST /units/{unitId}/visits`)과 기록 조회(`/visits`)**,
+파이프라인이 `buildings` 30,593행 · `units` 94,074행을 적재했고, API 11종(조회 9 + 쓰기 2)과
+`docs/openapi.yaml`이 붙어 **화면이 실데이터로 돈다**. 점검 결과 저장(`POST /units/{unitId}/visits`)까지 붙어
+현장 폼이 서버에 남는다. 남은 큰 구멍은 **점검 기록 조회(`/visits`)**,
 그리고 **지도 격자 밀집 표현의 최종 방식**이다 — 아래 Known Gaps 참조.
 
 ## Source of Truth — 작업별 먼저 읽을 파일 `[DAULLIM]`
@@ -94,7 +95,7 @@ docker compose down -v && docker compose up -d
 상세는 `frontend/DESIGN.md` § Known Gaps. 아래에 걸리면 **지어내지 말고 사용자에게 물어라**:
 
 - **방문결과(`consent_cd`)의 화면 표시 모델 미합의** — 상태명·목록은 `config/domain.ts`에서만 관리(`StatusTag`는 톤 슬롯만 앎). 진행상태(`units.status_cd`) 축은 ADR-013으로 확정됐다.
-- **점검 결과 저장 API 미구현** — `POST /units/{unitId}/visits`가 없어 점검 폼이 서버에 저장되지 않는다. 화면은 저장 결과를 로컬 상태로만 들고 있다(`field-b3.tsx`의 `visitOverrides`). 계약은 Notion "API 명세서 v2" §G-1에 있다.
+- ~~점검 결과 저장 API 미구현~~ → **구현됨** — `POST /units/{unitId}/visits`가 원입력만 받고 판정·처방·실효 개수를 서버가 재계산한다. `officerId`는 JWT `sub`, 멱등 키는 `Idempotency-Key` 헤더(재전송은 409가 아니라 기존 결과를 200으로). 계약은 `docs/openapi.yaml`이 정본이다 — Notion "API 명세서 v2" §G-1의 `ageBandCd`는 폐기됐다(ADR-013 결정 26). `field-b3.tsx`의 `visitOverrides`는 저장 직후 화면 반영 캐시로만 남았다.
 - **점검 기록 조회 API 미구현** — `/records` 화면 전체가 `mock/records.ts`를 쓴다(`GET /visits`·`/visits/{id}` 대기).
 - **`GET /auth/me` 미머지** — 상단바·드로어·설정의 사용자 정보가 `mock/sample.ts`의 `INSPECTOR`다(#23).
 - **회원탈퇴가 서버에 반영되지 않는다** — `DELETE /auth/me`가 없어 이 기기의 세션만 끊는다.
