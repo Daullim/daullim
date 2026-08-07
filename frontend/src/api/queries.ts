@@ -1,4 +1,4 @@
-import { ApiError, apiGet, apiGetRaw, apiSend, query } from "@/api/client";
+import { ApiError, apiDelete, apiGet, apiGetRaw, apiSend, query } from "@/api/client";
 import type {
   AdminDongBoundaryFeatureCollection,
   BuildingDetail,
@@ -106,6 +106,14 @@ export const login = (loginId: string, password: string, signal?: AbortSignal) =
 /** 로그인한 사용자 — 상단바·드로어가 마운트마다 부른다 */
 export const getCurrentUser = (signal?: AbortSignal) =>
   apiGet<CurrentUser>("/auth/me", signal);
+
+/**
+ * 회원탈퇴 — 비가역. 서버는 계정을 비활성화하고 점검 이력은 남긴다.
+ *
+ * 성공(204)한 뒤에만 토큰을 지운다. 실패했는데 지우면 계정은 살아 있고 세션만 끊겨,
+ * 사용자가 탈퇴됐다고 오해한다.
+ */
+export const withdraw = (signal?: AbortSignal) => apiDelete("/auth/me", signal);
 
 export interface SignupParams {
   loginId: string;

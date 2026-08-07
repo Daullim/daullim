@@ -1,7 +1,6 @@
 package com.daullim.backend.domain.visit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -11,7 +10,6 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -26,22 +24,6 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * 전달되는가</b>다 — 원입력만 받는지, 점검원을 토큰에서 꺼내는지, 멱등 키가 헤더에서 오는지, 위반이 400·422 중 어느 쪽으로 나가는지.
  */
 class VisitApiIT extends QueryApiSupport {
-
-  private long officerId;
-
-  @BeforeEach
-  void setUpOfficer() {
-    officerId =
-        jdbc.sql(
-                """
-                INSERT INTO users (login_id,password_hash,name,phone,birth_on,role_cd)
-                VALUES (:loginId,'{bcrypt}stub','김점검','010-1234-5678',DATE '1990-01-01','officer')
-                RETURNING user_id
-                """)
-            .param("loginId", "officer-" + UUID.randomUUID())
-            .query(Long.class)
-            .single();
-  }
 
   @Nested
   @DisplayName("G-1. 승낙 방문")
@@ -301,7 +283,7 @@ class VisitApiIT extends QueryApiSupport {
                       """
                       {"consentCd":"vacant","revisitPlanCd":"revisit"}
                       """)
-                  .with(officerToken()))
+                  .with(officer()))
           .andExpect(status().isNotFound());
     }
 
@@ -325,11 +307,7 @@ class VisitApiIT extends QueryApiSupport {
     return post("/api/v1/units/{id}/visits", b2FieldUnit)
         .contentType(MediaType.APPLICATION_JSON)
         .content(body)
-        .with(officerToken());
-  }
-
-  private org.springframework.test.web.servlet.request.RequestPostProcessor officerToken() {
-    return jwt().jwt(builder -> builder.subject(String.valueOf(officerId)));
+        .with(officer());
   }
 
   /** 오늘로부터 1년 전 — 어느 날 돌려도 내용연수 안쪽이라 자동 전량 교체로 넘어가지 않는다. */

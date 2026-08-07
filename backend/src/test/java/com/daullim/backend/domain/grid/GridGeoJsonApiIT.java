@@ -1,6 +1,5 @@
 package com.daullim.backend.domain.grid;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -17,7 +16,7 @@ class GridGeoJsonApiIT extends QueryApiSupport {
   @Test
   @DisplayName("485격자 GeoJSON을 geo+json으로 내린다")
   void servesFeatureCollection() throws Exception {
-    mvc.perform(get("/api/v1/grids").with(jwt()))
+    mvc.perform(get("/api/v1/grids").with(officer()))
         .andExpect(status().isOk())
         .andExpect(content().contentTypeCompatibleWith("application/geo+json"))
         .andExpect(jsonPath("$.type").value("FeatureCollection"))
@@ -27,7 +26,7 @@ class GridGeoJsonApiIT extends QueryApiSupport {
   @Test
   @DisplayName("격자 속성은 1km 코드와 정적 위험도를 담는다")
   void carriesStaticProperties() throws Exception {
-    mvc.perform(get("/api/v1/grids").with(jwt()))
+    mvc.perform(get("/api/v1/grids").with(officer()))
         .andExpect(jsonPath("$.features[0].geometry.type").value("Polygon"))
         .andExpect(jsonPath("$.features[0].properties.grid_id").exists())
         .andExpect(jsonPath("$.features[0].properties.avg_score").exists())
@@ -40,7 +39,7 @@ class GridGeoJsonApiIT extends QueryApiSupport {
   @Test
   @DisplayName("정적 자산이라 캐시 가능하게 내린다")
   void isCacheable() throws Exception {
-    mvc.perform(get("/api/v1/grids").with(jwt()))
+    mvc.perform(get("/api/v1/grids").with(officer()))
         .andExpect(
             header()
                 .string("Cache-Control", org.hamcrest.Matchers.containsString("max-age=86400")));

@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/sheet";
 import { Button } from "@/components/core/button";
 import { clearToken } from "@/api/token";
+import { displayName } from "@/lib/user";
 import type { CurrentUser } from "@/api/types";
 
 /* to가 없는 항목은 라우트 미정 — 자리만 확보한 플레이스홀더 (라우트를 지어내지 않는다) */
@@ -16,6 +17,14 @@ const MENU_ITEMS: { label: string; to?: string }[] = [
   { label: "현재 진행 상황" },
   { label: "설정", to: "/settings" },
 ];
+
+/**
+ * 현장모드에서 들어왔음을 곁길 화면에 알린다 — 그 화면이 나가기(X)를 띄우는 조건이다.
+ *
+ * location.state가 아니라 쿼리로 두는 이유는 새로고침이다. 현장 태블릿은 화면을 종일 켜 두고
+ * 새로고침이 잦은데(api/token.ts와 같은 이유), state는 그때 사라져 X가 증발한다.
+ */
+const FIELD_ENTRY = "?from=field";
 
 /**
  * 좌측 드로어 (/field·/control 공용) — focus trap·ESC·오버레이는 Radix Sheet에 위임.
@@ -37,9 +46,7 @@ export function AppDrawer({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="left" className="w-80 gap-0 bg-surface p-0">
         <SheetHeader className="shrink-0 border-b border-hairline px-5 py-5 text-left">
-          <SheetTitle className="text-title text-ink">
-            {user?.name ?? "사용자"} {user?.titleName ?? ""}
-          </SheetTitle>
+          <SheetTitle className="text-title text-ink">{displayName(user)}</SheetTitle>
           <SheetDescription className="text-body-md font-normal text-subtle">
             {user?.orgName ?? ""}
           </SheetDescription>
@@ -51,7 +58,7 @@ export function AppDrawer({
               key={label}
               type="button"
               disabled={!to}
-              onClick={to ? () => navigate(to) : undefined}
+              onClick={to ? () => navigate(mode === "field" ? to + FIELD_ENTRY : to) : undefined}
               className="flex h-13 w-full items-center px-5 text-left text-title text-body hover:bg-surface-muted disabled:cursor-not-allowed disabled:text-subtle disabled:hover:bg-surface"
             >
               {label}

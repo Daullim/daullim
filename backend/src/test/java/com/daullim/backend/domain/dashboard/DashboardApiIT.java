@@ -1,6 +1,5 @@
 package com.daullim.backend.domain.dashboard;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,7 +14,7 @@ class DashboardApiIT extends QueryApiSupport {
   @Test
   @DisplayName("관제 요약은 세대 기준 대상·완료와 건물 기준 위험을 센다")
   void summary() throws Exception {
-    mvc.perform(get("/api/v1/dashboard/summary").param("sigunguCd", SIGUNGU).with(jwt()))
+    mvc.perform(get("/api/v1/dashboard/summary").param("sigunguCd", SIGUNGU).with(officer()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.targetCount").value(6))
         .andExpect(jsonPath("$.data.doneCount").value(2))
@@ -27,7 +26,7 @@ class DashboardApiIT extends QueryApiSupport {
   @Test
   @DisplayName("시군구를 생략하면 전 지역을 센다")
   void summaryWithoutRegion() throws Exception {
-    mvc.perform(get("/api/v1/dashboard/summary").with(jwt()))
+    mvc.perform(get("/api/v1/dashboard/summary").with(officer()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.targetCount").value(6));
   }

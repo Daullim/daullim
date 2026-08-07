@@ -1,7 +1,6 @@
 package com.daullim.backend.domain.unit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -24,7 +23,7 @@ class UnitApiIT extends QueryApiSupport {
     @Test
     @DisplayName("세대 목록은 unitSeq 순이고 미지정 호수는 null이다")
     void ordersByUnitSeq() throws Exception {
-      mvc.perform(get("/api/v1/buildings/{id}/units", b2).with(jwt()))
+      mvc.perform(get("/api/v1/buildings/{id}/units", b2).with(officer()))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.data.length()").value(2))
           .andExpect(jsonPath("$.data[0].unitSeq").value(1))
@@ -37,7 +36,7 @@ class UnitApiIT extends QueryApiSupport {
     @Test
     @DisplayName("없는 건물의 세대 목록은 404다 — 빈 배열이 아니다")
     void notFound() throws Exception {
-      mvc.perform(get("/api/v1/buildings/{id}/units", 999_999L).with(jwt()))
+      mvc.perform(get("/api/v1/buildings/{id}/units", 999_999L).with(officer()))
           .andExpect(status().isNotFound());
     }
   }
@@ -53,7 +52,7 @@ class UnitApiIT extends QueryApiSupport {
               patch("/api/v1/units/{id}", b2FieldUnit)
                   .contentType(MediaType.APPLICATION_JSON)
                   .content("{\"hoNm\":\"101호\"}")
-                  .with(jwt()))
+                  .with(officer()))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.data.hoNm").value("101호"))
           .andExpect(jsonPath("$.data.hoNmSourceCd").value("field"))
@@ -85,7 +84,7 @@ class UnitApiIT extends QueryApiSupport {
               patch("/api/v1/units/{id}", b1ExposUnit)
                   .contentType(MediaType.APPLICATION_JSON)
                   .content("{\"hoNm\":\"999호\"}")
-                  .with(jwt()))
+                  .with(officer()))
           .andExpect(status().isForbidden())
           .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
@@ -97,7 +96,7 @@ class UnitApiIT extends QueryApiSupport {
               patch("/api/v1/units/{id}", b2FieldUnit)
                   .contentType(MediaType.APPLICATION_JSON)
                   .content("{\"hoNm\":\"201호\"}")
-                  .with(jwt()))
+                  .with(officer()))
           .andExpect(status().isConflict())
           .andExpect(jsonPath("$.code").value("CONFLICT"));
     }
@@ -109,7 +108,7 @@ class UnitApiIT extends QueryApiSupport {
               patch("/api/v1/units/{id}", b2FieldUnit)
                   .contentType(MediaType.APPLICATION_JSON)
                   .content("{\"hoNm\":\"  \"}")
-                  .with(jwt()))
+                  .with(officer()))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
@@ -121,7 +120,7 @@ class UnitApiIT extends QueryApiSupport {
               patch("/api/v1/units/{id}", 999_999L)
                   .contentType(MediaType.APPLICATION_JSON)
                   .content("{\"hoNm\":\"101호\"}")
-                  .with(jwt()))
+                  .with(officer()))
           .andExpect(status().isNotFound());
     }
   }

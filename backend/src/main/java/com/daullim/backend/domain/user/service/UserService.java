@@ -10,6 +10,8 @@ import com.daullim.backend.domain.user.dto.SignupRequest;
 import com.daullim.backend.domain.user.dto.SignupResponse;
 import com.daullim.backend.domain.user.entity.User;
 import com.daullim.backend.domain.user.repository.UserRepository;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.Locale;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -25,14 +27,17 @@ public class UserService {
   private final UserRepository userRepository;
   private final PasswordEncoder passwordEncoder;
   private final JwtTokenProvider jwtTokenProvider;
+  private final Clock clock;
 
   public UserService(
       UserRepository userRepository,
       PasswordEncoder passwordEncoder,
-      JwtTokenProvider jwtTokenProvider) {
+      JwtTokenProvider jwtTokenProvider,
+      Clock clock) {
     this.userRepository = userRepository;
     this.passwordEncoder = passwordEncoder;
     this.jwtTokenProvider = jwtTokenProvider;
+    this.clock = clock;
   }
 
   public LoginResponse login(LoginRequest request) {
@@ -58,6 +63,22 @@ public class UserService {
             .filter(User::isActive)
             .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
     return MyInfoResponse.from(user);
+  }
+
+  /**
+   * 회원탈퇴 — 물리 삭제가 아니라 비활성화다.
+   *
+   * <p>{@code visits.officer_id}가 {@code ON DELETE RESTRICT}로 과거 점검 이력을 붙들고 있어 행을 지울 수 없다. 지워서도 안
+   * 된다 — 누가 점검했는지가 기록의 일부다. 남은 액세스 토큰은 {@code ActiveAccountFilter}가 막는다.
+   */
+  @Transactional
+  public void withdraw(Long userId) {
+    User user =
+        userRepository
+            .findById(userId)
+            .filter(User::isActive)
+            .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
+    user.withdraw(Instant.now(clock));
   }
 
   @Transactional

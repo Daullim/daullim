@@ -1,5 +1,7 @@
 package com.daullim.backend.domain;
 
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+
 import com.daullim.backend.TestcontainersConfiguration;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,6 +11,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -54,8 +57,31 @@ public abstract class QueryApiSupport {
 
   protected long b1ExposUnit;
 
+  /** 토큰의 주인. ActiveAccountFilter가 요청마다 이 계정이 살아 있는지 확인한다. */
+  protected long officerId;
+
+  /**
+   * 인증된 요청 — {@code jwt()} 기본 subject는 {@code "user"}라 계정 조회를 통과하지 못한다.
+   *
+   * <p>{@code sub}는 우리가 발급할 때 넣는 {@code user_id}이므로 픽스처가 만든 실제 계정을 가리키게 한다.
+   */
+  protected RequestPostProcessor officer() {
+    return jwt().jwt(builder -> builder.subject(String.valueOf(officerId)));
+  }
+
   @BeforeEach
   void setUpFixtures() {
+    officerId =
+        jdbc.sql(
+                """
+                INSERT INTO users (login_id,password_hash,name,phone,birth_on,role_cd)
+                VALUES (:loginId,'{bcrypt}stub','이영선','010-1234-5678',DATE '1990-01-01','officer')
+                RETURNING user_id
+                """)
+            .param("loginId", "it-" + java.util.UUID.randomUUID())
+            .query(Long.class)
+            .single();
+
     // 다사46a41a·다사46b41a는 같은 1km(다사4641)로 모인다 — 유도가 없으면 이 둘이 갈라진다.
     b1 =
         insertBuilding(

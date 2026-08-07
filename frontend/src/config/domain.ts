@@ -92,6 +92,12 @@ export const REFUSAL_REASON: Record<RefusalReason, { label: string }> = {
   etc: { label: "기타" },
 };
 
+/**
+ * 이름 옆에 붙는 직책 — 이 앱을 쓰는 사람은 모두 점검관이다.
+ * 서버의 `titleName`·`rankName`은 이름 옆 표기에 쓰지 않는다(역할이 늘면 여기부터 고친다).
+ */
+export const OFFICER_TITLE = "점검관";
+
 /** Step 0 — 응대자 유형 (respondent_type). 설치 의무자는 소유자(소방시설법 제8조) */
 export type RespondentType = "owner" | "tenant" | "family" | "etc";
 

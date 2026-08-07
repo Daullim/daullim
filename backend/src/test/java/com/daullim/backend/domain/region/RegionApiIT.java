@@ -1,6 +1,5 @@
 package com.daullim.backend.domain.region;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -15,7 +14,7 @@ class RegionApiIT extends QueryApiSupport {
   @Test
   @DisplayName("시도는 행정표준코드로 내려간다 — 슬러그가 아니다")
   void sidos() throws Exception {
-    mvc.perform(get("/api/v1/regions/sidos").with(jwt()))
+    mvc.perform(get("/api/v1/regions/sidos").with(officer()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data[0].sidoCd").value("11"))
@@ -26,7 +25,7 @@ class RegionApiIT extends QueryApiSupport {
   @Test
   @DisplayName("시군구 regionTypeCd는 BUFFER를 뺀 URBAN·RURAL 다수값이다")
   void sigungus() throws Exception {
-    mvc.perform(get("/api/v1/regions/sigungus").param("sidoCd", SIDO).with(jwt()))
+    mvc.perform(get("/api/v1/regions/sigungus").param("sidoCd", SIDO).with(officer()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data[0].sigunguCd").value(SIGUNGU))
         .andExpect(jsonPath("$.data[0].sigunguNm").value("관악구"))
@@ -37,7 +36,7 @@ class RegionApiIT extends QueryApiSupport {
   @Test
   @DisplayName("행정동은 사전 21개 전부 내려가고 가구 수는 세대·평균 위험도는 건물 기준이다")
   void dongs() throws Exception {
-    mvc.perform(get("/api/v1/regions/dongs").param("sigunguCd", SIGUNGU).with(jwt()))
+    mvc.perform(get("/api/v1/regions/dongs").param("sigunguCd", SIGUNGU).with(officer()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.length()").value(21))
         .andExpect(jsonPath("$.data[?(@.dongCd=='" + DONG + "')].dongNm").value("신림동"))
@@ -56,7 +55,7 @@ class RegionApiIT extends QueryApiSupport {
   @Test
   @DisplayName("코드 형식이 어긋나면 400이다")
   void rejectsMalformedCode() throws Exception {
-    mvc.perform(get("/api/v1/regions/dongs").param("sigunguCd", "gwanak").with(jwt()))
+    mvc.perform(get("/api/v1/regions/dongs").param("sigunguCd", "gwanak").with(officer()))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
   }

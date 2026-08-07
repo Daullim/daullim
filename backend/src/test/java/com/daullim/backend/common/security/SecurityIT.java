@@ -3,11 +3,15 @@ package com.daullim.backend.common.security;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.daullim.backend.TestcontainersConfiguration;
+import com.daullim.backend.domain.user.entity.User;
+import com.daullim.backend.domain.user.repository.UserRepository;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.LocalDate;
+import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,8 +38,21 @@ class SecurityIT {
   int port;
 
   @Autowired JwtTokenProvider tokenProvider;
+  @Autowired UserRepository users;
 
   private final HttpClient client = HttpClient.newHttpClient();
+
+  /** 실제 포트를 때리는 테스트라 롤백이 없다 — 만든 계정은 쓴 자리에서 지운다. */
+  private User saveActiveUser() {
+    return users.save(
+        new User(
+            "sec-" + UUID.randomUUID(),
+            "{bcrypt}stub",
+            "김보안",
+            "010-1234-5678",
+            LocalDate.of(1990, 1, 1),
+            "officer"));
+  }
 
   @Test
   @DisplayName("토큰 없이 보호 경로에 오면 401을 봉투로 돌려준다")
@@ -57,15 +74,31 @@ class SecurityIT {
   }
 
   @Test
-  @DisplayName("발급한 토큰은 인가를 통과한다")
+  @DisplayName("살아 있는 계정의 토큰은 인가를 통과한다")
   void issuedTokenPassesAuthorization() throws Exception {
-    String token = tokenProvider.issue(1L, "kim01", "officer");
+    User user = saveActiveUser();
+    try {
+      String token = tokenProvider.issue(user.getId(), user.getLoginId(), user.getRoleCode());
+
+      HttpResponse<String> res =
+          send(request(PROTECTED_PATH).header("Authorization", "Bearer " + token).GET());
+
+      // 401이 아니라 404라는 것이 통과의 증거다. ERROR 디스패치가 재인가되지 않는다는 뜻이기도 하다.
+      assertThat(res.statusCode()).isEqualTo(404);
+    } finally {
+      users.deleteById(user.getId());
+    }
+  }
+
+  @Test
+  @DisplayName("서명은 멀쩡하되 없는 계정의 토큰은 401이다 — ActiveAccountFilter")
+  void tokenOfUnknownAccountIsRejected() throws Exception {
+    String token = tokenProvider.issue(-1L, "ghost", "officer");
 
     HttpResponse<String> res =
         send(request(PROTECTED_PATH).header("Authorization", "Bearer " + token).GET());
 
-    // 401이 아니라 404라는 것이 통과의 증거다. ERROR 디스패치가 재인가되지 않는다는 뜻이기도 하다.
-    assertThat(res.statusCode()).isEqualTo(404);
+    assertThat(res.statusCode()).isEqualTo(401);
   }
 
   @Test

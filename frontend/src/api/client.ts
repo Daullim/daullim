@@ -121,6 +121,12 @@ export async function apiSend<T>(
   return ((await res.json()) as Envelope<T>).data;
 }
 
+/** 본문 없는 삭제 — 성공이 204라 벗길 봉투가 없다. 실패 응답만 봉투로 온다. */
+export async function apiDelete(path: string, signal?: AbortSignal): Promise<void> {
+  const res = await send(path, { method: "DELETE", headers: authHeaders(), signal });
+  if (!res.ok) throw await toError(res);
+}
+
 /** GeoJSON은 봉투로 감싸지 않는다 — 표준 문서 형식 그대로 온다. */
 export async function apiGetRaw<T>(path: string, signal?: AbortSignal): Promise<T> {
   const res = await send(path, { headers: authHeaders(), signal });

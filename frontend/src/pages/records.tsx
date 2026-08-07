@@ -7,15 +7,14 @@ import { MonthCalendar } from "@/components/core/month-calendar";
 import { RecordDetailDialog } from "@/components/records/record-detail-dialog";
 import { RecordTable } from "@/components/records/record-table";
 import { formatDay } from "@/lib/inspection";
+import { todayDay } from "@/lib/units";
+import { useFieldExit } from "@/lib/use-field-exit";
 import {
   RECORD_DAYS,
   recordCountOfMonth,
   recordsOf,
   type InspectionRecord,
 } from "@/mock/records";
-
-const DEFAULT_MONTH = "202607";
-const DEFAULT_DAY = "20260715";
 
 /** 날짜는 패널 헤더에 있어 컬럼에서 뺀다 */
 const LIST_COLUMNS = ["time", "address", "unit", "consent", "condition", "rxDone"] as const;
@@ -24,15 +23,22 @@ const LIST_COLUMNS = ["time", "address", "unit", "consent", "condition", "rxDone
 export default function RecordsPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [month, setMonth] = useState(DEFAULT_MONTH);
-  const [selectedDay, setSelectedDay] = useState<string | null>(DEFAULT_DAY);
+  /**
+   * 진입 기본값은 오늘 — 점검원이 가장 자주 보는 것이 오늘 돈 결과다.
+   *
+   * 모듈 로드가 아니라 마운트 때 읽는다. 현장 태블릿은 화면을 종일 켜 두므로 자정을 넘기면
+   * 모듈 상수는 어제에 굳는다.
+   */
+  const [month, setMonth] = useState(() => todayDay().slice(0, 6));
+  const [selectedDay, setSelectedDay] = useState<string | null>(todayDay);
   const [viewing, setViewing] = useState<InspectionRecord | null>(null);
+  const exitToField = useFieldExit();
 
   const rows = recordsOf(selectedDay);
 
   return (
     <div className="flex h-dvh flex-col">
-      <TopBar mode="control" />
+      <TopBar mode="control" onExit={exitToField} />
 
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-hairline bg-surface px-4 py-2">
         <button

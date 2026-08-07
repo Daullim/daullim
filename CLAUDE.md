@@ -97,8 +97,8 @@ docker compose down -v && docker compose up -d
 - **방문결과(`consent_cd`)의 화면 표시 모델 미합의** — 상태명·목록은 `config/domain.ts`에서만 관리(`StatusTag`는 톤 슬롯만 앎). 진행상태(`units.status_cd`) 축은 ADR-013으로 확정됐다.
 - ~~점검 결과 저장 API 미구현~~ → **구현됨** — `POST /units/{unitId}/visits`가 원입력만 받고 판정·처방·실효 개수를 서버가 재계산한다. `officerId`는 JWT `sub`, 멱등 키는 `Idempotency-Key` 헤더(재전송은 409가 아니라 기존 결과를 200으로). 계약은 `docs/openapi.yaml`이 정본이다 — Notion "API 명세서 v2" §G-1의 `ageBandCd`는 폐기됐다(ADR-013 결정 26). `field-b3.tsx`의 `visitOverrides`는 저장 직후 화면 반영 캐시로만 남았다.
 - **점검 기록 조회 API 미구현** — `/records` 화면 전체가 `mock/records.ts`를 쓴다(`GET /visits`·`/visits/{id}` 대기).
-- **`GET /auth/me` 미머지** — 상단바·드로어·설정의 사용자 정보가 `mock/sample.ts`의 `INSPECTOR`다(#23).
-- **회원탈퇴가 서버에 반영되지 않는다** — `DELETE /auth/me`가 없어 이 기기의 세션만 끊는다.
+- ~~`GET /auth/me` 미머지~~ → **해소됨** — 상단바·드로어·설정이 모두 `GET /auth/me`를 쓴다. `mock/sample.ts`에 남은 건 `/demo`용 `DEMO_QUEUE_ITEMS`뿐이다.
+- ~~회원탈퇴가 서버에 반영되지 않는다~~ → **해소됨** — `DELETE /auth/me`가 계정을 비활성화한다(`is_active=false` + `withdrawn_at`, 행은 남는다). 액세스 토큰은 취소할 수 없으므로 `ActiveAccountFilter`가 요청마다 계정 생존을 확인해 **탈퇴한 토큰을 전 경로에서 401**로 막는다 — 인증이 붙는 경로는 요청당 `users` PK 조회 1회가 든다.
 - **도시 격자 위험 밀집 표시 방식 결정 대기** — 지도는 Naver Maps로 실장됐고 격자 표시는 "옅은 실선 경계"까지만 구현됐다. 코로플레스나 중심 색 도트는 아직 정하지 않았다.
 - ~~동 경계 GeoJSON 미확보~~ → **확보·실장됨**(2026-08-06). 출처는 [admdongkor](https://github.com/vuski/admdongkor) `ver20250701`이고 `seed/admin-dong-boundaries.geojson`(33개 행정동)이 정본이다. B1이 `GET /regions/boundaries`로 받아 시군구 단위로 그리고 폴리곤 클릭↔동 선택이 양방향으로 물린다. **이 파일은 사본이 3벌이다** — `pipeline/README.md` § 사본 동기화.
 - **격자 구역 번호 발번 규칙 미정** — 화면은 1km 격자 코드(`다사4941`)를 그대로 식별자로 쓴다. 규칙이 서면 표시명을 붙인다.
