@@ -109,6 +109,45 @@ export interface UnitItem {
 }
 
 /* ------------------------------------------------------------------ */
+/* 점검 저장                                                           */
+/* ------------------------------------------------------------------ */
+
+export interface ReplacementSubmitItem {
+  replaceReasonCd: string | null;
+  batteryTypeCd: string | null;
+  detectorFlagCds: string[];
+}
+
+export interface VisitSubmitRequest {
+  consentCd: string | null;
+  respondentTypeCd?: string | null;
+  refusalReasonCd?: string | null;
+  refusalNote?: string | null;
+  roomCount?: number | null;
+  mfgYm?: string | null;
+  mfgUnmarked?: boolean | null;
+  replaceCount?: number | null;
+  replacements?: ReplacementSubmitItem[];
+  extinguisherInstalledCd?: string | null;
+  rxDoneCd?: string | null;
+  revisitPlanCd: string | null;
+  noRevisitNote?: string | null;
+  note?: string | null;
+  routeOrder?: number | null;
+  dispatchedScore?: number | null;
+  dispatchedOrderKey?: number | null;
+  scoreVersion?: string | null;
+  gpsLat?: number | null;
+  gpsLng?: number | null;
+}
+
+export interface VisitSaveResult {
+  visitId: number;
+  visitedDay: string;
+  replay: boolean;
+}
+
+/* ------------------------------------------------------------------ */
 /* 지도·격자                                                           */
 /* ------------------------------------------------------------------ */
 

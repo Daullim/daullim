@@ -109,10 +109,11 @@ export async function apiSend<T>(
   path: string,
   body: unknown,
   signal?: AbortSignal,
+  extraHeaders: HeadersInit = {},
 ): Promise<T> {
   const res = await send(path, {
     method,
-    headers: { ...authHeaders(), "Content-Type": "application/json" },
+    headers: { ...authHeaders(), ...extraHeaders, "Content-Type": "application/json" },
     body: JSON.stringify(body),
     signal,
   });

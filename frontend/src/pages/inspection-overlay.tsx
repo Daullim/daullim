@@ -26,7 +26,9 @@ import {
   stepsFor,
 } from "@/lib/inspection";
 import { HOUSE_TYPE, type ConsentStatus } from "@/config/domain";
-import type { BuildingQueueItem } from "@/api/types";
+import { ApiError } from "@/api/client";
+import { submitVisit } from "@/api/queries";
+import type { BuildingQueueItem, VisitSaveResult, VisitSubmitRequest } from "@/api/types";
 import { recordsOfUnit } from "@/mock/records";
 
 /**
@@ -45,20 +47,22 @@ const FULLSCREEN_CLASS =
  */
 export function InspectionOverlay({
   item,
+  unitId,
   unitLabel,
   open,
   onClose,
   onSaved,
 }: {
   item: BuildingQueueItem | null;
+  unitId?: number;
   /** 세대 목록에서 고른 호수 — 저장 payload의 세대 식별값 (폼에 입력란 없음) */
   unitLabel?: string;
   open: boolean;
   onClose: () => void;
   /** 저장된 게이트 결과 — 호출부가 세대 상태로 환산한다 */
-  onSaved: (consent: ConsentStatus | null) => void;
+  onSaved: (consent: ConsentStatus | null, result: VisitSaveResult) => void;
 }) {
-  if (!item) return null;
+  if (!item || unitId === undefined) return null;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -67,6 +71,7 @@ export function InspectionOverlay({
         <InspectionForm
           key={`${item.buildingId}-${unitLabel ?? ""}`}
           item={item}
+          unitId={unitId}
           unitLabel={unitLabel}
           onClose={onClose}
           onSaved={onSaved}
@@ -78,18 +83,23 @@ export function InspectionOverlay({
 
 function InspectionForm({
   item,
+  unitId,
   unitLabel,
   onClose,
   onSaved,
 }: {
   item: BuildingQueueItem;
+  unitId: number;
   unitLabel?: string;
   onClose: () => void;
-  onSaved: (consent: ConsentStatus | null) => void;
+  onSaved: (consent: ConsentStatus | null, result: VisitSaveResult) => void;
 }) {
   const [form, dispatch] = useReducer(inspectionReducer, undefined, () =>
     createInitialState(item, unitLabel),
   );
+  const idempotencyKey = useRef(makeIdempotencyKey());
+  const [submitting, setSubmitting] = useState(false);
+  const [saveError, setSaveError] = useState<string>();
   const sectionProps = { form, dispatch };
   const history = recordsOfUnit(item.buildingId, form.unitLabel);
 
@@ -167,6 +177,7 @@ function InspectionForm({
           본 점검은 소방시설법 제8조에 따른 주택용 소방시설(단독경보형감지기·소화기)에 한정됩니다.
           승낙 기반 점검이며 강제 사항이 아닙니다.
         </InfoNote>
+        {saveError && <InfoNote tone="negative">{saveError}</InfoNote>}
       </div>
 
       {/* 하단 고정 위저드 바 — 좌 보조(field-lg) / 우 주요(field-xl) */}
@@ -183,12 +194,79 @@ function InspectionForm({
           variant="primary"
           size="field-xl"
           className="flex-1"
-          disabled={isLast ? !canSubmit(form) : !canAdvance(form, step)}
-          onClick={() => (isLast ? onSaved(form.consent) : setStepIndex(current + 1))}
+          disabled={submitting || (isLast ? !canSubmit(form) : !canAdvance(form, step))}
+          onClick={async () => {
+            if (!isLast) {
+              setStepIndex(current + 1);
+              return;
+            }
+            if (submitting || !canSubmit(form)) return;
+            setSubmitting(true);
+            setSaveError(undefined);
+            try {
+              const result = await submitVisit(
+                unitId,
+                toVisitSubmitRequest(form, item),
+                idempotencyKey.current,
+              );
+              onSaved(form.consent, result);
+            } catch (e) {
+              setSaveError(
+                e instanceof ApiError
+                  ? e.message
+                  : "저장하지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.",
+              );
+            } finally {
+              setSubmitting(false);
+            }
+          }}
         >
-          {nextLabel}
+          {submitting ? "저장 중..." : nextLabel}
         </Button>
       </div>
     </div>
   );
+}
+
+function toVisitSubmitRequest(
+  form: ReturnType<typeof createInitialState>,
+  item: BuildingQueueItem,
+): VisitSubmitRequest {
+  const base = {
+    consentCd: form.consent,
+    refusalReasonCd: form.refusalReason,
+    refusalNote: textOrNull(form.refusalNote),
+    revisitPlanCd: form.revisit,
+    noRevisitNote: textOrNull(form.noRevisitNote),
+    note: textOrNull(form.note),
+    dispatchedScore: item.score,
+    dispatchedOrderKey: item.orderKey,
+  } satisfies VisitSubmitRequest;
+
+  if (form.consent !== "accepted") return base;
+
+  return {
+    ...base,
+    respondentTypeCd: form.respondent,
+    roomCount: form.roomCount,
+    mfgYm: form.mfgYm,
+    mfgUnmarked: form.mfgUnmarked,
+    replaceCount: form.replaceCount,
+    replacements: form.replacements.map((r) => ({
+      replaceReasonCd: r.reason,
+      batteryTypeCd: r.batteryType,
+      detectorFlagCds: r.flags,
+    })),
+    extinguisherInstalledCd: form.extinguisherInstalled,
+    rxDoneCd: form.rxDone,
+  };
+}
+
+function textOrNull(value: string): string | null {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function makeIdempotencyKey(): string {
+  return crypto.randomUUID();
 }

@@ -15,7 +15,7 @@ import { EmptyState, ErrorInline, LastUpdated, RowSkeleton } from "@/components/
 import { InspectionOverlay } from "@/pages/inspection-overlay";
 import { CONSENT_TO_UNIT_STATUS, HOUSE_TYPE } from "@/config/domain";
 import { formatDay } from "@/lib/inspection";
-import { isQueueItemDone, todayDay, unitLabel } from "@/lib/units";
+import { isQueueItemDone, unitLabel } from "@/lib/units";
 import { useBuildingPins } from "@/lib/use-building-pins";
 import { useCurrentPosition } from "@/lib/use-current-position";
 import { ApiError } from "@/api/client";
@@ -75,10 +75,7 @@ export default function FieldUnitsPage() {
   );
   const units = useApiQuery(openId ? `units:${openId}` : null, (s) => getUnits(openId!, s));
 
-  /**
-   * 점검 저장 결과의 로컬 반영 — 방문 저장 API(`POST /units/{unitId}/visits`)가 아직 없어
-   * 서버가 상태를 되돌려주지 못한다. 그때까지 화면만 앞서 나가고, 붙는 즉시 이 오버레이는 지운다.
-   */
+  /** 저장 직후 열린 패널이 서버 재조회 전에도 바로 갱신되도록 하는 화면 반영 캐시 */
   const [visitOverrides, setVisitOverrides] = useState<Record<number, Partial<UnitItem>>>({});
 
   const mergedUnits = useMemo(
@@ -307,18 +304,21 @@ export default function FieldUnitsPage() {
       {/* 점검 오버레이(C) — 저장 시 해당 '세대'에 결과 반영, 건물 완료는 파생 */}
       <InspectionOverlay
         item={inspectItem}
+        unitId={inspecting?.unitId}
         unitLabel={inspectUnit ? unitLabel(inspectUnit) : undefined}
         open={inspecting !== null}
         onClose={() => setInspecting(null)}
-        onSaved={(consent) => {
+        onSaved={(consent, result) => {
           if (inspecting && consent) {
             setVisitOverrides((prev) => ({
               ...prev,
               [inspecting.unitId]: {
                 statusCd: CONSENT_TO_UNIT_STATUS[consent],
-                lastInspectedDay: todayDay(), // 방문한 날이 곧 그 세대의 마지막 점검일
+                lastInspectedDay: result.visitedDay,
               },
             }));
+            units.reload();
+            queue.reload();
           }
           setInspecting(null);
         }}

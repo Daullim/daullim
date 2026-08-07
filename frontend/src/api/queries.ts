@@ -11,6 +11,8 @@ import type {
   Sido,
   Sigungu,
   UnitItem,
+  VisitSaveResult,
+  VisitSubmitRequest,
   LoginResponse,
   SignupResponse,
 } from "@/api/types";
@@ -66,6 +68,20 @@ export const getUnits = (buildingId: number, signal?: AbortSignal) =>
 /** `hoNmSourceCd='field'` 행만 허용된다 — 그 외는 403, 건물 내 중복은 409 */
 export const renameUnit = (unitId: number, hoNm: string, signal?: AbortSignal) =>
   apiSend<UnitItem>("PATCH", `/units/${unitId}`, { hoNm }, signal);
+
+export const submitVisit = (
+  unitId: number,
+  body: VisitSubmitRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  apiSend<VisitSaveResult>(
+    "POST",
+    `/units/${unitId}/visits`,
+    body,
+    signal,
+    { "Idempotency-Key": idempotencyKey },
+  );
 
 /* 지도·격자 (D-1·D-3) */
 
