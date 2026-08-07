@@ -3,7 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { Menu } from "lucide-react";
 import { AppDrawer } from "@/components/layout/app-drawer";
 import { cn } from "@/lib/utils";
-import { fetchCurrentUser, type CurrentUser } from "@/lib/auth";
+import { ApiError } from "@/api/client";
+import { getCurrentUser } from "@/api/queries";
+import type { CurrentUser } from "@/api/types";
 
 export interface Crumb {
   label: string;
@@ -82,10 +84,11 @@ export function TopBar({
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchCurrentUser()
+    getCurrentUser()
       .then(setUser)
       .catch((error: unknown) => {
-        if (error instanceof Error && error.message === "UNAUTHORIZED") {
+        // 토큰이 없거나 만료됐다 — 계정 표시가 아니라 세션 자체가 없는 것이라 로그인으로 보낸다.
+        if (error instanceof ApiError && error.status === 401) {
           navigate("/login", { replace: true });
         }
       });

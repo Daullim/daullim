@@ -3,6 +3,7 @@ import type {
   AdminDongBoundaryFeatureCollection,
   BuildingDetail,
   BuildingQueueItem,
+  CurrentUser,
   CursorPage,
   DashboardSummary,
   Dong,
@@ -97,10 +98,14 @@ export const getGridSummary = (dongCd: string, signal?: AbortSignal) =>
 export const getDashboardSummary = (sigunguCd?: string, signal?: AbortSignal) =>
   apiGet<DashboardSummary>(`/dashboard/summary${query({ sigunguCd })}`, signal);
 
-/* 인증 — 이 둘만 토큰 없이 열려 있다 */
+/* 인증 — login·signup만 토큰 없이 열려 있다 */
 
 export const login = (loginId: string, password: string, signal?: AbortSignal) =>
   apiSend<LoginResponse>("POST", "/auth/login", { loginId, password }, signal);
+
+/** 로그인한 사용자 — 상단바·드로어가 마운트마다 부른다 */
+export const getCurrentUser = (signal?: AbortSignal) =>
+  apiGet<CurrentUser>("/auth/me", signal);
 
 export interface SignupParams {
   loginId: string;

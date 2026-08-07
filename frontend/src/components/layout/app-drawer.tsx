@@ -7,7 +7,8 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/core/button";
-import type { CurrentUser } from "@/lib/auth";
+import { clearToken } from "@/api/token";
+import type { CurrentUser } from "@/api/types";
 
 /* to가 없는 항목은 라우트 미정 — 자리만 확보한 플레이스홀더 (라우트를 지어내지 않는다) */
 const MENU_ITEMS: { label: string; to?: string }[] = [
@@ -74,7 +75,7 @@ export function AppDrawer({
               size="field-xl"
               className="w-full"
               onClick={() => {
-                localStorage.removeItem("accessToken");
+                clearToken();
                 navigate("/login");
               }}
             >
