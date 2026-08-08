@@ -6,13 +6,16 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.daullim.backend.domain.QueryApiSupport;
+import java.time.Clock;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
@@ -24,6 +27,9 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
  * 전달되는가</b>다 — 원입력만 받는지, 점검원을 토큰에서 꺼내는지, 멱등 키가 헤더에서 오는지, 위반이 400·422 중 어느 쪽으로 나가는지.
  */
 class VisitApiIT extends QueryApiSupport {
+
+  /** 서버가 방문일을 찍을 때 쓰는 그 시계 (KST 고정). */
+  @Autowired Clock clock;
 
   @Nested
   @DisplayName("G-1. 승낙 방문")
@@ -311,13 +317,19 @@ class VisitApiIT extends QueryApiSupport {
   }
 
   /** 오늘로부터 1년 전 — 어느 날 돌려도 내용연수 안쪽이라 자동 전량 교체로 넘어가지 않는다. */
-  private static String recentMfgYm() {
-    LocalDate month = LocalDate.now().minusYears(1);
+  private String recentMfgYm() {
+    LocalDate month = LocalDate.now(clock).minusYears(1);
     return "%04d-%02d".formatted(month.getYear(), month.getMonthValue());
   }
 
-  private static String today() {
-    return LocalDate.now().format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+  /**
+   * 방문일 — <b>서버와 같은 시계를 쓴다.</b>
+   *
+   * <p>{@code ClockConfig}가 KST로 고정돼 있어 서버의 달력일은 호스트 시간대와 무관하다. 여기서 {@code LocalDate.now()}로 JVM 기본
+   * 시간대를 따르면 러너가 UTC인 CI에서 15시(UTC) 이후에만 하루가 어긋나 깨진다 — 로컬(KST)에서는 재현되지 않는다.
+   */
+  private String today() {
+    return LocalDate.now(clock).format(DateTimeFormatter.BASIC_ISO_DATE);
   }
 
   private static long visitId(MvcResult result) throws Exception {
