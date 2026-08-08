@@ -10,15 +10,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDay, judgeAlarms, type InspectionFormState } from "@/lib/inspection";
-import type { InspectionRecord } from "@/mock/records";
+import { formatDay } from "@/lib/inspection";
+import { unitLabel } from "@/lib/units";
+import type { VisitListItem } from "@/api/types";
 import { cn } from "@/lib/utils";
 
-/** 비승낙은 경보기를 물리적으로 못 봐서 판정 자체가 없다 */
-function JudgementCell({ form }: { form: InspectionFormState }) {
-  const code = judgeAlarms(form);
-  if (!code) return <span className="text-subtle">—</span>;
-  return <ConditionBadge code={code} />;
+/** 없는 값의 자리 — 비승낙은 경보기를 물리적으로 못 봐서 판정 자체가 없다 */
+function Dash() {
+  return <span className="text-subtle">—</span>;
+}
+
+/** ISO 시각 → "HH:MM" (KST). 같은 날 기록의 정렬 기준이 시각이라 분까지만 보인다. */
+function timeOf(visitedAt: string): string {
+  return new Date(visitedAt).toLocaleTimeString("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 export type RecordColumn = "day" | "time" | "address" | "unit" | "consent" | "condition" | "rxDone";
@@ -27,23 +35,23 @@ interface ColumnSpec {
   label: string;
   /** 남는 폭을 가져갈 컬럼. 셀의 max-w-0과 짝이 되어야 잘린다 */
   fill?: boolean;
-  cell: (record: InspectionRecord) => React.ReactNode;
+  cell: (record: VisitListItem) => React.ReactNode;
 }
 
+/* 판정은 서버가 저장 시점에 계산해 둔 값을 그대로 쓴다 — 화면이 다시 판정하지 않는다. */
 const COLUMNS: Record<RecordColumn, ColumnSpec> = {
-  day: { label: "날짜", cell: (r) => <DataText>{formatDay(r.day)}</DataText> },
-  time: { label: "시각", cell: (r) => <DataText>{r.time}</DataText> },
+  day: { label: "날짜", cell: (r) => <DataText>{formatDay(r.visitedDay)}</DataText> },
+  time: { label: "시각", cell: (r) => <DataText>{timeOf(r.visitedAt)}</DataText> },
   address: { label: "주소", fill: true, cell: (r) => r.address },
-  unit: { label: "세대", cell: (r) => r.unitLabel },
-  consent: {
-    label: "승낙",
-    cell: (r) => (r.form.consent ? CONSENT_STATUS[r.form.consent].label : "—"),
+  unit: { label: "세대", cell: (r) => unitLabel(r) },
+  consent: { label: "승낙", cell: (r) => CONSENT_STATUS[r.consentCd].label },
+  condition: {
+    label: "판정",
+    cell: (r) => (r.conditionCode ? <ConditionBadge code={r.conditionCode} /> : <Dash />),
   },
-  condition: { label: "판정", cell: (r) => <JudgementCell form={r.form} /> },
   rxDone: {
     label: "교체 완료",
-    cell: (r) =>
-      r.form.rxDone ? RX_DONE[r.form.rxDone].label : <span className="text-subtle">—</span>,
+    cell: (r) => (r.rxDoneCd ? RX_DONE[r.rxDoneCd].label : <Dash />),
   },
 };
 
@@ -56,9 +64,9 @@ export function RecordTable({
   columns,
   onSelect,
 }: {
-  records: InspectionRecord[];
+  records: VisitListItem[];
   columns: readonly RecordColumn[];
-  onSelect?: (record: InspectionRecord) => void;
+  onSelect?: (record: VisitListItem) => void;
 }) {
   return (
     <Table>
@@ -77,7 +85,7 @@ export function RecordTable({
       <TableBody>
         {records.map((record) => (
           <TableRow
-            key={record.id}
+            key={record.visitId}
             tabIndex={onSelect ? 0 : undefined}
             onClick={onSelect ? () => onSelect(record) : undefined}
             onKeyDown={

@@ -27,9 +27,9 @@ import {
 } from "@/lib/inspection";
 import { HOUSE_TYPE, type ConsentStatus } from "@/config/domain";
 import { ApiError } from "@/api/client";
-import { submitVisit } from "@/api/queries";
+import { getVisits, submitVisit } from "@/api/queries";
+import { useApiQuery } from "@/api/use-api-query";
 import type { BuildingQueueItem, VisitSaveResult, VisitSubmitRequest } from "@/api/types";
-import { recordsOfUnit } from "@/mock/records";
 
 /**
  * 풀스크린 오버라이드 — base DialogContent의 중앙 카드 클래스를 twMerge로 소거.
@@ -101,7 +101,13 @@ function InspectionForm({
   const [submitting, setSubmitting] = useState(false);
   const [saveError, setSaveError] = useState<string>();
   const sectionProps = { form, dispatch };
-  const history = recordsOfUnit(item.buildingId, form.unitLabel);
+  /**
+   * 이 세대의 지난 방문 — 목데이터 시절엔 조회 키가 어긋나 늘 빈 목록이었다(#26에서 rank→buildingId로
+   * 바꿀 때 호출부만 바뀌었다). 이제 세대 PK로 서버에 직접 묻는다.
+   */
+  const history = useApiQuery(`unitVisits:${unitId}`, (s) =>
+    getVisits({ unitId, size: 5 }, s),
+  );
 
   /* 단계 배열은 승낙 여부에 따라 5개 ↔ 3개로 바뀐다 → 인덱스만 들고 나머지는 파생 */
   const [stepIndex, setStepIndex] = useState(0);
@@ -166,7 +172,7 @@ function InspectionForm({
           <h2 className="text-display text-ink">{STEP_LABEL[step]}</h2>
         </div>
 
-        {step === "gate" && <GateSection {...sectionProps} history={history} />}
+        {step === "gate" && <GateSection {...sectionProps} history={history.data?.items} />}
         {step === "alarm" && <AlarmSection {...sectionProps} />}
         {step === "extinguisher" && <ExtinguisherSection {...sectionProps} />}
         {step === "post" && <PostSection {...sectionProps} />}

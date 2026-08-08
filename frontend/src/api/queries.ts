@@ -12,6 +12,9 @@ import type {
   Sido,
   Sigungu,
   UnitItem,
+  VisitDayCount,
+  VisitDetail,
+  VisitListItem,
   VisitSaveResult,
   VisitSubmitRequest,
   LoginResponse,
@@ -69,6 +72,38 @@ export const getUnits = (buildingId: number, signal?: AbortSignal) =>
 /** `hoNmSourceCd='field'` 행만 허용된다 — 그 외는 403, 건물 내 중복은 409 */
 export const renameUnit = (unitId: number, hoNm: string, signal?: AbortSignal) =>
   apiSend<UnitItem>("PATCH", `/units/${unitId}`, { hoNm }, signal);
+
+/* 점검 기록 조회 (G-2 · H-1) */
+
+export interface VisitQueryParams {
+  /** `me`면 서버가 토큰의 주인으로 푼다 */
+  officerId?: string;
+  unitId?: number;
+  /** YYYYMMDD, 포함 */
+  from?: string;
+  to?: string;
+  consentCd?: string;
+  dongCd?: string;
+  cursor?: string;
+  /** 기본 20 · 최대 100 */
+  size?: number;
+}
+
+export const getVisits = (params: VisitQueryParams, signal?: AbortSignal) =>
+  apiGet<CursorPage<VisitListItem>>(`/visits${query({ ...params })}`, signal);
+
+/**
+ * 달력 마킹용 일자별 건수.
+ *
+ * 목록은 커서로 잘려 오므로 이걸로 점을 찍어야 한다 — 첫 페이지만 보고 찍으면 달력이 거짓말을 한다.
+ */
+export const getVisitCalendar = (
+  params: { from: string; to: string; officerId?: string; dongCd?: string },
+  signal?: AbortSignal,
+) => apiGet<VisitDayCount[]>(`/visits/calendar${query({ ...params })}`, signal);
+
+export const getVisit = (visitId: number, signal?: AbortSignal) =>
+  apiGet<VisitDetail>(`/visits/${visitId}`, signal);
 
 export const submitVisit = (
   unitId: number,
