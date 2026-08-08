@@ -26,8 +26,9 @@ import {
   stepsFor,
 } from "@/lib/inspection";
 import { HOUSE_TYPE, type ConsentStatus } from "@/config/domain";
-import { ApiError } from "@/api/client";
+import { ApiError, NETWORK_ERROR_CODE } from "@/api/client";
 import { getVisits, submitVisit } from "@/api/queries";
+import { savePendingVisit } from "@/lib/pending-visit";
 import { useApiQuery } from "@/api/use-api-query";
 import type { BuildingQueueItem, VisitSaveResult, VisitSubmitRequest } from "@/api/types";
 
@@ -52,6 +53,7 @@ export function InspectionOverlay({
   open,
   onClose,
   onSaved,
+  onStored,
 }: {
   item: BuildingQueueItem | null;
   unitId?: number;
@@ -61,6 +63,8 @@ export function InspectionOverlay({
   onClose: () => void;
   /** 저장된 게이트 결과 — 호출부가 세대 상태로 환산한다 */
   onSaved: (consent: ConsentStatus | null, result: VisitSaveResult) => void;
+  /** 연결이 안 돼 기기에 보관했다 — 화면은 오프라인 바로 넘겨받는다 */
+  onStored: () => void;
 }) {
   if (!item || unitId === undefined) return null;
 
@@ -75,6 +79,7 @@ export function InspectionOverlay({
           unitLabel={unitLabel}
           onClose={onClose}
           onSaved={onSaved}
+          onStored={onStored}
         />
       </DialogContent>
     </Dialog>
@@ -87,12 +92,14 @@ function InspectionForm({
   unitLabel,
   onClose,
   onSaved,
+  onStored,
 }: {
   item: BuildingQueueItem;
   unitId: number;
   unitLabel?: string;
   onClose: () => void;
   onSaved: (consent: ConsentStatus | null, result: VisitSaveResult) => void;
+  onStored: () => void;
 }) {
   const [form, dispatch] = useReducer(inspectionReducer, undefined, () =>
     createInitialState(item, unitLabel),
@@ -217,6 +224,22 @@ function InspectionForm({
               );
               onSaved(form.consent, result);
             } catch (e) {
+              /*
+               * 연결 자체가 안 된 것만 오프라인 보관으로 보낸다. 400·422는 다시 보내도 같은 답이
+               * 오므로 폼에서 고쳐야 한다 — 보관함에 넣으면 영영 나가지 않는 건이 된다.
+               */
+              if (e instanceof ApiError && e.code === NETWORK_ERROR_CODE) {
+                savePendingVisit({
+                  unitId,
+                  buildingId: item.buildingId,
+                  unitLabel: form.unitLabel,
+                  body: toVisitSubmitRequest(form, item),
+                  idempotencyKey: idempotencyKey.current,
+                  savedAt: new Date().toISOString(),
+                });
+                onStored();
+                return;
+              }
               setSaveError(
                 e instanceof ApiError
                   ? e.message
