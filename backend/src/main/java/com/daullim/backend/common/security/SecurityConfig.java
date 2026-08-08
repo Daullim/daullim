@@ -14,6 +14,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -29,7 +30,8 @@ public class SecurityConfig {
       HttpSecurity http,
       RestAuthenticationEntryPoint entryPoint,
       RestAccessDeniedHandler accessDeniedHandler,
-      JwtAuthenticationConverter jwtAuthenticationConverter) {
+      JwtAuthenticationConverter jwtAuthenticationConverter,
+      ActiveAccountFilter activeAccountFilter) {
 
     http.csrf(AbstractHttpConfigurer::disable)
         .cors(withDefaults())
@@ -58,7 +60,9 @@ public class SecurityConfig {
                     .authenticationEntryPoint(entryPoint)
                     .accessDeniedHandler(accessDeniedHandler))
         .exceptionHandling(
-            ex -> ex.authenticationEntryPoint(entryPoint).accessDeniedHandler(accessDeniedHandler));
+            ex -> ex.authenticationEntryPoint(entryPoint).accessDeniedHandler(accessDeniedHandler))
+        // 토큰이 인증으로 바뀐 직후 — 서명은 멀쩡한데 계정이 탈퇴한 경우를 여기서 걸러 낸다.
+        .addFilterAfter(activeAccountFilter, BearerTokenAuthenticationFilter.class);
 
     return http.build();
   }

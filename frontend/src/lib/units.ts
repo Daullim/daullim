@@ -13,8 +13,12 @@ export function todayDay(now: Date = new Date()): string {
   return `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}`;
 }
 
-/** 표시용 라벨 — 층이 있으면 "3층 302호", 호수 미지정이면 "미지정" */
-export function unitLabel(unit: UnitItem): string {
+/**
+ * 표시용 라벨 — 층이 있으면 "3층 302호", 호수 미지정이면 "미지정".
+ *
+ * 세대 목록과 점검 기록이 같은 규칙을 써야 해서 호수·층만 받는다 — 방문 응답에는 UnitItem이 없다.
+ */
+export function unitLabel(unit: { hoNm: string | null; flrNo: number | null }): string {
   const ho = unit.hoNm?.trim();
   if (!ho) return "미지정";
   return unit.flrNo != null ? `${unit.flrNo}층 ${ho}` : ho;

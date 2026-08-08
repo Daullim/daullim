@@ -1,7 +1,6 @@
 package com.daullim.backend.domain.building;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -23,7 +22,7 @@ class BuildingApiIT extends QueryApiSupport {
     @Test
     @DisplayName("order_key 순으로 내려가고 세대 집계가 한 번에 붙는다")
     void ordersByOrderKeyWithUnitAggregates() throws Exception {
-      mvc.perform(get("/api/v1/buildings/queue").param("dongCd", DONG).with(jwt()))
+      mvc.perform(get("/api/v1/buildings/queue").param("dongCd", DONG).with(officer()))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.data.items.length()").value(3))
           .andExpect(jsonPath("$.data.items[0].buildingId").value(b1))
@@ -41,7 +40,7 @@ class BuildingApiIT extends QueryApiSupport {
     @Test
     @DisplayName("보급이력이 없어 basis는 '미보급'이고 installDay는 null이다")
     void reflectsRealDataShape() throws Exception {
-      mvc.perform(get("/api/v1/buildings/queue").param("dongCd", DONG).with(jwt()))
+      mvc.perform(get("/api/v1/buildings/queue").param("dongCd", DONG).with(officer()))
           .andExpect(jsonPath("$.data.items[0].basis").value("미보급 · 동선 1"))
           .andExpect(jsonPath("$.data.items[0].installDay").doesNotExist())
           .andExpect(jsonPath("$.data.items[0].rxCodeCd").value("RX-BAT"));
@@ -55,7 +54,7 @@ class BuildingApiIT extends QueryApiSupport {
                   get("/api/v1/buildings/queue")
                       .param("dongCd", DONG)
                       .param("size", "2")
-                      .with(jwt()))
+                      .with(officer()))
               .andExpect(status().isOk())
               .andExpect(jsonPath("$.data.items.length()").value(2))
               .andExpect(jsonPath("$.data.nextCursor").value(QueueCursor.encode(2)))
@@ -68,7 +67,7 @@ class BuildingApiIT extends QueryApiSupport {
                   .param("dongCd", DONG)
                   .param("size", "2")
                   .param("cursor", QueueCursor.encode(2))
-                  .with(jwt()))
+                  .with(officer()))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.data.items.length()").value(1))
           .andExpect(jsonPath("$.data.items[0].orderKey").value(3))
@@ -79,7 +78,10 @@ class BuildingApiIT extends QueryApiSupport {
     @DisplayName("size는 1..100을 벗어나면 400이다")
     void rejectsOversizedPage() throws Exception {
       mvc.perform(
-              get("/api/v1/buildings/queue").param("dongCd", DONG).param("size", "101").with(jwt()))
+              get("/api/v1/buildings/queue")
+                  .param("dongCd", DONG)
+                  .param("size", "101")
+                  .with(officer()))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
@@ -91,7 +93,7 @@ class BuildingApiIT extends QueryApiSupport {
               get("/api/v1/buildings/queue")
                   .param("dongCd", DONG)
                   .param("gridId", "다사4641")
-                  .with(jwt()))
+                  .with(officer()))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.data.items.length()").value(2))
           .andExpect(jsonPath("$.data.items[0].buildingId").value(b1))
@@ -102,7 +104,7 @@ class BuildingApiIT extends QueryApiSupport {
               get("/api/v1/buildings/queue")
                   .param("dongCd", DONG)
                   .param("gridId", "다사46a41a")
-                  .with(jwt()))
+                  .with(officer()))
           .andExpect(jsonPath("$.data.items.length()").value(0));
     }
 
@@ -110,13 +112,17 @@ class BuildingApiIT extends QueryApiSupport {
     @DisplayName("주소 검색은 서버가 공백을 지운 뒤 매칭한다")
     void searchesAddressIgnoringWhitespace() throws Exception {
       mvc.perform(
-              get("/api/v1/buildings/queue").param("dongCd", DONG).param("q", "신림로 1").with(jwt()))
+              get("/api/v1/buildings/queue")
+                  .param("dongCd", DONG)
+                  .param("q", "신림로 1")
+                  .with(officer()))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.data.items.length()").value(1))
           .andExpect(jsonPath("$.data.items[0].buildingId").value(b1));
 
       // LIKE 메타문자는 이스케이프된다 — '%'가 전체 매칭이 되면 안 된다
-      mvc.perform(get("/api/v1/buildings/queue").param("dongCd", DONG).param("q", "%").with(jwt()))
+      mvc.perform(
+              get("/api/v1/buildings/queue").param("dongCd", DONG).param("q", "%").with(officer()))
           .andExpect(jsonPath("$.data.items.length()").value(0));
     }
 
@@ -127,7 +133,7 @@ class BuildingApiIT extends QueryApiSupport {
               get("/api/v1/buildings/queue")
                   .param("dongCd", DONG)
                   .param("cursor", "not-a-cursor")
-                  .with(jwt()))
+                  .with(officer()))
           .andExpect(status().isBadRequest())
           .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
@@ -140,7 +146,7 @@ class BuildingApiIT extends QueryApiSupport {
     @Test
     @DisplayName("상세는 대장 프리필과 점수 근거를 함께 내린다")
     void detail() throws Exception {
-      mvc.perform(get("/api/v1/buildings/{id}", b1).with(jwt()))
+      mvc.perform(get("/api/v1/buildings/{id}", b1).with(officer()))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.data.buildingId").value(b1))
           .andExpect(jsonPath("$.data.houseTypeCd").value("multi-unit"))
@@ -157,7 +163,7 @@ class BuildingApiIT extends QueryApiSupport {
     @Test
     @DisplayName("사용승인일이 없는 건물은 null로 내려 FE '미등재' 분기를 살린다")
     void keepsMissingUseAprDayNull() throws Exception {
-      mvc.perform(get("/api/v1/buildings/{id}", b2).with(jwt()))
+      mvc.perform(get("/api/v1/buildings/{id}", b2).with(officer()))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.data.useAprDay").doesNotExist())
           .andExpect(jsonPath("$.data.isEstimated").value(true));
@@ -166,7 +172,7 @@ class BuildingApiIT extends QueryApiSupport {
     @Test
     @DisplayName("없는 건물은 404 봉투다")
     void notFound() throws Exception {
-      mvc.perform(get("/api/v1/buildings/{id}", 999_999L).with(jwt()))
+      mvc.perform(get("/api/v1/buildings/{id}", 999_999L).with(officer()))
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }

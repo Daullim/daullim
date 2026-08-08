@@ -4,6 +4,7 @@ import ControlPage from "@/pages/control";
 import FieldDongPage from "@/pages/field-b1";
 import FieldGridPage from "@/pages/field-b2";
 import FieldUnitsPage from "@/pages/field-b3";
+import FieldProgressPage from "@/pages/field-progress";
 import RecordsPage from "@/pages/records";
 import DemoPage from "@/pages/demo";
 import LoginPage from "@/pages/login";
@@ -41,6 +42,7 @@ export default function App() {
         <Route path="/field" element={<FieldDongPage />} />
         <Route path="/field/grid" element={<FieldGridPage />} />
         <Route path="/field/units" element={<FieldUnitsPage />} />
+        <Route path="/field/progress" element={<FieldProgressPage />} />
       </Routes>
     </BrowserRouter>
   );

@@ -12,6 +12,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -38,6 +39,13 @@ public class AuthController {
   @GetMapping("/me")
   public ResponseEntity<ApiResponse<MyInfoResponse>> me(@AuthenticationPrincipal Jwt jwt) {
     return ResponseEntity.ok(ApiResponse.ok(userService.getMyInfo(Long.valueOf(jwt.getSubject()))));
+  }
+
+  /** 회원탈퇴 — 비활성화이고 점검 이력은 남는다. 남은 토큰은 ActiveAccountFilter가 막는다. */
+  @DeleteMapping("/me")
+  public ResponseEntity<Void> withdraw(@AuthenticationPrincipal Jwt jwt) {
+    userService.withdraw(Long.valueOf(jwt.getSubject()));
+    return ResponseEntity.noContent().build();
   }
 
   @PostMapping("/signup")

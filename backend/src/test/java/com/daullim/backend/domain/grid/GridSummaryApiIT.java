@@ -1,7 +1,6 @@
 package com.daullim.backend.domain.grid;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -16,7 +15,7 @@ class GridSummaryApiIT extends QueryApiSupport {
   @Test
   @DisplayName("격자 요약은 1km으로 모아 세고 전 세대 완료만 방문으로 친다")
   void summary() throws Exception {
-    mvc.perform(get("/api/v1/grids/summary").param("dongCd", DONG).with(jwt()))
+    mvc.perform(get("/api/v1/grids/summary").param("dongCd", DONG).with(officer()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.length()").value(2))
         .andExpect(jsonPath("$.data[0].gridId").value("다사4641"))

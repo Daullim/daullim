@@ -11,8 +11,10 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
@@ -49,6 +51,19 @@ public class GlobalExceptionHandler {
             .map(v -> v.getPropertyPath() + ": " + v.getMessage())
             .collect(Collectors.joining(", "));
     log.warn("validation failed - {}", detail);
+    return toResponse(ErrorCode.VALIDATION_ERROR, detail);
+  }
+
+  @ExceptionHandler({
+    ServletRequestBindingException.class,
+    MethodArgumentTypeMismatchException.class
+  })
+  public ResponseEntity<ApiResponse<Void>> handleBadRequestParam(Exception e) {
+    String detail =
+        e instanceof MethodArgumentTypeMismatchException mismatch
+            ? mismatch.getName() + ": 값의 형식이 올바르지 않습니다."
+            : ErrorCode.VALIDATION_ERROR.getMessage();
+    log.warn("bad request parameter - {}", e.getMessage());
     return toResponse(ErrorCode.VALIDATION_ERROR, detail);
   }
 

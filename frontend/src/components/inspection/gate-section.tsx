@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/select";
 import { ChoiceGroup, FormSection, InfoNote } from "@/components/inspection/form-controls";
 import type { InspectionAction, InspectionFormState } from "@/lib/inspection";
-import type { InspectionRecord } from "@/mock/records";
+import type { VisitListItem } from "@/api/types";
 
 /** 이력 표는 세대가 이미 헤더에 있어 주소·세대를 빼고 언제 방문했는지를 앞에 둔다 */
 const HISTORY_COLUMNS = ["day", "time", "consent", "condition", "rxDone"] as const;
@@ -28,7 +28,7 @@ export function GateSection({
   form: InspectionFormState;
   dispatch: React.Dispatch<InspectionAction>;
   /** 이 세대의 지난 방문 — 없으면 표를 띄우지 않는다 */
-  history?: InspectionRecord[];
+  history?: VisitListItem[];
 }) {
   return (
     <FormSection>

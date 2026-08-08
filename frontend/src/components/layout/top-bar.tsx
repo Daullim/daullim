@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Menu } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { AppDrawer } from "@/components/layout/app-drawer";
 import { cn } from "@/lib/utils";
-import { fetchCurrentUser, type CurrentUser } from "@/lib/auth";
+import { displayName } from "@/lib/user";
+import { ApiError } from "@/api/client";
+import { getCurrentUser } from "@/api/queries";
+import type { CurrentUser } from "@/api/types";
 
 export interface Crumb {
   label: string;
@@ -36,7 +39,6 @@ function Breadcrumb({ crumbs }: { crumbs: Crumb[] }) {
 /** 우측 계정 표기 — `소속 | 이름 직급` (양 모드 공통) */
 function Account({ className, user }: { className?: string; user?: CurrentUser }) {
   const org = user?.orgName;
-  const rank = user?.rankName;
   return (
     <span className={cn("ml-auto flex shrink-0 items-center gap-2 pr-3", className)}>
       {org && <span className="text-subtle">{org}</span>}
@@ -45,10 +47,22 @@ function Account({ className, user }: { className?: string; user?: CurrentUser }
           |
         </span>
       )}
-      <span className="text-body">
-        {user?.name ?? "사용자"} {rank ?? ""}
-      </span>
+      <span className="text-body">{displayName(user)}</span>
     </span>
+  );
+}
+
+/** 현장모드에서 곁길로 들어온 화면을 빠져나온다 — 장갑 조작이라 44px를 지킨다. */
+function ExitButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="나가기"
+      onClick={onClick}
+      className="flex size-11 shrink-0 items-center justify-center rounded-md text-ink hover:bg-surface-muted"
+    >
+      <X aria-hidden className="size-6" />
+    </button>
   );
 }
 
@@ -73,19 +87,23 @@ function HamburgerButton({ onClick }: { onClick: () => void }) {
 export function TopBar({
   mode,
   crumbs,
+  onExit,
 }: {
   mode: "control" | "field";
   crumbs?: Crumb[];
+  /** 주면 우측 끝에 나가기(X)가 붙는다 — 현장모드에서 들어온 곁길 화면만 쓴다. */
+  onExit?: () => void;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [user, setUser] = useState<CurrentUser>();
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetchCurrentUser()
+    getCurrentUser()
       .then(setUser)
       .catch((error: unknown) => {
-        if (error instanceof Error && error.message === "UNAUTHORIZED") {
+        // 토큰이 없거나 만료됐다 — 계정 표시가 아니라 세션 자체가 없는 것이라 로그인으로 보낸다.
+        if (error instanceof ApiError && error.status === 401) {
           navigate("/login", { replace: true });
         }
       });
@@ -106,6 +124,7 @@ export function TopBar({
           />
         </Link>
         <Account className="text-body-sm" user={user} />
+        {onExit && <ExitButton onClick={onExit} />}
         <AppDrawer mode="control" open={drawerOpen} onOpenChange={setDrawerOpen} user={user} />
       </header>
     );
@@ -116,6 +135,7 @@ export function TopBar({
       <HamburgerButton onClick={() => setDrawerOpen(true)} />
       {crumbs && <Breadcrumb crumbs={crumbs} />}
       <Account className="text-body-md" user={user} />
+      {onExit && <ExitButton onClick={onExit} />}
       <AppDrawer mode="field" open={drawerOpen} onOpenChange={setDrawerOpen} user={user} />
     </header>
   );

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { TopBar } from "@/components/layout/top-bar";
@@ -6,16 +6,20 @@ import { DataText } from "@/components/core/data-text";
 import { MonthCalendar } from "@/components/core/month-calendar";
 import { RecordDetailDialog } from "@/components/records/record-detail-dialog";
 import { RecordTable } from "@/components/records/record-table";
+import { EmptyState, ErrorInline, RowSkeleton } from "@/components/core/system-states";
 import { formatDay } from "@/lib/inspection";
-import {
-  RECORD_DAYS,
-  recordCountOfMonth,
-  recordsOf,
-  type InspectionRecord,
-} from "@/mock/records";
+import { todayDay } from "@/lib/units";
+import { useFieldExit } from "@/lib/use-field-exit";
+import { getVisitCalendar, getVisits } from "@/api/queries";
+import { useApiQuery } from "@/api/use-api-query";
 
-const DEFAULT_MONTH = "202607";
-const DEFAULT_DAY = "20260715";
+/** 월의 마지막 날 — 달력 집계 범위의 끝. 다음 달 0일이 이번 달 말일이다. */
+function monthRange(month: string): { from: string; to: string } {
+  const year = Number(month.slice(0, 4));
+  const mm = Number(month.slice(4, 6));
+  const lastDay = new Date(year, mm, 0).getDate();
+  return { from: `${month}01`, to: `${month}${String(lastDay).padStart(2, "0")}` };
+}
 
 /** 날짜는 패널 헤더에 있어 컬럼에서 뺀다 */
 const LIST_COLUMNS = ["time", "address", "unit", "consent", "condition", "rxDone"] as const;
@@ -24,15 +28,36 @@ const LIST_COLUMNS = ["time", "address", "unit", "consent", "condition", "rxDone
 export default function RecordsPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [month, setMonth] = useState(DEFAULT_MONTH);
-  const [selectedDay, setSelectedDay] = useState<string | null>(DEFAULT_DAY);
-  const [viewing, setViewing] = useState<InspectionRecord | null>(null);
+  /**
+   * 진입 기본값은 오늘 — 점검원이 가장 자주 보는 것이 오늘 돈 결과다.
+   *
+   * 모듈 로드가 아니라 마운트 때 읽는다. 현장 태블릿은 화면을 종일 켜 두므로 자정을 넘기면
+   * 모듈 상수는 어제에 굳는다.
+   */
+  const [month, setMonth] = useState(() => todayDay().slice(0, 6));
+  const [selectedDay, setSelectedDay] = useState<string | null>(todayDay);
+  const [viewing, setViewing] = useState<number | null>(null);
+  const exitToField = useFieldExit();
 
-  const rows = recordsOf(selectedDay);
+  /* 달력 점 표식·월 총건수 — 목록은 커서로 잘려 오므로 집계를 따로 받는다 */
+  const range = monthRange(month);
+  const calendar = useApiQuery(`visitCalendar:${month}`, (s) =>
+    getVisitCalendar({ from: range.from, to: range.to }, s),
+  );
+  const markedDays = useMemo(
+    () => new Set((calendar.data ?? []).filter((d) => d.count > 0).map((d) => d.day)),
+    [calendar.data],
+  );
+  const monthCount = (calendar.data ?? []).reduce((n, d) => n + d.count, 0);
+
+  const visits = useApiQuery(selectedDay ? `visits:${selectedDay}` : null, (s) =>
+    getVisits({ from: selectedDay!, to: selectedDay!, size: 100 }, s),
+  );
+  const rows = visits.data?.items ?? [];
 
   return (
     <div className="flex h-dvh flex-col">
-      <TopBar mode="control" />
+      <TopBar mode="control" onExit={exitToField} />
 
       <div className="flex shrink-0 flex-wrap items-center gap-3 border-b border-hairline bg-surface px-4 py-2">
         <button
@@ -47,7 +72,7 @@ export default function RecordsPage() {
         <h1 className="text-title text-ink">점검 기록</h1>
         <span className="ml-auto text-body-md text-ink">
           {month.slice(0, 4)}.{month.slice(4, 6)} 총{" "}
-          <DataText>{recordCountOfMonth(month)}</DataText>건
+          <DataText>{monthCount}</DataText>건
         </span>
       </div>
 
@@ -61,7 +86,7 @@ export default function RecordsPage() {
             <MonthCalendar
               month={month}
               selectedDay={selectedDay}
-              markedDays={RECORD_DAYS}
+              markedDays={markedDays}
               onMonthChange={setMonth}
               onSelectDay={setSelectedDay}
             />
@@ -80,13 +105,17 @@ export default function RecordsPage() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {rows.length === 0 ? (
-              <p className="py-10 text-center text-body-md text-subtle">점검 기록 없음</p>
+            {visits.error ? (
+              <ErrorInline onRetry={visits.reload} className="m-3" />
+            ) : visits.loading && !visits.data ? (
+              <RowSkeleton rows={5} />
+            ) : rows.length === 0 ? (
+              <EmptyState message="점검 기록 없음" onAction={visits.reload} />
             ) : (
               <RecordTable
                 records={rows}
                 columns={LIST_COLUMNS}
-                onSelect={setViewing}
+                onSelect={(r) => setViewing(r.visitId)}
               />
             )}
           </div>
@@ -94,7 +123,7 @@ export default function RecordsPage() {
       </main>
 
       <RecordDetailDialog
-        record={viewing}
+        visitId={viewing}
         open={viewing !== null}
         onClose={() => setViewing(null)}
       />

@@ -11,15 +11,33 @@ import { UnitPanel } from "@/components/layout/unit-panel";
 import { Button } from "@/components/core/button";
 import { DataText } from "@/components/core/data-text";
 import { QueueRow } from "@/components/core/queue-row";
-import { EmptyState, ErrorInline, LastUpdated, RowSkeleton } from "@/components/core/system-states";
+import {
+  EmptyState,
+  ErrorInline,
+  LastUpdated,
+  OfflineBar,
+  RowSkeleton,
+} from "@/components/core/system-states";
 import { InspectionOverlay } from "@/pages/inspection-overlay";
 import { CONSENT_TO_UNIT_STATUS, HOUSE_TYPE } from "@/config/domain";
 import { formatDay } from "@/lib/inspection";
-import { isQueueItemDone, todayDay, unitLabel } from "@/lib/units";
+import { isQueueItemDone, unitLabel } from "@/lib/units";
+import { openRoute } from "@/lib/map-link";
+import {
+  clearPendingVisit,
+  loadPendingVisit,
+  type PendingVisit,
+} from "@/lib/pending-visit";
 import { useBuildingPins } from "@/lib/use-building-pins";
 import { useCurrentPosition } from "@/lib/use-current-position";
-import { ApiError } from "@/api/client";
-import { getBuilding, getBuildingQueue, getUnits, renameUnit } from "@/api/queries";
+import { ApiError, NETWORK_ERROR_CODE } from "@/api/client";
+import {
+  getBuilding,
+  getBuildingQueue,
+  getUnits,
+  renameUnit,
+  submitVisit,
+} from "@/api/queries";
 import { useApiQuery } from "@/api/use-api-query";
 import { useRegionNames } from "@/api/use-region";
 import type { BuildingQueueItem, UnitItem } from "@/api/types";
@@ -75,11 +93,35 @@ export default function FieldUnitsPage() {
   );
   const units = useApiQuery(openId ? `units:${openId}` : null, (s) => getUnits(openId!, s));
 
-  /**
-   * 점검 저장 결과의 로컬 반영 — 방문 저장 API(`POST /units/{unitId}/visits`)가 아직 없어
-   * 서버가 상태를 되돌려주지 못한다. 그때까지 화면만 앞서 나가고, 붙는 즉시 이 오버레이는 지운다.
-   */
+  /** 저장 직후 열린 패널이 서버 재조회 전에도 바로 갱신되도록 하는 화면 반영 캐시 */
   const [visitOverrides, setVisitOverrides] = useState<Record<number, Partial<UnitItem>>>({});
+
+  /** 전송하지 못한 점검 1건 — 있으면 상단에 오프라인 바가 뜬다 */
+  const [pending, setPending] = useState<PendingVisit | null>(loadPendingVisit);
+  const [resending, setResending] = useState(false);
+  const [resendError, setResendError] = useState<string>();
+
+  /** 같은 멱등 키로 다시 보낸다 — 앞선 요청이 실은 닿아 있었어도 중복 저장되지 않는다. */
+  async function resendPending() {
+    if (!pending || resending) return;
+    setResending(true);
+    setResendError(undefined);
+    try {
+      await submitVisit(pending.unitId, pending.body, pending.idempotencyKey);
+      clearPendingVisit();
+      setPending(null);
+      units.reload();
+      queue.reload();
+    } catch (e) {
+      setResendError(
+        e instanceof ApiError && e.code !== NETWORK_ERROR_CODE
+          ? e.message
+          : "아직 연결되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+      );
+    } finally {
+      setResending(false);
+    }
+  }
 
   const mergedUnits = useMemo(
     () => (units.data ?? []).map((u) => ({ ...u, ...visitOverrides[u.unitId] })),
@@ -152,6 +194,18 @@ export default function FieldUnitsPage() {
   return (
     <div className="flex h-dvh flex-col">
       <TopBar mode="field" crumbs={crumbs} />
+
+      {pending && (
+        <OfflineBar
+          className="shrink-0"
+          message={
+            resendError ??
+            `${pending.unitLabel || "이 세대"} 점검 결과가 기기에 보관돼 있습니다 — 연결되면 재전송하세요.`
+          }
+          retrying={resending}
+          onRetry={resendPending}
+        />
+      )}
 
       {/* 좌 지도 + 우 리사이즈 패널 2열 (접기 가능) — relative는 접힘 탭 앵커용 */}
       <main className="relative flex min-h-0 flex-1 gap-3 p-3">
@@ -283,8 +337,13 @@ export default function FieldUnitsPage() {
                       aria-label={`${item.address} 이동·세대`}
                       className="flex gap-2 overflow-hidden border-b border-hairline bg-surface p-3 duration-150 animate-in fade-in-0 slide-in-from-top-2"
                     >
-                      {/* 길찾기 — 카카오맵/티맵 딥링크 자리 (ADR-004 §3 보류) — 연동 전까지 동작 없음 */}
-                      <Button variant="secondary" size="field-xl" className="w-32">
+                      {/* 길찾기 — 카카오맵 웹 URL. 앱이 있으면 앱으로 전환된다(lib/map-link.ts) */}
+                      <Button
+                        variant="secondary"
+                        size="field-xl"
+                        className="w-32"
+                        onClick={() => openRoute(item)}
+                      >
                         길찾기
                       </Button>
                       <Button
@@ -307,19 +366,26 @@ export default function FieldUnitsPage() {
       {/* 점검 오버레이(C) — 저장 시 해당 '세대'에 결과 반영, 건물 완료는 파생 */}
       <InspectionOverlay
         item={inspectItem}
+        unitId={inspecting?.unitId}
         unitLabel={inspectUnit ? unitLabel(inspectUnit) : undefined}
         open={inspecting !== null}
         onClose={() => setInspecting(null)}
-        onSaved={(consent) => {
+        onSaved={(consent, result) => {
           if (inspecting && consent) {
             setVisitOverrides((prev) => ({
               ...prev,
               [inspecting.unitId]: {
                 statusCd: CONSENT_TO_UNIT_STATUS[consent],
-                lastInspectedDay: todayDay(), // 방문한 날이 곧 그 세대의 마지막 점검일
+                lastInspectedDay: result.visitedDay,
               },
             }));
+            units.reload();
+            queue.reload();
           }
+          setInspecting(null);
+        }}
+        onStored={() => {
+          setPending(loadPendingVisit());
           setInspecting(null);
         }}
       />

@@ -11,23 +11,41 @@ import {
 import { Button } from "@/components/core/button";
 import { DataText } from "@/components/core/data-text";
 import { ReviewSection } from "@/components/inspection/review-section";
-import { formatDay } from "@/lib/inspection";
-import type { InspectionRecord } from "@/mock/records";
+import { formatDay, toFormState } from "@/lib/inspection";
+import { unitLabel } from "@/lib/units";
+import { getVisit } from "@/api/queries";
+import { useApiQuery } from "@/api/use-api-query";
+import { ErrorInline, RowSkeleton } from "@/components/core/system-states";
 
 /**
  * 점검 기록 상세 — 점검 폼 마지막 단계(최종 확인) 레이아웃을 그대로 재사용한다.
  * ReviewSection이 원래 dispatch 없는 읽기전용이라 포크 없이 쓴다.
  */
 export function RecordDetailDialog({
-  record,
+  visitId,
   open,
   onClose,
 }: {
-  record: InspectionRecord | null;
+  /** null이면 열지 않는다 — 상세는 목록이 아니라 이 id로 서버에서 따로 읽는다 */
+  visitId: number | null;
   open: boolean;
   onClose: () => void;
 }) {
-  if (!record) return null;
+  if (visitId === null) return null;
+  return <Detail visitId={visitId} open={open} onClose={onClose} />;
+}
+
+function Detail({
+  visitId,
+  open,
+  onClose,
+}: {
+  visitId: number;
+  open: boolean;
+  onClose: () => void;
+}) {
+  const visit = useApiQuery(`visit:${visitId}`, (s) => getVisit(visitId, s));
+  const record = visit.data;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
@@ -38,15 +56,20 @@ export function RecordDetailDialog({
       >
         <DialogHeader className="shrink-0 flex-row items-start justify-between gap-3 border-b border-hairline px-6 py-4 text-left">
           <div className="min-w-0 space-y-1">
-            <DialogTitle className="truncate text-title text-ink">{record.address}</DialogTitle>
+            <DialogTitle className="truncate text-title text-ink">
+              {record?.address ?? "점검 기록"}
+            </DialogTitle>
             <DialogDescription asChild>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-body-sm text-body">
-                <span>{record.unitLabel}</span>
-                <span>
-                  점검일 <DataText>{formatDay(record.day)}</DataText>{" "}
-                  <DataText>{record.time}</DataText>
-                </span>
-                <span>점검원 {record.inspectorName}</span>
+                {record && (
+                  <>
+                    <span>{unitLabel(record)}</span>
+                    <span>
+                      점검일 <DataText>{formatDay(record.visitedDay)}</DataText>
+                    </span>
+                    <span>점검원 {record.officerName}</span>
+                  </>
+                )}
               </div>
             </DialogDescription>
           </div>
@@ -62,15 +85,23 @@ export function RecordDetailDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5">
-          <ReviewSection form={record.form} readOnly />
+          {visit.error ? (
+            <ErrorInline onRetry={visit.reload} />
+          ) : !record ? (
+            <RowSkeleton rows={4} />
+          ) : (
+            <>
+              <ReviewSection form={toFormState(record)} readOnly />
 
-          {record.form.note && (
-            <section>
-              <h3 className="mb-2 text-title-sm text-ink">비고</h3>
-              <p className="rounded-sm bg-surface-muted px-3 py-2 text-body-md text-body">
-                {record.form.note}
-              </p>
-            </section>
+              {record.note && (
+                <section>
+                  <h3 className="mb-2 text-title-sm text-ink">비고</h3>
+                  <p className="rounded-sm bg-surface-muted px-3 py-2 text-body-md text-body">
+                    {record.note}
+                  </p>
+                </section>
+              )}
+            </>
           )}
         </div>
 

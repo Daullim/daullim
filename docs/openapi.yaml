@@ -2,8 +2,14 @@ openapi: 3.1.0
 
 # 계약 정본 (ADR-005). 변경은 "계약 변경 PR"로만 한다.
 #
-# 범위: Issue #25 조회 API 9종 + 지도 정적 GeoJSON. 인증(#20·#22·#23)·visits 저장/조회·
-# GET /codes·재방문은 이 파일에 없다 — 아직 구현되지 않았고, 지어내지 않는다.
+# 범위: Issue #25 조회 API 9종 + 지도 정적 GeoJSON + 점검 결과 저장·조회 + 계정(/auth/me).
+# 로그인·회원가입(#20·#22)·재방문은 아직 없다 — 지어내지 않는다.
+#
+# 폐기 확정 (다시 올리지 말 것):
+# - GET /codes — FE 라벨 정본은 config/domain.ts라 런타임 의존이 없고, CodeLookupIT가
+#   domain.ts↔seed 일치를 이미 지킨다. 쓸 화면이 없어 죽은 엔드포인트가 된다.
+# - POST /visits/sync — Idempotency-Key가 대체한다. 같은 키로 POST /units/{unitId}/visits를
+#   재전송하면 중복 저장 없이 기존 결과가 돌아오므로 묶음 전송 전용 경로가 할 일이 없다.
 #
 # ⚠️ 값 규약은 실데이터에 맞춘다. Notion "API 명세서 v2" §4의 JSON 예시는 갱신되지 않아 값이 낡았고,
 # 구조는 v2를, 값은 아래 description을 따른다.
@@ -32,18 +38,74 @@ security:
   - bearerAuth: []
 
 tags:
+  - name: 계정
+    description: 로그인한 사용자 조회와 탈퇴
   - name: 지역
     description: 지역 셀렉터 3단
   - name: 대상건물
     description: 우선순위 큐와 대장 프리필
   - name: 세대
     description: 세대 목록과 현장 호수 입력
+  - name: 점검
+    description: 현장 점검 결과 저장
   - name: 지도
     description: 격자 집계
   - name: 관제
     description: 관제 화면 하단 요약
 
 paths:
+  /auth/me:
+    get:
+      tags: [계정]
+      summary: 내 정보 조회
+      operationId: getCurrentUser
+      description: |
+        상단바·드로어·설정 계정 카드가 같은 응답을 쓴다. 사용자는 토큰의 `sub`로 정한다 — 경로에 식별자가 없다.
+
+        소속 3종(`rankName`·`titleName`·`orgName`)은 미입력이면 null이다. 화면은 빈 칸을 그리지 않고 항목을 생략한다.
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/CurrentUser" }
+              example:
+                code: SUCCESS
+                message: 요청을 처리했습니다.
+                data:
+                  id: 1
+                  loginId: insp-lee
+                  name: 이영선
+                  phone: 010-1234-5678
+                  birthOn: "1990-01-01"
+                  rankName: 주임
+                  titleName: 점검관
+                  orgName: 관악소방서 · 예방안전3팀
+                  roleCode: officer
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+    delete:
+      tags: [계정]
+      summary: 회원탈퇴
+      operationId: withdraw
+      description: |
+        **비가역.** 계정을 비활성화한다(`is_active=false` + `withdrawn_at`) — 행을 지우지 않는다.
+        `visits.officer_id`가 `ON DELETE RESTRICT`로 과거 점검 이력을 붙들고 있고, 누가 점검했는지는 기록의 일부다.
+
+        액세스 토큰은 stateless라 발급 후 취소할 수단이 없다. 그래서 인증 필터가 요청마다 계정이 살아 있는지
+        확인하고, 탈퇴한 계정의 토큰은 **남은 TTL과 무관하게 전 경로에서 401**이 된다.
+
+        이미 탈퇴한 계정이 다시 부르면 401이다 — 두 번 탈퇴되지 않는다.
+      responses:
+        "204":
+          description: 탈퇴 완료 (본문 없음)
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /regions/sidos:
     get:
       tags: [지역]
@@ -344,6 +406,229 @@ paths:
               schema: { $ref: "#/components/schemas/ApiError" }
               example: { code: CONFLICT, message: 같은 건물에 이미 있는 호수입니다., data: null }
 
+  /units/{unitId}/visits:
+    post:
+      tags: [점검]
+      summary: 점검 결과 저장
+      operationId: submitVisit
+      description: |
+        현장 점검 폼의 **원입력만** 받는다. 판정(`conditionCode`)·처방(`rxCode`)·
+        실효 교체 개수(`effectiveReplaceCount`)는 서버가 `JudgmentService`로 다시 계산한다.
+
+        `officerId`는 본문이 아니라 JWT `sub`에서 꺼낸다. 오프라인 재전송은 `Idempotency-Key`
+        헤더를 `visits.client_visit_id`로 저장해 같은 키 재전송 시 새 행을 만들지 않고 기존 결과를 돌려준다.
+
+        비승낙(`refused`·`vacant`·`unreachable`) 방문은 경보기·소화기 필드를 보내지 않는다.
+        서버도 저장 전 해당 필드를 지워 DB `ck_v_na`와 같은 신뢰 경계를 유지한다.
+      parameters:
+        - name: unitId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: 오프라인 재전송 멱등 키. UUID 형식이어야 한다.
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VisitSubmitRequest" }
+            examples:
+              accepted:
+                summary: 승낙 저장
+                value:
+                  consentCd: accepted
+                  respondentTypeCd: owner
+                  roomCount: 2
+                  mfgYm: "2025-08"
+                  replaceCount: 1
+                  replacements:
+                    - { replaceReasonCd: battery-dead, batteryTypeCd: sealed, detectorFlagCds: [] }
+                  extinguisherInstalledCd: installed
+                  rxDoneCd: done
+                  revisitPlanCd: not-needed
+                  note: 현장 교체 완료
+              notInspected:
+                summary: 공가 저장
+                value:
+                  consentCd: vacant
+                  revisitPlanCd: revisit
+                  note: 부재
+      responses:
+        "201":
+          description: 새 점검 저장
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VisitSaveResult" }
+        "200":
+          description: 같은 Idempotency-Key 재전송 — 기존 결과 반환
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VisitSaveResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "422":
+          description: lookup에 없는 도메인 코드
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiError" }
+              example: { code: DOMAIN_CODE_INVALID, message: 정의되지 않은 도메인 코드입니다., data: null }
+
+  /visits:
+    get:
+      tags: [점검]
+      summary: 점검 기록 목록 조회
+      operationId: listVisits
+      description: |
+        `visited_at` 내림차순(최신 먼저). 필터는 전부 선택이고, 준 것만 AND로 걸린다.
+
+        **커서는 `(visited_at, visit_id)` 복합이다.** `order_key`와 달리 `visited_at`은 같은 시각이 겹칠 수 있어
+        (오프라인 재전송이 한꺼번에 들어오면 실제로 겹친다) 시각만으로 끊으면 경계의 행이 두 페이지에 겹치거나 빠진다.
+
+        soft delete(`deleted_at`)된 방문은 목록·상세·집계 어디에도 나오지 않는다 — `ix_visits_*` 부분 인덱스와 같은 기준이다.
+      parameters:
+        - name: officerId
+          in: query
+          description: "`me`를 주면 토큰의 주인으로 푼다. 권한 경계가 아니라 필터다 — 남의 id를 주면 그 사람 기록이 나온다."
+          schema: { type: string, pattern: "^(me|\\d+)$" }
+        - name: unitId
+          in: query
+          description: 세대 1곳의 방문 이력 — 점검 폼의 '이 세대 방문 이력'이 쓴다.
+          schema: { type: integer, format: int64 }
+        - name: from
+          in: query
+          description: 방문일 하한 (YYYYMMDD, 포함)
+          schema: { type: string, pattern: "^\\d{8}$" }
+        - name: to
+          in: query
+          description: 방문일 상한 (YYYYMMDD, 포함)
+          schema: { type: string, pattern: "^\\d{8}$" }
+        - name: consentCd
+          in: query
+          schema: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        - name: dongCd
+          in: query
+          schema: { type: string, pattern: "^\\d{10}$" }
+        - name: cursor
+          in: query
+          description: 이전 응답의 `nextCursor`. 불투명 문자열이라 해석하지 않는다.
+          schema: { type: string }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        required: [items, nextCursor]
+                        properties:
+                          items:
+                            type: array
+                            items: { $ref: "#/components/schemas/VisitListItem" }
+                          nextCursor: { type: [string, "null"] }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /visits/calendar:
+    get:
+      tags: [점검]
+      summary: 점검 기록 달력 집계
+      operationId: getVisitCalendar
+      description: |
+        일자별 건수. **목록으로는 만들 수 없다** — 커서로 잘려 오므로 첫 페이지만 보고 달력에 점을 찍으면 거짓말이 된다.
+
+        건수가 0인 날은 내리지 않는다. 화면이 필요로 하는 것은 "찍을 날"의 목록이다.
+        커서를 받지 않는다 — 한 달치라 페이지가 필요 없고, 오히려 잘리면 안 되는 값이다.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, pattern: "^\\d{8}$" }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, pattern: "^\\d{8}$" }
+        - name: officerId
+          in: query
+          schema: { type: string, pattern: "^(me|\\d+)$" }
+        - name: consentCd
+          in: query
+          schema: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        - name: dongCd
+          in: query
+          schema: { type: string, pattern: "^\\d{10}$" }
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items: { $ref: "#/components/schemas/VisitDayCount" }
+              example:
+                code: SUCCESS
+                message: 요청을 처리했습니다.
+                data:
+                  - { day: "20260713", count: 1 }
+                  - { day: "20260715", count: 2 }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /visits/{visitId}:
+    get:
+      tags: [점검]
+      summary: 점검 기록 상세 조회
+      operationId: getVisit
+      description: |
+        현장 원입력 + 서버가 계산한 판정 스냅샷 + 교체 항목(외관 세부 항목 포함).
+
+        화면은 이 응답을 점검 폼의 최종 확인 단계에 그대로 되돌려 그린다. `ruleVersion`은 그때의 판정 규칙이다 —
+        규칙이 바뀌어도 과거 판정을 재해석하지 않는다.
+      parameters:
+        - name: visitId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VisitDetail" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /grids:
     get:
       tags: [지도]
@@ -509,6 +794,25 @@ components:
             ]
         message: { type: string }
         data: { type: "null" }
+
+    CurrentUser:
+      type: object
+      description: 로그인한 사용자. 소속 3종은 미입력이면 null이다.
+      required: [id, loginId, name, phone, birthOn, roleCode]
+      properties:
+        id: { type: integer, format: int64 }
+        loginId: { type: string, maxLength: 50 }
+        name: { type: string, maxLength: 50 }
+        phone:
+          type: string
+          pattern: "^\\d{3}-\\d{3,4}-\\d{4}$"
+        birthOn: { type: string, format: date }
+        rankName: { type: [string, "null"], maxLength: 30, example: 주임 }
+        titleName: { type: [string, "null"], maxLength: 30, example: 점검관 }
+        orgName: { type: [string, "null"], maxLength: 100 }
+        roleCode:
+          type: string
+          enum: [officer, control, admin]
 
     Sido:
       type: object
@@ -709,6 +1013,212 @@ components:
         lastInspectedDay:
           type: [string, "null"]
           pattern: "^\\d{8}$"
+
+    VisitSubmitRequest:
+      type: object
+      description: |
+        현장 점검 폼의 원입력. `ageBandCd`는 ADR-013 결정 26으로 폐기됐고, 경과 판정 근거는
+        `mfgYm` 또는 `mfgUnmarked=true`다. 서버가 판정·처방·실효 교체 개수를 재계산하므로
+        해당 파생값은 요청에 없다.
+
+        승낙 방문은 `respondentTypeCd`, `roomCount`, `mfgYm` 또는 `mfgUnmarked`,
+        `extinguisherInstalledCd`, `revisitPlanCd`가 필요하다. 비승낙 방문은 `consentCd`와
+        `revisitPlanCd`만으로 저장할 수 있고, 거부(`refused`)만 `refusalReasonCd`가 추가로 필요하다.
+      required: [consentCd, revisitPlanCd]
+      properties:
+        consentCd:
+          type: string
+          enum: [accepted, refused, vacant, unreachable]
+        respondentTypeCd:
+          type: [string, "null"]
+          enum: [owner, tenant, family, etc, null]
+        refusalReasonCd:
+          type: [string, "null"]
+          enum: [no-need, distrust, no-time, etc, null]
+        refusalNote: { type: [string, "null"] }
+        roomCount:
+          type: [integer, "null"]
+          minimum: 1
+          maximum: 32767
+        mfgYm:
+          type: [string, "null"]
+          pattern: "^\\d{4}-(0[1-9]|1[0-2])$"
+          description: 제조년월 실측. `mfgUnmarked=true`와 공존할 수 없다.
+        mfgUnmarked:
+          type: [boolean, "null"]
+          description: 제조년월 표기 없음. true면 전량 교체 대상이다.
+        replaceCount:
+          type: [integer, "null"]
+          minimum: 0
+          maximum: 32767
+          description: 전량 자동 확정(경과·미표기)이 아니면 `replacements.length`와 같아야 한다.
+        replacements:
+          type: array
+          items: { $ref: "#/components/schemas/ReplacementSubmitItem" }
+        extinguisherInstalledCd:
+          type: [string, "null"]
+          enum: [installed, missing, null]
+        rxDoneCd:
+          type: [string, "null"]
+          enum: [done, advised-only, null]
+        revisitPlanCd:
+          type: string
+          enum: [not-needed, revisit]
+        noRevisitNote:
+          type: [string, "null"]
+          description: 전량 교체 대상인데 교체도 재방문도 없이 종료할 때 필수.
+        note: { type: [string, "null"] }
+        routeOrder: { type: [integer, "null"], maximum: 32767 }
+        dispatchedScore:
+          type: [number, "null"]
+          description: 배차 당시 점수 스냅샷.
+        dispatchedOrderKey:
+          type: [integer, "null"]
+          description: 배차 당시 큐 순서 스냅샷.
+        scoreVersion:
+          type: [string, "null"]
+          maxLength: 20
+        gpsLat: { type: [number, "null"] }
+        gpsLng: { type: [number, "null"] }
+
+    ReplacementSubmitItem:
+      type: object
+      required: [replaceReasonCd]
+      properties:
+        replaceReasonCd:
+          type: string
+          enum: [expired, battery-dead, appearance, detached, unmarked, etc]
+        batteryTypeCd:
+          type: [string, "null"]
+          enum: [replaceable, sealed, unknown, null]
+          description: "`replaceReasonCd=battery-dead`일 때만 허용·필수."
+        detectorFlagCds:
+          type: array
+          items:
+            type: string
+            enum: [stain, cover-damage, false-alarm, condensation]
+          description: "`replaceReasonCd=appearance`일 때만 허용·필수."
+
+    VisitSaveResult:
+      type: object
+      required: [visitId, visitedDay, replay]
+      properties:
+        visitId: { type: integer, format: int64 }
+        visitedDay:
+          type: string
+          pattern: "^\\d{8}$"
+          description: 서버가 KST 기준으로 기록한 방문일.
+        replay:
+          type: boolean
+          description: 같은 `Idempotency-Key`로 저장된 기존 결과면 true.
+
+    VisitListItem:
+      type: object
+      description: |
+        목록 1행. 표가 조인을 더 하지 않도록 주소·호수·점검원 이름이 함께 온다.
+
+        **호수 표시는 서버가 만들지 않는다** — `hoNm`·`flrNo`를 그대로 내리고 조합은 FE의 `unitLabel()` 한 곳에서 한다
+        (세대 목록과 같은 규칙이어야 한다).
+      required: [visitId, unitId, buildingId, visitedDay, visitedAt, address, consentCd, inspected]
+      properties:
+        visitId: { type: integer, format: int64 }
+        unitId: { type: integer, format: int64 }
+        buildingId: { type: integer, format: int64 }
+        visitedDay: { type: string, pattern: "^\\d{8}$" }
+        visitedAt: { type: string, format: date-time }
+        address: { type: string }
+        hoNm:
+          type: [string, "null"]
+          description: 다가구는 현장 입력 전까지 null이다.
+        flrNo: { type: [integer, "null"] }
+        consentCd: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        inspected:
+          type: boolean
+          description: "`consent_statuses.is_inspectable`에서 파생. false면 아래 둘이 null이다."
+        conditionCode:
+          type: [string, "null"]
+          enum: [OK_GOOD, REPLACE_ADVISED, EXPIRED, DEFECTIVE, null]
+        rxDoneCd: { type: [string, "null"], enum: [done, advised-only, null] }
+        officerName: { type: string }
+
+    VisitDayCount:
+      type: object
+      required: [day, count]
+      properties:
+        day: { type: string, pattern: "^\\d{8}$" }
+        count: { type: integer, format: int64, minimum: 1 }
+
+    VisitDetail:
+      type: object
+      description: |
+        상세 — 저장 요청(`VisitSubmitRequest`)의 필드를 되돌려 주고, 거기에 서버만 아는 값
+        (`expired`·`effectiveReplaceCount`·`conditionCode`·`ruleVersion`)을 얹는다.
+
+        비승낙(`inspected=false`) 방문은 경보기·소화기 필드가 전량 null이다(DB `ck_v_na`와 같다).
+      required:
+        [visitId, unitId, buildingId, address, visitedDay, visitedAt, officerName, consentCd,
+         inspected, revisitPlanCd, ruleVersion, replacements]
+      properties:
+        visitId: { type: integer, format: int64 }
+        unitId: { type: integer, format: int64 }
+        buildingId: { type: integer, format: int64 }
+        address: { type: string }
+        hoNm: { type: [string, "null"] }
+        flrNo: { type: [integer, "null"] }
+        visitedDay: { type: string, pattern: "^\\d{8}$" }
+        visitedAt: { type: string, format: date-time }
+        officerName: { type: string }
+        consentCd: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        inspected: { type: boolean }
+        respondentTypeCd: { type: [string, "null"], enum: [owner, tenant, family, etc, null] }
+        refusalReasonCd: { type: [string, "null"], enum: [no-need, distrust, no-time, etc, null] }
+        refusalNote: { type: [string, "null"] }
+        roomCount: { type: [integer, "null"] }
+        mfgYm: { type: [string, "null"], pattern: "^\\d{4}-(0[1-9]|1[0-2])$" }
+        mfgUnmarked: { type: boolean }
+        replaceCount:
+          type: [integer, "null"]
+          description: 전량 자동 확정(경과·미표기)이면 원입력이 없어 null이다.
+        expired: { type: [boolean, "null"] }
+        effectiveReplaceCount:
+          type: [integer, "null"]
+          description: 서버가 계산한 실효 교체 개수 — 경과·미표기면 `roomCount`와 같다.
+        conditionCode:
+          type: [string, "null"]
+          enum: [OK_GOOD, REPLACE_ADVISED, EXPIRED, DEFECTIVE, null]
+        extinguisherInstalledCd: { type: [string, "null"], enum: [installed, missing, null] }
+        rxDoneCd: { type: [string, "null"], enum: [done, advised-only, null] }
+        revisitPlanCd: { type: string, enum: [not-needed, revisit] }
+        noRevisitNote: { type: [string, "null"] }
+        note: { type: [string, "null"] }
+        ruleVersion:
+          type: string
+          description: 그때의 판정 규칙 스냅샷.
+        replacements:
+          type: array
+          items: { $ref: "#/components/schemas/ReplacementItemDetail" }
+
+    ReplacementItemDetail:
+      type: object
+      required: [itemSeq, replaceReasonCd, autoGenerated, detectorFlagCds]
+      properties:
+        itemSeq: { type: integer, minimum: 1 }
+        replaceReasonCd:
+          type: string
+          enum: [expired, battery-dead, appearance, detached, unmarked, etc]
+        batteryTypeCd: { type: [string, "null"], enum: [replaceable, sealed, unknown, null] }
+        rxCodeCd: { type: [string, "null"], enum: [RX-BAT, RX-IOT, null] }
+        conditionCode:
+          type: [string, "null"]
+          enum: [OK_GOOD, REPLACE_ADVISED, EXPIRED, DEFECTIVE, null]
+        autoGenerated:
+          type: boolean
+          description: 참이면 전량 교체 확정(경과·미표기)으로 서버가 실 개수만큼 만든 행이다.
+        detectorFlagCds:
+          type: array
+          items:
+            type: string
+            enum: [stain, cover-damage, false-alarm, condensation]
 
     GridFeatureCollection:
       type: object

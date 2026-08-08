@@ -99,16 +99,34 @@ export function ErrorInline({
 }
 
 /** Offline — 상단 고정 안내 바. 폼 저장 실패도 이 플로우로 수렴 (PRD). */
-export function OfflineBar({ className }: { className?: string }) {
+export function OfflineBar({
+  message,
+  onRetry,
+  retrying,
+  className,
+}: {
+  /** 미전달 시 기본 안내 — 보관 중인 건이 있으면 어느 세대인지 밝혀 준다 */
+  message?: string;
+  onRetry?: () => void;
+  retrying?: boolean;
+  className?: string;
+}) {
   return (
     <div
       role="status"
       className={cn(
-        "border-l-4 border-l-offline bg-offline-bg px-3 py-2 text-body-sm text-risk-warn",
+        "flex items-center gap-3 border-l-4 border-l-offline bg-offline-bg px-3 py-2 text-body-sm text-risk-warn",
         className,
       )}
     >
-      오프라인 — 점검 결과는 기기에 저장되고, 연결되면 자동 전송됩니다.
+      <span className="flex-1">
+        {message ?? "오프라인 — 점검 결과는 기기에 저장되고, 연결되면 자동 전송됩니다."}
+      </span>
+      {onRetry && (
+        <Button variant="secondary" disabled={retrying} onClick={onRetry}>
+          {retrying ? "전송 중..." : "재전송"}
+        </Button>
+      )}
     </div>
   );
 }

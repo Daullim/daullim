@@ -1,8 +1,9 @@
-import { ApiError, apiGet, apiGetRaw, apiSend, query } from "@/api/client";
+import { ApiError, apiDelete, apiGet, apiGetRaw, apiSend, query } from "@/api/client";
 import type {
   AdminDongBoundaryFeatureCollection,
   BuildingDetail,
   BuildingQueueItem,
+  CurrentUser,
   CursorPage,
   DashboardSummary,
   Dong,
@@ -11,6 +12,11 @@ import type {
   Sido,
   Sigungu,
   UnitItem,
+  VisitDayCount,
+  VisitDetail,
+  VisitListItem,
+  VisitSaveResult,
+  VisitSubmitRequest,
   LoginResponse,
   SignupResponse,
 } from "@/api/types";
@@ -67,6 +73,52 @@ export const getUnits = (buildingId: number, signal?: AbortSignal) =>
 export const renameUnit = (unitId: number, hoNm: string, signal?: AbortSignal) =>
   apiSend<UnitItem>("PATCH", `/units/${unitId}`, { hoNm }, signal);
 
+/* 점검 기록 조회 (G-2 · H-1) */
+
+export interface VisitQueryParams {
+  /** `me`면 서버가 토큰의 주인으로 푼다 */
+  officerId?: string;
+  unitId?: number;
+  /** YYYYMMDD, 포함 */
+  from?: string;
+  to?: string;
+  consentCd?: string;
+  dongCd?: string;
+  cursor?: string;
+  /** 기본 20 · 최대 100 */
+  size?: number;
+}
+
+export const getVisits = (params: VisitQueryParams, signal?: AbortSignal) =>
+  apiGet<CursorPage<VisitListItem>>(`/visits${query({ ...params })}`, signal);
+
+/**
+ * 달력 마킹용 일자별 건수.
+ *
+ * 목록은 커서로 잘려 오므로 이걸로 점을 찍어야 한다 — 첫 페이지만 보고 찍으면 달력이 거짓말을 한다.
+ */
+export const getVisitCalendar = (
+  params: { from: string; to: string; officerId?: string; dongCd?: string },
+  signal?: AbortSignal,
+) => apiGet<VisitDayCount[]>(`/visits/calendar${query({ ...params })}`, signal);
+
+export const getVisit = (visitId: number, signal?: AbortSignal) =>
+  apiGet<VisitDetail>(`/visits/${visitId}`, signal);
+
+export const submitVisit = (
+  unitId: number,
+  body: VisitSubmitRequest,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+) =>
+  apiSend<VisitSaveResult>(
+    "POST",
+    `/units/${unitId}/visits`,
+    body,
+    signal,
+    { "Idempotency-Key": idempotencyKey },
+  );
+
 /* 지도·격자 (D-1·D-3) */
 
 /** 정적 GeoJSON — 봉투 없이 온다. 동 필터는 summary의 gridId로 화면에서 조인한다 */
@@ -81,10 +133,22 @@ export const getGridSummary = (dongCd: string, signal?: AbortSignal) =>
 export const getDashboardSummary = (sigunguCd?: string, signal?: AbortSignal) =>
   apiGet<DashboardSummary>(`/dashboard/summary${query({ sigunguCd })}`, signal);
 
-/* 인증 — 이 둘만 토큰 없이 열려 있다 */
+/* 인증 — login·signup만 토큰 없이 열려 있다 */
 
 export const login = (loginId: string, password: string, signal?: AbortSignal) =>
   apiSend<LoginResponse>("POST", "/auth/login", { loginId, password }, signal);
+
+/** 로그인한 사용자 — 상단바·드로어가 마운트마다 부른다 */
+export const getCurrentUser = (signal?: AbortSignal) =>
+  apiGet<CurrentUser>("/auth/me", signal);
+
+/**
+ * 회원탈퇴 — 비가역. 서버는 계정을 비활성화하고 점검 이력은 남긴다.
+ *
+ * 성공(204)한 뒤에만 토큰을 지운다. 실패했는데 지우면 계정은 살아 있고 세션만 끊겨,
+ * 사용자가 탈퇴됐다고 오해한다.
+ */
+export const withdraw = (signal?: AbortSignal) => apiDelete("/auth/me", signal);
 
 export interface SignupParams {
   loginId: string;

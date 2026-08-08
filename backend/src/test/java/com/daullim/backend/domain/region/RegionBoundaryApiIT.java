@@ -1,6 +1,5 @@
 package com.daullim.backend.domain.region;
 
-import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -17,7 +16,7 @@ class RegionBoundaryApiIT extends QueryApiSupport {
   @Test
   @DisplayName("시연 지역 33개 행정동 경계를 geo+json으로 내린다")
   void servesFeatureCollection() throws Exception {
-    mvc.perform(get("/api/v1/regions/boundaries").with(jwt()))
+    mvc.perform(get("/api/v1/regions/boundaries").with(officer()))
         .andExpect(status().isOk())
         .andExpect(content().contentTypeCompatibleWith("application/geo+json"))
         .andExpect(jsonPath("$.type").value("FeatureCollection"))
@@ -27,7 +26,7 @@ class RegionBoundaryApiIT extends QueryApiSupport {
   @Test
   @DisplayName("경계 속성은 행정표준 행정동코드와 시군구코드를 담는다")
   void carriesAdministrativeCodes() throws Exception {
-    mvc.perform(get("/api/v1/regions/boundaries").with(jwt()))
+    mvc.perform(get("/api/v1/regions/boundaries").with(officer()))
         .andExpect(jsonPath("$.features[0].properties.dong_cd").exists())
         .andExpect(jsonPath("$.features[0].properties.sigungu_cd").exists())
         .andExpect(jsonPath("$.features[0].properties.source").value("admdongkor-ver20250701"))
@@ -41,7 +40,7 @@ class RegionBoundaryApiIT extends QueryApiSupport {
   @Test
   @DisplayName("정적 자산이라 캐시 가능하게 내린다")
   void isCacheable() throws Exception {
-    mvc.perform(get("/api/v1/regions/boundaries").with(jwt()))
+    mvc.perform(get("/api/v1/regions/boundaries").with(officer()))
         .andExpect(
             header()
                 .string("Cache-Control", org.hamcrest.Matchers.containsString("max-age=86400")));
