@@ -15,8 +15,9 @@ import org.springframework.stereotype.Component;
 /**
  * 지역 명칭 사전 — {@code buildings}에 명칭 컬럼이 없어 코드만으로는 셀렉터를 그릴 수 없다.
  *
- * <p>원천은 pipeline이 산출하는 {@code seed/regions.csv}(37행)를 그대로 복사한 것이다. 조회 전용 상수이고 변경 주기가 사실상 없어 테이블을
- * 만들지 않는다. 코드는 행정표준코드이며 접두사 관계가 성립한다 — {@code dongCd[:5] == sigunguCd}, {@code [:2] == sidoCd}.
+ * <p>원천은 pipeline이 산출하는 {@code seed/regions.csv}(65행 — 시도 3 · 시군구 4 · 행정동 58)를 그대로 복사한 것이다. 조회 전용
+ * 상수이고 변경 주기가 사실상 없어 테이블을 만들지 않는다. 코드는 행정표준코드이며 접두사 관계가 성립한다 — {@code dongCd[:5] == sigunguCd},
+ * {@code [:2] == sidoCd}.
  *
  * <p>빌드 시점에 {@code ../seed}에서 끌어오지 않고 복사본을 둔 이유는 {@code Dockerfile}의 빌드 컨텍스트가 {@code backend/}뿐이라
  * 컨테이너 빌드에서 상위 디렉터리가 보이지 않기 때문이다. pipeline이 사전을 다시 내면 이 파일도 같이 갱신한다.

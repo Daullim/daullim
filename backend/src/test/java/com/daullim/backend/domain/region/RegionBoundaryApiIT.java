@@ -14,13 +14,26 @@ import org.junit.jupiter.api.Test;
 class RegionBoundaryApiIT extends QueryApiSupport {
 
   @Test
-  @DisplayName("시연 지역 33개 행정동 경계를 geo+json으로 내린다")
+  @DisplayName("시연 지역 58개 행정동 경계를 geo+json으로 내린다")
   void servesFeatureCollection() throws Exception {
     mvc.perform(get("/api/v1/regions/boundaries").with(officer()))
         .andExpect(status().isOk())
         .andExpect(content().contentTypeCompatibleWith("application/geo+json"))
         .andExpect(jsonPath("$.type").value("FeatureCollection"))
-        .andExpect(jsonPath("$.features.length()").value(33));
+        .andExpect(jsonPath("$.features.length()").value(58));
+  }
+
+  /**
+   * 이 파일만 {@code run_seed.py}의 산출이 아니라 admdongkor에서 손으로 잘라 온 것이라, 시연 지역이 늘어도 조용히 뒤처진다. 큐·목록은 멀쩡한데
+   * 지도만 비어 보이므로 눈으로는 늦게 발견된다 — 사전(regions.csv)과 대조해 못 박는다.
+   */
+  @Test
+  @DisplayName("경계 시군구는 지역 사전의 시군구와 정확히 일치한다 — 재절단 누락 방지")
+  void coversExactlyTheCatalogSigungus() throws Exception {
+    mvc.perform(get("/api/v1/regions/boundaries").with(officer()))
+        .andExpect(
+            jsonPath("$.features[*].properties.sigungu_cd")
+                .value(org.hamcrest.Matchers.hasItems("11620", "26230", "26710", "52750")));
   }
 
   @Test
