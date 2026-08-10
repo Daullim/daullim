@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
@@ -16,6 +16,7 @@ import { useApiQuery } from "@/api/use-api-query";
 import { useRegionNames } from "@/api/use-region";
 import type { GridFeatureProperties } from "@/api/types";
 import { boundsOf, centerOf, filterToDong, gridStyles } from "@/lib/grid-layer";
+import { scrollRowIntoList } from "@/lib/scroll-row-into-list";
 import { distanceMeters, useCurrentPosition } from "@/lib/use-current-position";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +31,8 @@ interface GridRow {
   /** 현재 위치에서 격자 중심까지(m). 위치를 못 잡았으면 null */
   distance: number | null;
 }
+
+const gridRowId = (gridId: string) => `grid-row-${gridId}`;
 
 /* 정렬 필터 — UI 로컬 개념 (도메인 열거값 아님) */
 type GridSort = "risk" | "unvisited" | "distance";
@@ -64,6 +67,7 @@ export default function FieldGridPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [sort, setSort] = useState<GridSort>("risk");
   const [map, setMap] = useState<naver.maps.Map | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const position = useCurrentPosition(map);
 
   /* 실시간 집계가 이 동에 어떤 격자가 있는지도 알려준다 — GeoJSON에는 행정동 속성이 없다 */
@@ -125,12 +129,15 @@ export default function FieldGridPage() {
     return () => map.data.removeGeoJson(dongGrids);
   }, [map, dongGrids]);
 
-  /* 지도 → 리스트: 격자를 누르면 그 행이 선택된다 */
+  /* 지도 → 리스트: 격자를 누르면 그 행이 선택되고, 목록 밖이면 보이는 데까지 스크롤한다
+     (B3의 핀 선택과 같은 거동 — 강조만 걸어두면 화면 밖이라 안 보인다) */
   useEffect(() => {
     if (!map) return;
     const listener = map.data.addListener("click", (e: naver.maps.FeatureEvent) => {
       const gridId = e.feature.getProperty("grid_id");
-      if (typeof gridId === "string") setSelected(gridId);
+      if (typeof gridId !== "string") return;
+      setSelected(gridId);
+      scrollRowIntoList(listRef.current, gridRowId(gridId));
     });
     return () => map.data.removeListener(listener);
   }, [map]);
@@ -153,7 +160,11 @@ export default function FieldGridPage() {
     <div className="flex h-dvh flex-col">
       <TopBar
         mode="field"
-        crumbs={[{ label: region.label ?? "동 선택", to: "/field" }, { label: "격자 선택" }]}
+        /* 복귀 시 고른 동을 잃지 않도록 dongCd를 달아 되돌린다 */
+        crumbs={[
+          { label: region.label ?? "동 선택", to: dongCd ? `/field?dongCd=${dongCd}` : "/field" },
+          { label: "격자 선택" },
+        ]}
       />
 
       {/* 좌 지도 + 우 리사이즈 패널 2열 (접기 가능) — relative는 접힘 탭 앵커용 */}
@@ -211,7 +222,7 @@ export default function FieldGridPage() {
             })}
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto">
             {loading && rows.length === 0 && <RowSkeleton density="field" rows={4} />}
             {error && <ErrorInline onRetry={() => (summary.error ? summary : grids).reload()} />}
             {!loading && !error && rows.length === 0 && (
@@ -220,6 +231,7 @@ export default function FieldGridPage() {
             {rows.map((g) => (
               <button
                 key={g.gridId}
+                id={gridRowId(g.gridId)}
                 type="button"
                 onClick={() => setSelected(g.gridId)}
                 aria-current={current === g.gridId ? "true" : undefined}

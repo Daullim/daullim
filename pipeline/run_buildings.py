@@ -1,7 +1,9 @@
 #!/usr/bin/env python
 """건물 마스터 + 세대 생성 실행 로그 — 표제부 수집·지오코딩·DDL 검증.
 
-    ./.venv/bin/python run_buildings.py [--region gwanak imsil]
+    ./.venv/bin/python run_buildings.py [--region gwanak imsil gijang busanjin]
+
+기본값은 `daullim_data.regions.REGIONS` 전체 — 일부만 돌리려면 `--region`으로 좁힌다.
 
 호출은 전부 캐시를 경유한다(`data/eais/`·`data/geocode_cache/`).
 중간에 끊겨도 다시 돌리면 이미 받은 것은 재호출하지 않는다.

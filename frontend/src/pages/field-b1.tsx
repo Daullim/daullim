@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
 import { MapCanvas } from "@/components/layout/map-canvas";
@@ -26,8 +26,11 @@ import { cn } from "@/lib/utils";
  */
 export default function FieldDongPage() {
   const navigate = useNavigate();
-  /* 값은 행정표준코드다. 빈 상태로 시작하고 셀렉터가 첫 시도·시군구를 채운다 */
-  const [region, setRegion] = useState<RegionValue>({});
+  const [params] = useSearchParams();
+  const [region, setRegion] = useState<RegionValue>(() => {
+    const dong = params.get("dongCd");
+    return dong ? { sido: dong.slice(0, 2), sigungu: dong.slice(0, 5), dong } : {};
+  });
   const [map, setMap] = useState<naver.maps.Map | null>(null);
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const stripRef = useRef<HTMLDivElement>(null);

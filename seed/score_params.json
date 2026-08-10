@@ -1,14 +1,14 @@
 {
   "version": "v0-20260805",
-  "q_lo_value": -8.16556936076324,
-  "q_hi_value": -5.419891362773259,
+  "q_lo_value": -8.819022466787583,
+  "q_hi_value": -5.1464112830245465,
   "alpha": 1.0,
-  "m_urban": 3142.886633377664,
-  "m_rural": 94.0,
-  "lambda_bar_urban": 0.00021034266038754874,
-  "lambda_bar_rural": 0.0002803137957213214,
+  "m_urban": 3292.65650650901,
+  "m_rural": 93.29999999999927,
+  "lambda_bar_urban": 0.00021470627252710668,
+  "lambda_bar_rural": 0.0002371552529888537,
   "beta_age": 0.5,
   "beta_struct": 0.0,
-  "universe": "gwanak+imsil",
-  "computed_at": "2026-08-05T03:21:40"
+  "universe": "gwanak+imsil+gijang+busanjin",
+  "computed_at": "2026-08-11T03:54:20"
 }

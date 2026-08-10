@@ -65,6 +65,23 @@ REGIONS: dict[str, Region] = {
         mois="52750",
         zone=("다마",),
     ),
+    "gijang": Region(
+        key="gijang",
+        name="부산광역시 기장군",
+        sido="부산",
+        kostat="21510",
+        mois="26710",
+        # 기장군은 100km 존 경계(마라/마마)에 걸친다 — zone[0] 고정 금지, resolve_grid500() 경유.
+        zone=("마라", "마마"),
+    ),
+    "busanjin": Region(
+        key="busanjin",
+        name="부산광역시 부산진구",
+        sido="부산",
+        kostat="21050",
+        mois="26230",
+        zone=("마라",),
+    ),
 }
 
 _SYSTEMS = ("kostat", "mois", "zone")

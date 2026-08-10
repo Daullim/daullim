@@ -19,7 +19,9 @@ class RegionApiIT extends QueryApiSupport {
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data[0].sidoCd").value("11"))
         .andExpect(jsonPath("$.data[0].sidoNm").value("서울특별시"))
-        .andExpect(jsonPath("$.data[1].sidoCd").value("52"));
+        .andExpect(jsonPath("$.data[1].sidoCd").value("26"))
+        .andExpect(jsonPath("$.data[1].sidoNm").value("부산광역시"))
+        .andExpect(jsonPath("$.data[2].sidoCd").value("52"));
   }
 
   @Test

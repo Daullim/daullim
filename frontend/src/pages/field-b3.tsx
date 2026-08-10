@@ -23,6 +23,7 @@ import { CONSENT_TO_UNIT_STATUS, HOUSE_TYPE } from "@/config/domain";
 import { formatDay } from "@/lib/inspection";
 import { isQueueItemDone, unitLabel } from "@/lib/units";
 import { openRoute } from "@/lib/map-link";
+import { scrollRowIntoList } from "@/lib/scroll-row-into-list";
 import {
   clearPendingVisit,
   loadPendingVisit,
@@ -44,7 +45,6 @@ import type { BuildingQueueItem, UnitItem } from "@/api/types";
 
 /** 주소 검색은 서버가 한다 — 타자마다 보내지 않도록 잠깐 묵힌다 */
 const SEARCH_DEBOUNCE_MS = 300;
-const QUEUE_SCROLL_TOP_PADDING = 16;
 
 const queueRowId = (buildingId: number) => `visit-queue-building-${buildingId}`;
 
@@ -137,17 +137,7 @@ export default function FieldUnitsPage() {
   /* 핀 ↔ 큐 양방향 — 핀을 누르면 그 행이 열리고, 행을 고르면 그 핀이 강조된다 */
   const selectFromPin = (buildingId: number) => {
     setSelectedId(buildingId);
-    requestAnimationFrame(() => {
-      const list = queueListRef.current;
-      const row = document.getElementById(queueRowId(buildingId));
-      if (!list || !row) return;
-      const listTop = list.getBoundingClientRect().top;
-      const rowTop = row.getBoundingClientRect().top;
-      list.scrollTo({
-        top: list.scrollTop + rowTop - listTop - QUEUE_SCROLL_TOP_PADDING,
-        behavior: "smooth",
-      });
-    });
+    scrollRowIntoList(queueListRef.current, queueRowId(buildingId));
   };
   useBuildingPins(map, items, { selectedId: selectedId ?? openId, onSelect: selectFromPin });
   const inspectUnit = mergedUnits.find((u) => u.unitId === inspecting?.unitId);
@@ -183,10 +173,15 @@ export default function FieldUnitsPage() {
       .join(" · ");
   };
 
+  /* 동 크럼은 dongCd를 달고 돌아간다 — 안 달면 B1이 첫 시군구로 초기화돼 고른 동을 잃는다 */
+  const dongCrumb = {
+    label: region.label ?? "동 선택",
+    to: dongCd ? `/field?dongCd=${dongCd}` : "/field",
+  };
   const crumbs = rural
-    ? [{ label: region.label ?? "동 선택", to: "/field" }, { label: "가구 선택" }]
+    ? [dongCrumb, { label: "가구 선택" }]
     : [
-        { label: region.label ?? "동 선택", to: "/field" },
+        dongCrumb,
         { label: gridId ?? "격자", to: `/field/grid?dongCd=${dongCd}` },
         { label: "주택 선택" },
       ];

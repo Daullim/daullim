@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 from .region_type import RURAL, URBAN
+from .regions import REGIONS
 
 # ── score 정규화 (§2-5 확정) ────────────────────────────────────────────
 # 곱 구조 + 화재 강도의 두꺼운 꼬리 때문에 Score_raw는 로그정규에 가깝다.
@@ -59,7 +60,7 @@ class ScoreParams:
     lambda_bar_rural: float
     beta_age: float
     beta_struct: float
-    universe: str = "gwanak+imsil"
+    universe: str = "+".join(REGIONS)
     computed_at: str = ""
 
     def to_dict(self) -> dict:

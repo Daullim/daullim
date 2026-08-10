@@ -16,13 +16,14 @@ import pandas as pd
 
 from daullim_data.ingest import load_fires
 from daullim_data.ltr import FEATURES, capture_rate, fit_with_ci
+from daullim_data.regions import REGIONS
 from daullim_data.scoring import normalize_score, raw_score
 from daullim_data.utils import DataTrapError, to_5179
 from daullim_data.vulnerability import Betas, relative_risk
 from run_scoring import build_scored
 from run_vulnerability import AS_OF
 
-SGG_OF = {"gwanak": ("서울", "관악구"), "imsil": ("전북", "임실군")}
+SGG_OF = {key: (r.sido, r.name.split()[-1]) for key, r in REGIONS.items()}
 NEAREST_LIMIT_M = 150.0  # 화재 지점 ↔ 건물 매칭 상한. 넘으면 그 화재는 라벨에서 뺀다.
 
 
