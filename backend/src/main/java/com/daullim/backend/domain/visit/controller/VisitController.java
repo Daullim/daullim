@@ -8,6 +8,7 @@ import com.daullim.backend.domain.visit.dto.VisitDayCount;
 import com.daullim.backend.domain.visit.dto.VisitDetailResponse;
 import com.daullim.backend.domain.visit.dto.VisitListItem;
 import com.daullim.backend.domain.visit.dto.VisitSubmitRequest;
+import com.daullim.backend.domain.visit.dto.VisitSummary;
 import com.daullim.backend.domain.visit.service.VisitQueryService;
 import com.daullim.backend.domain.visit.service.VisitSaveResult;
 import com.daullim.backend.domain.visit.service.VisitSubmissionService;
@@ -126,6 +127,29 @@ public class VisitController {
 
     return ApiResponse.ok(
         queryService.countByDay(filter(officerId, null, from, to, consentCd, dongCd, jwt)));
+  }
+
+  @Operation(
+      summary = "점검 기록 기간 집계",
+      description =
+          """
+          총건수 · 승낙 코드별 건수 · 실효 교체 대수 합. 현장 '오늘' 카드가 from=to=오늘로 부른다.
+          목록으로는 만들 수 없다 — 커서로 잘려 와 첫 페이지만 세면 실제보다 적게 나온다.
+          '오늘'을 서버가 정하지 않고 기간을 받는다 — 오늘의 경계가 KST 달력일이라 화면이 자기 날짜를 보낸다.
+          건수가 0인 승낙 코드는 담지 않는다.
+          """)
+  @GetMapping("/api/v1/visits/summary")
+  public ApiResponse<VisitSummary> summary(
+      @RequestParam(required = false)
+          @Pattern(regexp = "me|\\d+", message = "officerId는 me 또는 숫자입니다.") String officerId,
+      @RequestParam @Pattern(regexp = "\\d{8}", message = "from은 YYYYMMDD입니다.") String from,
+      @RequestParam @Pattern(regexp = "\\d{8}", message = "to는 YYYYMMDD입니다.") String to,
+      @RequestParam(required = false) String consentCd,
+      @RequestParam(required = false) @Pattern(regexp = "\\d{10}", message = "행정동코드는 10자리 숫자입니다.") String dongCd,
+      @AuthenticationPrincipal Jwt jwt) {
+
+    return ApiResponse.ok(
+        queryService.summarize(filter(officerId, null, from, to, consentCd, dongCd, jwt)));
   }
 
   @Operation(summary = "점검 기록 상세 조회", description = "현장 원입력 + 서버가 계산한 판정 스냅샷 + 교체 항목(외관 세부 항목 포함).")

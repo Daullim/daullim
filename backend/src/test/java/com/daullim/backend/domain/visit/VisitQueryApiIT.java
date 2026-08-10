@@ -175,6 +175,74 @@ class VisitQueryApiIT extends QueryApiSupport {
     }
   }
 
+  /**
+   * 현장 '오늘' 카드가 쓰는 집계.
+   *
+   * <p>픽스처: 승낙 2건(점검함 — 실효 교체 각 1대) · 거부 1건 · 공가 1건(난곡동) · 연락두절 1건은 soft delete.
+   */
+  @Nested
+  @DisplayName("G-2. 기간 집계")
+  class Summary {
+
+    @Test
+    @DisplayName("총건수·승낙코드별 건수·실효 교체 합을 한 번에 낸다")
+    void summarizesRange() throws Exception {
+      mvc.perform(get("/api/v1/visits/summary?from=20260701&to=20260731").with(officer()))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.data.total").value(4))
+          .andExpect(jsonPath("$.data.byConsent.accepted").value(2))
+          .andExpect(jsonPath("$.data.byConsent.refused").value(1))
+          .andExpect(jsonPath("$.data.byConsent.vacant").value(1))
+          // 점검하지 않은 방문은 effective_replace_count가 null이다 — 합이 null이 되면 안 된다.
+          .andExpect(jsonPath("$.data.effectiveReplaceCount").value(2));
+    }
+
+    @Test
+    @DisplayName("건수가 0인 승낙 코드는 담지 않는다 — 0 채우기는 화면 몫이다")
+    void omitsZeroConsentCodes() throws Exception {
+      // unreachable 건은 soft delete돼 집계에서 빠지므로 키 자체가 없어야 한다.
+      mvc.perform(get("/api/v1/visits/summary?from=20260701&to=20260731").with(officer()))
+          .andExpect(jsonPath("$.data.byConsent.unreachable").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("하루로 좁히면 그날 것만 — '오늘' 카드가 부르는 방식")
+    void narrowsToSingleDay() throws Exception {
+      mvc.perform(get("/api/v1/visits/summary?from=20260715&to=20260715").with(officer()))
+          .andExpect(jsonPath("$.data.total").value(2))
+          .andExpect(jsonPath("$.data.byConsent.accepted").value(2))
+          .andExpect(jsonPath("$.data.effectiveReplaceCount").value(2));
+    }
+
+    @Test
+    @DisplayName("기록이 없는 기간은 0이고 byConsent가 빈 객체다 — 화면이 분기하지 않게")
+    void emptyRangeYieldsZeros() throws Exception {
+      mvc.perform(get("/api/v1/visits/summary?from=20260101&to=20260131").with(officer()))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.data.total").value(0))
+          .andExpect(jsonPath("$.data.effectiveReplaceCount").value(0))
+          .andExpect(jsonPath("$.data.byConsent").isMap())
+          .andExpect(jsonPath("$.data.byConsent").isEmpty());
+    }
+
+    @Test
+    @DisplayName("dongCd로 좁혀진다 — 목록·달력과 같은 필터를 탄다")
+    void filtersByDong() throws Exception {
+      mvc.perform(
+              get("/api/v1/visits/summary?from=20260701&to=20260731&dongCd={dong}", OTHER_DONG)
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.total").value(1))
+          .andExpect(jsonPath("$.data.byConsent.vacant").value(1));
+    }
+
+    @Test
+    @DisplayName("from·to는 필수다")
+    void requiresRange() throws Exception {
+      mvc.perform(get("/api/v1/visits/summary?to=20260731").with(officer()))
+          .andExpect(status().isBadRequest());
+    }
+  }
+
   @Nested
   @DisplayName("H-1. 상세")
   class Detail {
