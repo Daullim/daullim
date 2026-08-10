@@ -80,10 +80,7 @@ BE 주소는 시연에 노출하지 않는다 — 화면은 Vercel 도메인 하
 | `seed/demo-snapshot.sql` | `pg_dump --data-only`. `buildings`·`units` COPY 2블록 + 시퀀스 `setval` 2줄 (19MB). `address_norm`은 GENERATED라 제외된다 |
 | `seed/reset-demo.sh` | 업무 데이터를 비우고 스냅샷을 재적재. `users`·lookup 6종은 **보존**한다 |
 
-> ⚠️ **스냅샷이 뒤처져 있다 (2026-08-11).** `seed/demo-snapshot.sql`은 2026-08-07 생성분으로
-> **2지역(관악+임실) · buildings 30,593 · units 94,074**를 담고 있다. 부산 기장군·부산진구가
-> 편입된 4지역 데이터(61,803 / 152,202)는 **로컬 DB에만 있고 스냅샷에는 없다** —
-> 이 상태로 배포하면 운영은 계속 2지역만 보여준다. 배포 전에 로컬 DB에서 `pg_dump`를 다시 떠야 한다.
+현재 스냅샷은 **4지역 · buildings 61,803 · units 152,202** (2026-08-11 재생성, 35MB).
 
 접속 URL은 Railway → Postgres 서비스 → Variables의 **`DATABASE_PUBLIC_URL`**이다(내부용 `DATABASE_URL`이 아니다).
 
@@ -101,8 +98,31 @@ DEMO_DB_URL='postgresql://...' ./seed/reset-demo.sh
 **스냅샷을 다시 뜰 때** — 로컬 DB가 정본이다:
 
 ```bash
+# ① 업무 상태를 출발점으로 되돌린다 (아래 ⚠️ 참조)
+docker compose exec -T postgres psql -U daullim -d daullim -c \
+  "UPDATE units SET status_cd='pending', last_inspected_day=NULL, rx_baseline_day=NULL WHERE status_cd <> 'pending';"
+
+# ② 덤프
 docker exec backend-postgres-1 pg_dump -U daullim -d daullim \
   --data-only --no-owner --no-privileges -t public.buildings -t public.units > seed/demo-snapshot.sql
+```
+
+> ⚠️ **덤프 전에 `units`의 업무 상태를 비워야 한다 — 안 그러면 리셋 후 앞뒤가 안 맞는다.**
+> 스냅샷은 `buildings`·`units`만 담는데 `reset-demo.sh`는 **`visits`까지 TRUNCATE**한다.
+> 로컬에서 현장 폼을 테스트하면 `units.status_cd`가 `done`·`refused`로 남는데, 그대로 덤프하면
+> **"점검 기록 0건인데 세대는 점검 완료"** 상태로 시연이 시작된다(`/records`는 비어 있고
+> 큐에서는 그 세대가 처리된 것으로 보임). 2026-08-11 재생성 때 실제로 2행이 이렇게 섞여 들어갔다.
+> 확인은 덤프 후 이 한 줄로 한다 — `pending` 하나만 나와야 한다:
+>
+> ```bash
+> grep -c $'\tpending\t' seed/demo-snapshot.sql   # units 행수와 같아야 한다
+> ```
+
+덤프 후 **행수·구조를 확인**한다. `COPY` 2블록 + `setval` 2줄이 아니면 대상 테이블이 바뀐 것이다:
+
+```bash
+grep -c "^COPY public\." seed/demo-snapshot.sql          # 2
+grep -c "^SELECT pg_catalog.setval" seed/demo-snapshot.sql  # 2
 ```
 
 ## 시연 당일 절차
