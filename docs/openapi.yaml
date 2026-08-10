@@ -600,6 +600,57 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /visits/summary:
+    get:
+      tags: [점검]
+      summary: 점검 기록 기간 집계
+      operationId: getVisitSummary
+      description: |
+        총건수 · 승낙 코드별 건수 · 실효 교체 대수 합. 현장 '오늘' 카드가 `from=to=오늘`로 부른다.
+
+        **목록으로는 만들 수 없다** — 커서로 잘려 오므로 첫 페이지만 세면 실제보다 적게 나온다.
+        달력 집계(`/visits/calendar`)를 따로 둔 이유와 같다.
+
+        달력이 "찍을 날"을 답한다면 이쪽은 **"그 기간에 무엇을 했나"**를 답한다 — 축이 달라 합치지 않는다.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, pattern: "^\\d{8}$" }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, pattern: "^\\d{8}$" }
+        - name: officerId
+          in: query
+          schema: { type: string, pattern: "^(me|\\d+)$" }
+        - name: consentCd
+          in: query
+          schema: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        - name: dongCd
+          in: query
+          schema: { type: string, pattern: "^\\d{10}$" }
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VisitSummary" }
+              example:
+                code: SUCCESS
+                message: 요청을 처리했습니다.
+                data:
+                  total: 11
+                  byConsent: { accepted: 8, refused: 2, vacant: 1 }
+                  effectiveReplaceCount: 9
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /visits/{visitId}:
     get:
       tags: [점검]
@@ -1147,6 +1198,36 @@ components:
       properties:
         day: { type: string, pattern: "^\\d{8}$" }
         count: { type: integer, format: int64, minimum: 1 }
+
+    VisitSummary:
+      type: object
+      required: [total, byConsent, effectiveReplaceCount]
+      description: |
+        기간 집계. 현장 '오늘' 카드가 `from=to=오늘`로 부른다.
+
+        **'오늘'을 서버가 정하지 않는다** — 오늘의 경계가 KST 달력일(`visits.visited_day`와 같은 기준)이라
+        서버 시간대로 계산하면 어긋날 수 있다. 화면이 자기 달력일을 보낸다.
+      properties:
+        total:
+          type: integer
+          format: int64
+          minimum: 0
+          description: 기간 내 방문 건수
+        byConsent:
+          type: object
+          additionalProperties: { type: integer, format: int64, minimum: 1 }
+          description: |
+            승낙 게이트 코드별 건수. **0인 코드는 담지 않는다** — 화면이 자기 열거값 4종
+            (`config/domain.ts`의 `CONSENT_STATUS`)을 돌며 없는 코드를 0으로 채운다.
+            서버가 코드 목록을 박으면 lookup 테이블과 두 곳이 된다.
+          example: { accepted: 8, refused: 2, vacant: 1 }
+        effectiveReplaceCount:
+          type: integer
+          format: int64
+          minimum: 0
+          description: |
+            기간 내 **실효** 교체 대수 합. 원입력이 아니라 서버 판정 결과다(ADR-013).
+            미점검 방문은 값이 없어 합에 기여하지 않는다.
 
     VisitDetail:
       type: object

@@ -17,6 +17,7 @@ import type {
   VisitListItem,
   VisitSaveResult,
   VisitSubmitRequest,
+  VisitSummary,
   LoginResponse,
   SignupResponse,
 } from "@/api/types";
@@ -101,6 +102,15 @@ export const getVisitCalendar = (
   params: { from: string; to: string; officerId?: string; dongCd?: string },
   signal?: AbortSignal,
 ) => apiGet<VisitDayCount[]>(`/visits/calendar${query({ ...params })}`, signal);
+
+/**
+ * 기간 방문 집계. '오늘'은 `from`·`to`에 같은 날을 넣어 부른다 —
+ * 오늘의 경계가 KST 달력일이라 서버가 정하지 않고 화면이 자기 날짜를 보낸다.
+ */
+export const getVisitSummary = (
+  params: { from: string; to: string; officerId?: string; consentCd?: string; dongCd?: string },
+  signal?: AbortSignal,
+) => apiGet<VisitSummary>(`/visits/summary${query({ ...params })}`, signal);
 
 export const getVisit = (visitId: number, signal?: AbortSignal) =>
   apiGet<VisitDetail>(`/visits/${visitId}`, signal);

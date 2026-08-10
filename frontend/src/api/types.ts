@@ -205,6 +205,19 @@ export interface VisitDayCount {
   count: number;
 }
 
+/**
+ * 기간 집계 — '오늘' 카드가 `from=to=오늘`로 부른다.
+ *
+ * 목록으로는 만들 수 없다(커서로 잘려 와 첫 페이지만 세면 적게 나온다).
+ * `byConsent`는 **건수가 0인 코드를 담지 않는다** — 화면이 `CONSENT_STATUS` 4종을 돌며 0으로 채운다.
+ */
+export interface VisitSummary {
+  total: number;
+  byConsent: Partial<Record<ConsentStatus, number>>;
+  /** 실효 교체 대수 합 — 서버 판정 결과다(원입력 아님) */
+  effectiveReplaceCount: number;
+}
+
 export interface ReplacementItemDetail {
   itemSeq: number;
   replaceReasonCd: ReplaceReason;
