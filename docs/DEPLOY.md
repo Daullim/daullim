@@ -72,13 +72,18 @@ BE 주소는 시연에 노출하지 않는다 — 화면은 Vercel 도메인 하
 
 ## DB 적재 — 스냅샷 (ADR-006 §3)
 
-**Flyway는 테이블 12개(+ 자기 이력 테이블)와 lookup seed만 만든다.** `buildings` 30,593행 · `units` 94,074행은 따로 넣어야 한다.
+**Flyway는 테이블 12개(+ 자기 이력 테이블)와 lookup seed만 만든다.** `buildings` 61,803행 · `units` 152,202행은 따로 넣어야 한다.
 파이프라인을 운영 DB에 직접 돌리지 않고 **스냅샷을 복원**한다 — seed 동결 결정에 따른 것이다.
 
 | 파일 | 내용 |
 |---|---|
 | `seed/demo-snapshot.sql` | `pg_dump --data-only`. `buildings`·`units` COPY 2블록 + 시퀀스 `setval` 2줄 (19MB). `address_norm`은 GENERATED라 제외된다 |
 | `seed/reset-demo.sh` | 업무 데이터를 비우고 스냅샷을 재적재. `users`·lookup 6종은 **보존**한다 |
+
+> ⚠️ **스냅샷이 뒤처져 있다 (2026-08-11).** `seed/demo-snapshot.sql`은 2026-08-07 생성분으로
+> **2지역(관악+임실) · buildings 30,593 · units 94,074**를 담고 있다. 부산 기장군·부산진구가
+> 편입된 4지역 데이터(61,803 / 152,202)는 **로컬 DB에만 있고 스냅샷에는 없다** —
+> 이 상태로 배포하면 운영은 계속 2지역만 보여준다. 배포 전에 로컬 DB에서 `pg_dump`를 다시 떠야 한다.
 
 접속 URL은 Railway → Postgres 서비스 → Variables의 **`DATABASE_PUBLIC_URL`**이다(내부용 `DATABASE_URL`이 아니다).
 

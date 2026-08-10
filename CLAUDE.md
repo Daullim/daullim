@@ -7,9 +7,11 @@
 
 다울림 — 소방 취약가구 화재경보기 사후관리 **우선순위 처방 도구**(소방안전 빅데이터 경진대회 출품, 3주 MVP, 1인 개발). 주 사용자는 소방 점검원·예방담당자. 두 모드: `/control` 관제(데스크톱)·`/field` 현장(**태블릿 1024×768 가로 우선, 장갑 조작·명료함**).
 `frontend/` `backend/` `pipeline/` `data/` `seed/`가 전부 실물로 서 있다.
-파이프라인이 `buildings` 30,593행 · `units` 94,074행을 적재했고, API 15종과
+파이프라인이 `buildings` 61,803행 · `units` 152,202행을 적재했고, API 15종과
 `docs/openapi.yaml`이 붙어 **화면이 실데이터로 돈다**. 점검 결과 저장·조회가 모두 붙어
 현장 폼이 서버에 남고 `/records`가 그것을 되읽는다 — **목데이터는 `/demo`용 한 벌만 남았다**.
+시연 지역은 **4곳**(ADR-010 개정 1, 2026-08-10) — 관악구·임실군에 부산 **기장군**(농촌)·**부산진구**(도시)가
+추가됐다. 다만 **4지역 데이터로 화면을 아직 안 봤다**(2026-08-11 기준) — 파이프라인·DB·BE 기동까지만 확인.
 남은 큰 구멍은 **지도 격자 밀집 표현의 최종 방식**이다 — 아래 Known Gaps 참조.
 
 ## Source of Truth — 작업별 먼저 읽을 파일 `[DAULLIM]`
@@ -100,5 +102,5 @@ docker compose down -v && docker compose up -d
 - ~~`GET /auth/me` 미머지~~ → **해소됨** — 상단바·드로어·설정이 모두 `GET /auth/me`를 쓴다. `mock/sample.ts`에 남은 건 `/demo`용 `DEMO_QUEUE_ITEMS`뿐이다.
 - ~~회원탈퇴가 서버에 반영되지 않는다~~ → **해소됨** — `DELETE /auth/me`가 계정을 비활성화한다(`is_active=false` + `withdrawn_at`, 행은 남는다). 액세스 토큰은 취소할 수 없으므로 `ActiveAccountFilter`가 요청마다 계정 생존을 확인해 **탈퇴한 토큰을 전 경로에서 401**로 막는다 — 인증이 붙는 경로는 요청당 `users` PK 조회 1회가 든다.
 - **도시 격자 위험 밀집 표시 방식 결정 대기** — 지도는 Naver Maps로 실장됐고 격자 표시는 "옅은 실선 경계"까지만 구현됐다. 코로플레스나 중심 색 도트는 아직 정하지 않았다.
-- ~~동 경계 GeoJSON 미확보~~ → **확보·실장됨**(2026-08-06). 출처는 [admdongkor](https://github.com/vuski/admdongkor) `ver20250701`이고 `seed/admin-dong-boundaries.geojson`(33개 행정동)이 정본이다. B1이 `GET /regions/boundaries`로 받아 시군구 단위로 그리고 폴리곤 클릭↔동 선택이 양방향으로 물린다. **이 파일은 사본이 3벌이다** — `pipeline/README.md` § 사본 동기화.
+- ~~동 경계 GeoJSON 미확보~~ → **확보·실장됨**(2026-08-06). 출처는 [admdongkor](https://github.com/vuski/admdongkor) `ver20250701`이고 `seed/admin-dong-boundaries.geojson`(**58개 행정동**, 2026-08-11 부산 편입 후 재절단)이 정본이다. B1이 `GET /regions/boundaries`로 받아 시군구 단위로 그리고 폴리곤 클릭↔동 선택이 양방향으로 물린다. **이 파일은 사본이 3벌인 데다 `run_seed.py`가 만들지 않는다** — 시연 지역을 늘리면 손으로 다시 잘라야 하고, 안 하면 지도만 조용히 빈다(`pipeline/README.md` § 산출·적재).
 - **격자 구역 번호 발번 규칙 미정** — 화면은 1km 격자 코드(`다사4941`)를 그대로 식별자로 쓴다. 규칙이 서면 표시명을 붙인다.
