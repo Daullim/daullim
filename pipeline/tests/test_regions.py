@@ -44,8 +44,21 @@ def test_미등록_지역은_죽는다():
         region("jongno")
 
 
-def test_시연지역은_ADR_010의_둘이다():
-    assert set(REGIONS) == {"gwanak", "imsil"}
+def test_시연지역은_ADR_010_개정1의_넷이다():
+    assert set(REGIONS) == {"gwanak", "imsil", "gijang", "busanjin"}
+
+
+def test_기장군_부산진구_코드():
+    assert sigungu_code("gijang", "kostat") == "21510"
+    assert sigungu_code("gijang", "mois") == "26710"
+    assert sigungu_code("busanjin", "kostat") == "21050"
+    assert sigungu_code("busanjin", "mois") == "26230"
+
+
+def test_기장군은_존이_둘이다():
+    """100km 존 경계(마라/마마)에 걸치는 유일한 시연 지역 — zone[0] 고정 금지."""
+    assert region("gijang").zone == ("마라", "마마")
+    assert region("busanjin").zone == ("마라",)
 
 
 # ── 현행 코드 검증 ──────────────────────────────────────────────────────
@@ -53,6 +66,8 @@ def test_시연지역은_ADR_010의_둘이다():
 def test_현행_코드는_통과한다():
     assert assert_current_mois("11620") == "11620"  # 관악구
     assert assert_current_mois("52750") == "52750"  # 임실군
+    assert assert_current_mois("26710") == "26710"  # 기장군
+    assert assert_current_mois("26230") == "26230"  # 부산진구
 
 
 @needs_codes
@@ -113,3 +128,18 @@ def test_임실군은_리_단위까지_내려간다():
 def test_bjdongCd는_5자리다():
     for code, _ in bjdong_codes("gwanak"):
         assert len(code) == 5 and code.isdigit()
+
+
+@needs_codes
+def test_부산진구는_11개_동():
+    codes = bjdong_codes("busanjin")
+    assert len(codes) == 11
+    assert "초읍동" in {n.split()[-1] for _, n in codes}
+
+
+@needs_codes
+def test_기장군도_임실군처럼_읍면과_리가_둘다_존재한다():
+    leaf = bjdong_codes("gijang")
+    both = bjdong_codes("gijang", include_upper=True)
+    assert len(leaf) < len(both)
+    assert all(not c.endswith("00") for c, _ in leaf)

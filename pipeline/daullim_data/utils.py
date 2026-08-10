@@ -249,6 +249,23 @@ def coord_to_grid500(lat: float, lng: float, zone: str) -> str:
     return f"{nfc(zone)}{int(dx // 1000):02d}{half(dx)}{int(dy // 1000):02d}{half(dy)}"
 
 
+def resolve_grid500(lat: float, lng: float, zones: tuple[str, ...]) -> str:
+    """좌표가 실제로 속한 존을 후보 중에서 골라 500m 격자 ID를 만든다.
+
+    시군구가 100km 존 경계에 걸치면(예: 기장군=마라+마마) `zones[0]` 고정은 틀린다 —
+    다른 존 영역의 좌표를 넣으면 dx/dy가 100,000을 넘어서 `{:02d}` 자리수가 깨지고
+    `grid500_to_1km`이 그 시점에야 형식 오류로 죽는다. 여기서 미리 존을 확정한다.
+    """
+    x, y = to_5179(lat, lng)
+    for zone in zones:
+        ox, oy = zone_origin(zone)
+        if 0 <= x - ox < 100_000 and 0 <= y - oy < 100_000:
+            return coord_to_grid500(lat, lng, zone)
+    raise DataTrapError(
+        f"좌표 ({lat}, {lng})가 후보 존 {zones}의 100km 셀 어디에도 속하지 않음"
+    )
+
+
 # ── 7. 좌표계 ───────────────────────────────────────────────────────────
 # 저장·교환 EPSG:4326 / 계산 EPSG:5179(UTM-K). 변수 접미사 _4326 / _5179 강제.
 CRS_STORAGE = "EPSG:4326"

@@ -13,6 +13,7 @@ from daullim_data.utils import (
     ZONE_PREFIX,
     cell_key,
     clip_to_sido,
+    coord_to_grid500,
     fill_report,
     glob_kr,
     grid500_to_1km,
@@ -20,6 +21,7 @@ from daullim_data.utils import (
     normalize_month,
     normalize_year_counts,
     read_csv_kr,
+    resolve_grid500,
     round_coords,
     to_4326,
     to_5179,
@@ -27,6 +29,7 @@ from daullim_data.utils import (
     write_csv_kr,
     write_outputs_atomic,
     year_weight,
+    zone_origin,
 )
 
 
@@ -158,6 +161,30 @@ def test_NFD로_들어온_격자ID도_유도된다():
 def test_형식이_다르면_조용히_넘기지_않는다(bad):
     with pytest.raises(DataTrapError, match="형식 아님"):
         grid500_to_1km(bad)
+
+
+# ── 6-1. 존 경계에 걸치는 시군구(기장군=마라+마마) ──────────────────────
+def test_존_경계에_걸치면_zone0_고정이_깨진다():
+    """기장군 같은 지역에서 첫 번째 존만 쓰면 다른 존 좌표가 3자리로 넘쳐 형식이 깨진다."""
+    ox, oy = zone_origin("마마")
+    lat, lng = to_4326(ox + 50_000, oy + 50_000)  # 마마 영역 한복판
+    with pytest.raises(DataTrapError, match="형식 아님"):
+        grid500_to_1km(coord_to_grid500(lat, lng, "마라"))  # 마라 원점으로 잘못 계산
+
+
+def test_resolve_grid500는_후보_중_맞는_존을_고른다():
+    ox, oy = zone_origin("마마")
+    lat, lng = to_4326(ox + 50_000, oy + 50_000)
+    grid = resolve_grid500(lat, lng, ("마라", "마마"))
+    assert grid.startswith("마마")
+    assert grid500_to_1km(grid)  # 형식도 정상
+
+
+def test_resolve_grid500는_후보에_없으면_죽는다():
+    ox, oy = zone_origin("마마")
+    lat, lng = to_4326(ox + 50_000, oy + 50_000)
+    with pytest.raises(DataTrapError, match="어디에도 속하지 않음"):
+        resolve_grid500(lat, lng, ("다사",))
 
 
 # ── 7. 좌표계 ───────────────────────────────────────────────────────────

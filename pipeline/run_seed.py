@@ -35,9 +35,9 @@ from daullim_data.utils import (
     SEED_ROOT,
     CRS_STORAGE,
     DataTrapError,
-    coord_to_grid500,
     glob_kr,
     grid500_to_1km,
+    resolve_grid500,
 )
 from run_scoring import SCORE_VERSION, build_scored
 
@@ -115,7 +115,7 @@ def main() -> int:
     # region_type_cd는 **저장값 4분류**다(BUFFER 보존) — algo_class(2분류)와 다른 축이다.
     ordered["region_type_cd"] = ordered["region_type_cd"].fillna("URBAN")
     ordered["grid_id"] = [
-        coord_to_grid500(la, ln, region(k).zone[0])
+        resolve_grid500(la, ln, region(k).zone)
         for la, ln, k in zip(ordered["lat"], ordered["lng"], ordered["region_key"])
     ]
 
