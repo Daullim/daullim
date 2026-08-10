@@ -21,7 +21,7 @@ from daullim_data.apiclient import (
 )
 from daullim_data.buildings import build_master, fetch_expos, fetch_titles, geocode
 from daullim_data.regions import REGIONS, region
-from daullim_data.scoring import assign_order, basis_text, rx_code
+from daullim_data.scoring import assign_order, basis_text, risk_level, rx_code
 from daullim_data.seed_out import (
     build_buildings_csv,
     build_grid_geojson,
@@ -128,10 +128,14 @@ def main() -> int:
     per_grid = (
         ordered.groupby("grid1k")
         .agg(buildings=("bld_key", "size"), avg_score=("score", "mean"),
-             region_type_cd=("region_type_cd", "first"), households=("exposure", "max"),
-             risk_level_cd=("risk_level_cd", lambda s: s.mode().iat[0]))
+             region_type_cd=("region_type_cd", "first"), households=("exposure", "max"))
         .reset_index()
     )
+    # 등급은 **화면에 함께 뜨는 avg_score에서** 낸다 — 건물 한 채의 '점수→등급'과 같은 규칙(절대 임계값).
+    # 예전엔 건물 등급의 최빈값을 썼는데, 평균과 최빈값은 서로 다른 통계라 어긋났다:
+    # 마마4907은 평균 36.5(=warn 구간)인데 56채 중 38채가 ok라 배지가 'ok'로 떴고,
+    # 평균이 더 낮은 마마5203(35.6)은 다수가 warn이라 '경고'로 떠서 화면상 역전으로 보였다.
+    per_grid["risk_level_cd"] = risk_level(per_grid["avg_score"]).values
     bounds = load_boundaries(set(per_grid["grid1k"]))
     geojson = build_grid_geojson(per_grid, boundaries=bounds)
     print(f"  격자 {len(per_grid):,}개 중 경계 확보 {len(geojson['features']):,}개")
