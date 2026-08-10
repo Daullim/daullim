@@ -12,6 +12,9 @@ data/*
 __pycache__/
 .pytest_cache/
 
+# run_all.py 통합 실행 로그 — 실행마다 쌓이는 산출물이라 커밋하지 않는다
+pipeline/logs/
+
 # IDE
 .idea/
 

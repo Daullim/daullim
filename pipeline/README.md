@@ -40,6 +40,28 @@ Python 3.13 고정(3.14는 geopandas 휠 미비). 근거는 [ADR-014](../docs/ad
 도농 판별이 틀린 것이므로 뒤로 진행하지 않는다. `-u`(언버퍼드)를 붙여야 장시간 실행에서
 진행 상황이 로그에 실시간으로 남는다.
 
+### 한 번에 — `run_all.py`
+
+손으로 8줄을 순서대로 치면 단계를 빠뜨리기 쉽다. 오케스트레이터가 1~8을 순차 실행하고
+**첫 실패에서 멈춘다.**
+
+```bash
+./.venv/bin/python -u run_all.py                     # 전 구간
+./.venv/bin/python -u run_all.py --skip-diagnostics  # 3·5 생략
+./.venv/bin/python -u run_all.py --from 6            # 6단계부터 (앞 산출물 재사용)
+```
+
+각 `run_*.py`의 `main()`을 **그대로 호출**하는 얇은 래퍼다 — 단계 하나만 다시 돌리고 싶으면
+예전처럼 그 스크립트를 직접 실행해도 결과가 같다. 9단계(`run_ltr`)는 미채택이라 넣지 않았다.
+
+통합 로그는 `pipeline/logs/run-all-{타임스탬프}.log`에 콘솔과 **동시에** 남는다(gitignore 대상).
+
+| 종료코드 | 뜻 |
+|---|---|
+| `0` | 전 단계 통과 |
+| `1` | 어느 단계가 미달 — 게이트(2 성적표 · 4 DDL 검증 · 7 seed 검증)가 여기로 온다 |
+| `2` | 함정 감지(`DataTrapError`)나 예상 못 한 예외 |
+
 ## 구조
 
 | 모듈 | 역할 |
@@ -64,6 +86,7 @@ Python 3.13 고정(3.14는 geopandas 휠 미비). 근거는 [ADR-014](../docs/ad
 | `run_seed.py` | seed 3종 동시 산출 + 검증 |
 | `load_seed.py` | DB 적재 — buildings UPSERT / units DO NOTHING |
 | `run_ltr.py` | β 재학습 시도 + 채택 판정 (라벨 감사·교란 검사) |
+| `run_all.py` | 1~8단계 오케스트레이터 — 순차 실행·첫 실패에서 중단·통합 로그 |
 
 ## 규칙 셋 (어기면 조용히 틀린 답이 나온다)
 
