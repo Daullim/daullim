@@ -26,15 +26,19 @@ def _fake_result(marker: str = "a") -> tuple[pd.DataFrame, ScoreParams]:
 
 @pytest.fixture
 def counting_compute(monkeypatch):
-    """`_compute_scored`를 호출 횟수 세는 가짜로 바꾸고, 캐시를 비운 채 시작한다."""
-    calls = {"n": 0}
+    """`_compute_scored`를 호출 횟수 세는 가짜로 바꾸고, 캐시를 비운 채 시작한다.
 
-    def fake():
+    `fit_sidos`도 받아 두어 어떤 학습 범위로 불렸는지 기록한다 — LORO 폴드 분리 검증용.
+    """
+    calls = {"n": 0, "keys": []}
+
+    def fake(fit_sidos=None):
         calls["n"] += 1
-        return _fake_result()
+        calls["keys"].append(fit_sidos)
+        return _fake_result("+".join(fit_sidos) if fit_sidos else "all")
 
     monkeypatch.setattr(run_scoring, "_compute_scored", fake)
-    monkeypatch.setattr(run_scoring, "_SCORED", None)
+    monkeypatch.setattr(run_scoring, "_SCORED", {})
     return calls
 
 
@@ -76,12 +80,52 @@ def test_rebuild는_강제로_다시_계산한다(counting_compute):
 
 def test_rebuild_후에는_새_결과가_캐시된다(monkeypatch):
     """`rebuild=True`가 캐시를 **갱신**하는지 — 계산만 다시 하고 옛 값을 남기면 최악이다."""
-    monkeypatch.setattr(run_scoring, "_SCORED", None)
+    monkeypatch.setattr(run_scoring, "_SCORED", {})
 
-    monkeypatch.setattr(run_scoring, "_compute_scored", lambda: _fake_result("old"))
+    monkeypatch.setattr(run_scoring, "_compute_scored", lambda fit_sidos=None: _fake_result("old"))
     assert run_scoring.build_scored()[0]["marker"].iat[0] == "old"
 
-    monkeypatch.setattr(run_scoring, "_compute_scored", lambda: _fake_result("new"))
+    monkeypatch.setattr(run_scoring, "_compute_scored", lambda fit_sidos=None: _fake_result("new"))
     assert run_scoring.build_scored(rebuild=True)[0]["marker"].iat[0] == "new"
     # rebuild 없이 다시 불러도 갱신된 값이 나와야 한다
     assert run_scoring.build_scored()[0]["marker"].iat[0] == "new"
+
+
+# ── LORO 폴드 분리 ──────────────────────────────────────────────────────
+# 캐시 키에 fit_sidos가 없으면 첫 폴드 결과가 세 폴드에 재사용돼 **조용히 같은 숫자 3개**가
+# 나온다. 결과가 그럴듯해서 눈으로는 안 잡히므로 여기서 잠근다.
+def test_학습범위가_다르면_따로_계산한다(counting_compute):
+    run_scoring.build_scored(fit_sidos=("서울", "부산"))
+    run_scoring.build_scored(fit_sidos=("서울", "전북"))
+    run_scoring.build_scored(fit_sidos=("부산", "전북"))
+    assert counting_compute["n"] == 3
+    assert counting_compute["keys"] == [("서울", "부산"), ("서울", "전북"), ("부산", "전북")]
+
+
+def test_같은_학습범위를_다시_부르면_캐시를_쓴다(counting_compute):
+    run_scoring.build_scored(fit_sidos=("서울", "부산"))
+    run_scoring.build_scored(fit_sidos=("서울", "부산"))
+    assert counting_compute["n"] == 1
+
+
+def test_폴드마다_다른_결과를_돌려준다(counting_compute):
+    """캐시가 섞이면 세 폴드가 같은 프레임을 받는다 — marker로 구분되는지 본다."""
+    a, _ = run_scoring.build_scored(fit_sidos=("서울", "부산"))
+    b, _ = run_scoring.build_scored(fit_sidos=("부산", "전북"))
+    assert a["marker"].iat[0] == "서울+부산"
+    assert b["marker"].iat[0] == "부산+전북"
+
+
+def test_전체적합과_폴드적합은_다른_캐시다(counting_compute):
+    """`None`(기존 경로)과 LORO 폴드가 같은 칸을 쓰면 run_seed 산출이 오염된다."""
+    run_scoring.build_scored()
+    run_scoring.build_scored(fit_sidos=("서울", "부산"))
+    assert counting_compute["n"] == 2
+    assert counting_compute["keys"] == [None, ("서울", "부산")]
+
+
+def test_리스트로_줘도_같은_캐시를_탄다(counting_compute):
+    """호출부가 list를 넘겨도 키가 갈리면 안 된다 — tuple로 정규화한다."""
+    run_scoring.build_scored(fit_sidos=("서울", "부산"))
+    run_scoring.build_scored(fit_sidos=["서울", "부산"])
+    assert counting_compute["n"] == 1

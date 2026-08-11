@@ -135,3 +135,47 @@ def capture_rate(df: pd.DataFrame, score_col: str, label_col: str, *, frac: floa
     if total == 0:
         return float("nan")
     return 100.0 * df.nlargest(n, score_col)[label_col].sum() / total
+
+
+@dataclass
+class CaptureResult:
+    """포집률 + 신뢰구간. `n_positive`를 항상 함께 낸다 — 구간 폭을 읽으려면 표본을 알아야 한다."""
+
+    rate: float
+    ci_lo: float
+    ci_hi: float
+    n_positive: int
+
+    def render(self) -> str:
+        if self.n_positive == 0:
+            return "     —  (양성 0건)"
+        return f"{self.rate:>5.1f}%  [{self.ci_lo:>5.1f}, {self.ci_hi:>5.1f}]  n={self.n_positive}"
+
+
+def capture_rate_ci(
+    df: pd.DataFrame, score_col: str, label_col: str, *,
+    frac: float = 0.10, n_boot: int = 1000, seed: int = 20260811,
+) -> CaptureResult:
+    """포집률 + **양성 단위 부트스트랩** 신뢰구간.
+
+    재표집 단위가 건물 전체가 아니라 **양성**인 것이 핵심이다. 포집률의 분모가 양성 수이므로
+    불확실성도 거기서 온다 — 음성까지 섞어 재표집하면 상위 10% 경계가 흔들려 다른 것을 재게 된다.
+
+    ⚠️ 양성이 적으면 구간이 넓다. 눈금 자체가 1/n_positive라 전북(13건)은 7.7%p 단위로 뛴다 —
+    구간이 넓은 것은 계산이 틀린 게 아니라 **표본이 그만큼**이라는 뜻이다.
+    """
+    n = max(1, int(len(df) * frac))
+    top = set(df.nlargest(n, score_col).index)
+    positives = df.index[df[label_col].astype(bool)]
+    if len(positives) == 0:
+        return CaptureResult(float("nan"), float("nan"), float("nan"), 0)
+
+    hit = np.fromiter((i in top for i in positives), dtype=float, count=len(positives))
+    rng = np.random.default_rng(seed)
+    boots = [rng.choice(hit, size=hit.size, replace=True).mean() for _ in range(n_boot)]
+    return CaptureResult(
+        rate=100.0 * hit.mean(),
+        ci_lo=100.0 * float(np.percentile(boots, 2.5)),
+        ci_hi=100.0 * float(np.percentile(boots, 97.5)),
+        n_positive=int(hit.size),
+    )
