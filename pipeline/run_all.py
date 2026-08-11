@@ -5,8 +5,7 @@
     ./.venv/bin/python -u run_all.py --skip-diagnostics  # 진단 3·5 생략
     ./.venv/bin/python -u run_all.py --from 6            # 6단계부터 (앞 산출물 재사용)
 
-각 단계는 해당 `run_*.py`의 `main()`을 **그대로 호출**한다 — 로직을 옮겨 적지 않는다.
-따라서 단계 하나만 다시 돌리고 싶으면 예전처럼 그 스크립트를 직접 실행해도 결과가 같다.
+각 단계는 `run_*.py`의 `main()`을 **그대로 호출**한다(로직 이관 없음) — 단계 단독 재실행도 동일 결과.
 
 종료코드는 단계의 것을 그대로 물려받는다:
 
@@ -14,9 +13,8 @@
 * ``1`` 어느 단계가 미달 — 게이트(2 성적표 · 4 DDL 검증 · 7 seed 검증)가 여기로 온다
 * ``2`` 함정 감지(:class:`DataTrapError`)나 예상 못 한 예외
 
-`run_ltr.py`(β 재학습)와 `run_loro.py`(LORO 교차검증)는 넣지 않았다. 둘 다 **진단**이라
-산출물을 바꾸지 않고, LORO는 폴드마다 학습 범위를 달리해 `build_scored()`를 3회 더 돌리므로
-전 구간 실행 시간만 늘린다. 필요할 때 따로 실행한다.
+`run_ltr.py`(β 재학습)·`run_loro.py`(LORO 교차검증) 제외 — 둘 다 진단이라 산출물 불변,
+LORO는 폴드당 `build_scored()` 3회 추가 실행으로 전 구간 시간만 늘어남. 필요 시 개별 실행.
 """
 
 from __future__ import annotations
@@ -88,10 +86,10 @@ def select(
 
 @contextmanager
 def _own_argv(module: str) -> Iterator[None]:
-    """단계가 보는 `sys.argv`를 그 스크립트 단독 실행처럼 만든다.
+    """`sys.argv`를 단계 단독 실행처럼 격리.
 
-    여러 `run_*.py`가 `main()` 안에서 argparse를 돌린다. 그대로 두면 `run_all.py`에 준
-    `--skip-diagnostics`를 그쪽이 자기 인자로 읽고 SystemExit(2)로 죽는다.
+    여러 `run_*.py`가 `main()` 안에서 argparse를 쓴다 — 격리 없으면 `run_all.py`의
+    `--skip-diagnostics`를 하위 스크립트가 자기 인자로 오인해 SystemExit(2).
     """
     saved = sys.argv
     sys.argv = [f"{module}.py"]
@@ -102,10 +100,8 @@ def _own_argv(module: str) -> Iterator[None]:
 
 
 def call_main(stage: Stage) -> int:
-    """단계의 `main()`을 호출한다.
-
-    import를 여기서 하는 이유는 두 가지다 — 8개 모듈의 무거운 의존(geopandas 등)을 실행하는
-    단계에서만 지불하고, `--from`으로 건너뛴 단계는 import조차 하지 않는다.
+    """단계 `main()` 호출 — 지연 import로 무거운 의존성(geopandas 등) 비용을 실행 단계에만 지불,
+    `--from`으로 건너뛴 단계는 import조차 하지 않음.
     """
     module = import_module(stage.module)
     with _own_argv(stage.module):
@@ -168,10 +164,9 @@ def _summary(done: Sequence[tuple[Stage, float]], *, failed: Stage | None, elaps
 
 
 class _Tee(io.TextIOBase):
-    """콘솔과 로그 파일에 동시에 쓴다.
+    """콘솔·로그 파일 동시 출력.
 
-    매 write마다 flush한다 — README가 `-u`를 요구하는 이유와 같다. 장시간 실행에서
-    진행이 실시간으로 보여야 어디서 멈췄는지 알 수 있다.
+    매 write마다 flush — 장시간 실행 중 진행을 실시간으로 보기 위함(README `-u` 요구와 동일 이유).
     """
 
     def __init__(self, *streams: io.TextIOBase) -> None:

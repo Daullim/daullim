@@ -83,8 +83,7 @@ def main() -> int:
         sources = prepare_fires(fires, reference_day=REFERENCE_DAY)
 
         # ── m 모멘트 추정: 도농 클래스별, w_sev 없는 순수 사건 수로 ──
-        # 분자와 **같은 사건 집합**(주거 화재)을 써야 한다. 분자는 주거만 보는데
-        # m을 전체 화재로 추정하면 두 항의 기준이 어긋난다.
+        # 분자(주거 화재)와 같은 사건 집합 사용 — 전체 화재로 추정 시 두 항 기준 불일치
         cells = grids.loc[grids["households"].fillna(0) > 0].copy()
         cells["raw_fires"] = cells["residential_fires"].fillna(0)
         estimates = {}

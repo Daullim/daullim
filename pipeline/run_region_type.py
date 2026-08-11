@@ -67,8 +67,7 @@ def main() -> int:
               f"NO_POP 승격(주거화재>0) {int(g['no_pop_promoted'].sum()):,}")
     pooled = pd.concat(frames, ignore_index=True)
 
-    # 성적표는 **3개 시도 합산**으로 낸다 — 정의서의 대조 규약이 그렇고,
-    # 서울은 읍·면이 없어 시도별로는 RURAL 표본 자체가 성립하지 않는다.
+    # 성적표는 3개 시도 합산 — 대조 규약이 그렇고, 서울은 읍·면 없어 시도별 RURAL 표본 불성립
     print()
     print("=" * 72)
     print("v0 성적표 (§7) — 3개 시도 합산")

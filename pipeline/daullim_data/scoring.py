@@ -2,10 +2,9 @@
 
     Score_raw = λ̂ × (1 + αV⊥) × exp(Σβx)
 
-세 항은 관측 해상도가 다르고(점·격자·건물), 각각 독립적인 배수라 곱으로 묶인다.
-λ̂가 기대 발생 강도, ②③이 무차원 상대위험 배수이므로 곱은 **'이 건물의 기대 위험'**이라는
-해석 가능한 단위가 된다 — 서로 다른 동네의 두 건물을 직접 비교할 수 있는 근거이자
-전국 단일 큐가 성립하는 이유다.
+세 항은 관측 해상도가 다름(점·격자·건물) — 각각 독립적 배수라 곱으로 결합.
+λ̂=기대 발생 강도, ②③=무차원 상대위험 배수이므로 곱은 '건물의 기대 위험'이라는 해석 가능한 단위가 됨
+— 서로 다른 동네 두 건물의 직접 비교, 전국 단일 큐 성립의 근거.
 """
 
 from __future__ import annotations
@@ -19,21 +18,19 @@ from .region_type import RURAL, URBAN
 from .regions import REGIONS
 
 # ── score 정규화 (§2-5 확정) ────────────────────────────────────────────
-# 곱 구조 + 화재 강도의 두꺼운 꼬리 때문에 Score_raw는 로그정규에 가깝다.
-# 단순 min-max면 상위 1~2개가 100을 먹고 나머지가 0~5에 몰려 화면에서 변별이 안 되고,
-# 백분위 랭크면 분포는 예쁘지만 '기대 위험의 근사'라는 단위 해석을 버리게 된다
-# (관악구 1등과 임실군 1등이 둘 다 100이 되어 도농 비교가 깨진다).
-# 로그가 분포를 펴고 q01/q99 클리핑이 극단값의 스케일 지배를 막는다 — 순서와 비율을 모두 보존.
+# 곱 구조 + 화재 강도 두꺼운 꼬리 → Score_raw 로그정규에 가까움.
+# min-max는 상위 1~2개가 100 독식·나머지 0~5 밀집(변별 불가). 백분위 랭크는 단위 해석 상실
+# (관악 1등·임실 1등 둘 다 100 → 도농 비교 붕괴).
+# 로그 변환 + q01/q99 클리핑 = 분포 펴기 + 극단값 스케일 지배 방지, 순서·비율 보존.
 Q_LO, Q_HI = 0.01, 0.99
 SCORE_MIN, SCORE_MAX = 0.0, 100.0
 
-# risk_level은 **절대 임계값**이다. 분위수(상위 10%=danger)로 하면 화면에 항상 일정 비율이
-# 빨간색으로 남아 '위험 가구가 줄었는가'를 볼 수 없다 — 기획서 §5-1의 '성과지표를 투입에서
-# 결과로'와 정면으로 어긋난다. 절대 임계값이어야 개선이 측정된다.
+# risk_level은 절대 임계값 — 분위수(상위 10%=danger)면 화면에 항상 일정 비율이 danger로
+# 남아 '위험 가구 감소'를 못 봄(기획서 §5-1 '성과지표를 투입에서 결과로'와 상충).
 # 값은 FE 목데이터 전수 역산(ok 최대 31.0 · warn 38.4~66.3 · danger 최소 71.8).
 DANGER_MIN, WARN_MIN = 70.0, 35.0
 
-# 농촌 절대 필터 (§3-2). 랭킹이 아니라 **대상 지역 확정**이 역할이다.
+# 농촌 절대 필터(§3-2) — 랭킹이 아닌 대상 지역 확정 역할.
 RURAL_NONAPT_MIN, RURAL_ELDERLY_MIN = 0.8, 0.4
 
 EXPLORE_FRACTION = 0.07  # G2 탐사 쿼터 5~10%의 중앙
@@ -44,10 +41,8 @@ RX_UNSUPPLIED = "RX-IOT"  # 보급이력 전량 NULL = 미보급 → 기기 설�
 class ScoreParams:
     """`score_version`이 가리키는 변환 파라미터.
 
-    ⚠️ **DDL의 `score_version`은 varchar(20)이라 파라미터를 못 담는다.**
-    §2-5는 "변환 파라미터를 score_version에 함께 박아" 재현성을 확보하라고 하지만
-    20자에는 들어가지 않는다. 그래서 버전은 **키**로만 쓰고 값은 사이드카
-    (`seed/score_params.json`)에 남긴다 — 재현 가능성이라는 목적은 그대로 달성된다.
+    ⚠️ DDL `score_version`은 varchar(20)이라 파라미터 직접 저장 불가(§2-5 요구와 상충) —
+    버전은 키로만 쓰고 값은 사이드카(`seed/score_params.json`)에 저장, 재현성 목적은 그대로 달성.
     """
 
     version: str
@@ -99,11 +94,10 @@ def risk_level(score: pd.Series) -> pd.Series:
 
 # ── 동선 효율 (타이브레이커 3단) ────────────────────────────────────────
 def morton_key(x_5179, y_5179, *, cell_m: int = 100) -> pd.Series:
-    """Z-order(Morton) 곡선 — 공간적으로 가까운 건물이 순번에서도 붙는다.
+    """Z-order(Morton) 곡선 — 공간적으로 가까운 건물이 순번에서도 인접.
 
-    §2-3의 '동선 효율 ASC'는 잔차 동점에서 **처리량을 최대화**하라는 뜻이다.
-    좌표를 그냥 x·y로 정렬하면 한 축을 훑고 되돌아오는 지그재그가 생기는데,
-    Z-order는 2차원 근접성을 1차원 순서에 보존해 되돌아오는 이동을 줄인다.
+    §2-3 '동선 효율 ASC' = 잔차 동점에서 처리량 최대화. x·y 단순 정렬은 지그재그 이동 발생 —
+    Z-order는 2차원 근접성을 1차원 순서에 보존해 이동 거리 절감.
     """
     xi = (np.asarray(x_5179, float) // cell_m).astype(np.int64)
     yi = (np.asarray(y_5179, float) // cell_m).astype(np.int64)
@@ -120,9 +114,8 @@ def morton_key(x_5179, y_5179, *, cell_m: int = 100) -> pd.Series:
 def rural_target(nonapt_ratio, elderly_ratio) -> pd.Series:
     """Target_rural = { g ∈ RURAL | NonApt ≥ 0.8 ∧ Elderly ≥ 0.4 }.
 
-    농촌은 랭킹을 포기한다 — 사건이 균등 희소해 '어느 셀을 맞히나'라는 문제 설정이
-    성립하지 않고, 사망 셀의 이력 순위가 72~3,273위로 흩어져 랭킹이 정보를 못 담는다.
-    필터로 대상을 확정하고 순서는 가구 속성으로 정한다.
+    농촌은 랭킹 포기 — 사건 균등 희소해 '어느 셀 맞히나' 문제 설정이 성립 안 함,
+    사망 셀 이력 순위가 72~3,273위로 산개해 랭킹이 무정보. 필터로 대상 확정, 순서는 가구 속성.
     """
     n = pd.Series(np.asarray(nonapt_ratio, float))
     e = pd.Series(np.asarray(elderly_ratio, float))
@@ -151,35 +144,33 @@ class OrderReport:
         return "\n".join(lines + [f"    · {n}" for n in self.notes])
 
 
-# 큐 블록 — 정렬 논리가 다른 집단을 섞지 않고 계층으로 쌓는다(§2-2).
-# 화면은 항상 시군구로 필터되므로, 전역 계층 정렬이 곧 시군구 내부 블록 순서가 된다.
+# 큐 블록 — 정렬 논리가 다른 집단을 계층으로 분리(§2-2). 화면은 시군구 필터라 전역 계층 순서 = 시군구 내부 블록 순서.
 TIER_RURAL_TARGET = 0  # 농촌 절대필터 통과 — 가구 속성 정렬
 TIER_URBAN = 1  # 도시 — score 캐스케이드
 TIER_RURAL_REST = 2  # 농촌 필터 미통과 — score 캐스케이드
 
 
 def assign_order(buildings: pd.DataFrame, *, rng_seed: int = 20260805) -> tuple[pd.DataFrame, OrderReport]:
-    """블록 배치 + 타이브레이커 캐스케이드로 `order_key`를 확정하고 G2 쿼터를 표기한다.
+    """블록 배치 + 타이브레이커 캐스케이드로 `order_key` 확정, G2 쿼터 표기.
 
-    **블록이 먼저다.** 농촌은 랭킹을 포기하고 필터로 대상을 확정한 뒤 가구 속성으로
-    정렬한다(§2-2) — 도시의 score 정렬과 논리가 다르므로 한 목록에 섞지 않고 계층으로 쌓는다.
+    블록이 먼저 — 농촌은 랭킹 포기, 필터로 대상 확정 후 가구 속성 정렬(§2-2). 도시 score
+    정렬과 논리가 달라 한 목록에 섞지 않고 계층으로 분리.
 
         블록 0  농촌 절대필터 통과 : 사용승인일 ASC → 1인가구율 DESC → 소방서거리 DESC
         블록 1  도시              : score DESC → 연차 DESC → 동선(Z-order) ASC
         블록 2  농촌 필터 미통과    : 블록 1과 같은 캐스케이드
 
-    도시 캐스케이드의 원칙: **위험으로 가르고, 위험이 침묵하면 처리량으로 가르고,
-    그마저 침묵하면 무정보 키임을 선언하고 닫는다.** 무작위 셔플은 쓰지 않는다.
+    도시 캐스케이드 원칙: 위험으로 가르고, 위험 침묵 시 처리량으로 가르고, 그마저 침묵하면
+    무정보 키 선언 후 종료. 무작위 셔플 미사용.
 
-    ⚠️ 두 자리에서 원래 축이 무력화돼 대리를 쓴다(보급이력 전량 NULL — 확정 결정 1).
-      · 도시 2단 '만료확률 DESC' → **연차 DESC** (만료확률의 대리, x₁과 같은 방향)
-      · 농촌 1순위 '보급연차 DESC' → **사용승인일 ASC** (오래된 건물 먼저 — 확정 결정 2)
-    보급이력이 들어오면 둘 다 원래 축으로 복귀한다.
+    ⚠️ 보급이력 전량 NULL(확정 결정 1)로 두 축 대리 사용:
+      · 도시 2단 '만료확률 DESC' → 연차 DESC (대리, x₁과 같은 방향)
+      · 농촌 1순위 '보급연차 DESC' → 사용승인일 ASC (오래된 건물 먼저, 확정 결정 2)
+    보급이력 확보 시 원래 축으로 복귀.
     """
     out = buildings.copy()
-    # 오래될수록 큰 값 = DESC 정렬에서 앞. **결측은 -inf로 맨 뒤로 보낸다** —
-    # 0으로 두면 실제 날짜(-738,000 근처)보다 커서 '모름'이 '가장 오래됨'으로 둔갑해
-    # 큐 1등을 차지한다(실측: 임실군 상위 5건이 전부 사용승인일 결측이었다).
+    # 오래될수록 큰 값=DESC 정렬 앞순위, 결측은 -inf로 맨 뒤 — 0이면 실제 날짜(-738,000대)보다 커서
+    # '모름'이 '가장 오래됨'으로 둔갑해 큐 1등 차지(실측: 임실군 상위 5건 전부 사용승인일 결측).
     out["_age_days"] = (
         pd.to_datetime(out["use_apr_day"].astype("string"), format="%Y%m%d", errors="coerce")
         .map(lambda d: -d.toordinal() if pd.notna(d) else float("-inf"))
@@ -212,8 +203,8 @@ def assign_order(buildings: pd.DataFrame, *, rng_seed: int = 20260805) -> tuple[
     ordered = pd.concat(blocks, ignore_index=True)
     ordered["order_key"] = np.arange(1, len(ordered) + 1)
 
-    # G2 — 큐로 뽑힌 가구에서만 회신이 쌓이면 재학습이 자기 선택 편향에 갇힌다.
-    # 선정 지역 내 무작위 배정으로 "우리 모델이 무작위보다 몇 배 나은가"를 실측하게 한다.
+    # G2 — 큐 선정 가구에서만 회신 쌓이면 재학습이 자기선택 편향에 갇힘. 선정 지역 내 무작위
+    # 배정으로 모델 대 무작위 성능 실측 대조 확보.
     rng = np.random.default_rng(rng_seed)
     n_explore = int(round(len(ordered) * EXPLORE_FRACTION))
     picks = rng.choice(len(ordered), size=n_explore, replace=False)
@@ -244,8 +235,5 @@ def basis_text(order_key: pd.Series) -> pd.Series:
 
 
 def rx_code(n: int) -> pd.Series:
-    """미보급이면 전지 교체가 무의미하다 — 기기 설치로 간다(확정 결정 2).
-
-    방문 전이라 실측이 없고, 현장 회신이 오면 덮인다.
-    """
+    """미보급이면 전지 교체 무의미 — 기기 설치로 처리(확정 결정 2). 방문 전 잠정값, 현장 회신 시 덮어씀."""
     return pd.Series([RX_UNSUPPLIED] * n)

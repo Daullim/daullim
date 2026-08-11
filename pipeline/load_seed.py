@@ -10,8 +10,7 @@
   · `units.status_cd`·`last_inspected_day`·`rx_baseline_day` — **절대 금지**(BE 전용 업무 상태)
   · `visits`·`replacement_items`·lookup 6종 — 금지
 
-파이썬 DB 드라이버를 쓰지 않는다. 컨테이너의 `psql`을 그대로 호출하므로 의존성이 늘지 않는다
-(ADR-014의 의존성 최소화 원칙).
+DB 드라이버 미사용 — 컨테이너 `psql` 직접 호출로 의존성 최소화(ADR-014).
 """
 
 from __future__ import annotations

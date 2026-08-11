@@ -1,7 +1,4 @@
-"""건물 마스터 — 유형 판정과 `units` 생성 규칙을 잠근다.
-
-외부 API는 호출하지 않는다. 응답 형태는 실측(2026-08-04)에서 확인한 것을 픽스처로 옮겼다.
-"""
+"""건물 마스터 — 유형 판정과 `units` 생성 규칙 잠금. 외부 API 미호출, 픽스처는 실측(2026-08-04) 이식."""
 
 from __future__ import annotations
 
@@ -63,11 +60,7 @@ def test_주택이_아니면_None():
 
 # ── 세대수 ──────────────────────────────────────────────────────────────
 def test_단독과_다중은_무조건_1세대다():
-    """ADR-015가 '1행, ho_nm=본가구'로 규정했으므로 unit_count도 1이어야 정합한다.
-
-    실측에 fmlyCnt=0인데 hoCnt=16인 단독주택이 있었다(다가구를 단독으로 등록한 것으로 보임).
-    보조 규칙을 그대로 두면 '행 1개인데 unit_count 16'이 되어 검증이 깨진다.
-    """
+    """ADR-015 '1행,ho_nm=본가구' 규정 — 실측 fmlyCnt=0·hoCnt=16 사례로 unit_count 불일치 방지."""
     assert unit_count_of(DETACHED, families=0, households=0, hos=16) == 1
     assert unit_count_of(MULTI_USER, families=9, households=0, hos=0) == 1
 
@@ -209,10 +202,7 @@ def test_units_행수가_unit_count_합과_같다():
 
 
 def test_전유부_호수가_중복이면_믿지_않는다():
-    """같은 지번에 여러 동이 있으면 '2층201호'가 동마다 반복돼 들어온다(실측 3.9%).
-
-    DDL의 ux_units_bld_ho(건물 내 호수 유일)에 걸리므로 field로 정직하게 떨어뜨린다.
-    """
+    """같은 지번 내 동마다 '2층201호' 반복 입력(실측 3.9%) — ux_units_bld_ho 유니크 제약 위반 방지로 field 처리."""
     t = _title(mainPurpsCdNm="공동주택", etcPurps="다세대주택", hhldCnt=4, fmlyCnt=0)
     expos = [{"hoNm": "201호", "flrNo": 2}, {"hoNm": "301호", "flrNo": 3},
              {"hoNm": "201호", "flrNo": 2}, {"hoNm": "301호", "flrNo": 3}]  # 2개 동

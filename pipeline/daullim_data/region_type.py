@@ -1,13 +1,12 @@
 """도농 판별 — `도농판별-공간분석-정의서` §2-2의 결정 트리.
 
-스코어링이 아니라 **결정 트리**인 이유는 감사 가능성이다. 왜 이 격자가 농촌인지
-한 줄로 설명되어야 한다. 임계값 1,500/300은 DEGURBA(EU Eurostat·OECD·UN 통계위) 준용.
+스코어링 아닌 결정 트리인 이유는 감사 가능성 — 왜 이 격자가 농촌인지 한 줄 설명 가능해야 함.
+임계값 1,500/300은 DEGURBA(EU Eurostat·OECD·UN 통계위) 준용.
 
-축이 둘이라는 점을 오해하지 마라(확정 결정 6):
-  · **저장값** `region_type_cd` = 밀도 기반 4분류. BUFFER를 보존한다 — 화면·감사용
-  · **알고리즘 클래스** = 타이브레이크 후 URBAN/RURAL 2분. λ̄·m·백분위가 타는 축
-BUFFER를 별도 클래스로 추정하지 않는 이유는 표본이 작아 모멘트 추정이 불안정하기 때문이다.
-어차피 한쪽으로 배정되므로 그 클래스 값을 쓴다.
+축이 둘(확정 결정 6):
+  · 저장값 `region_type_cd` = 밀도 기반 4분류, BUFFER 보존 — 화면·감사용
+  · 알고리즘 클래스 = 타이브레이크 후 URBAN/RURAL 2분 — λ̄·m·백분위가 타는 축
+BUFFER는 별도 클래스로 미추정 — 표본 작아 모멘트 추정 불안정, 어차피 한쪽 배정이라 그 클래스 값 사용.
 """
 
 from __future__ import annotations
@@ -30,11 +29,10 @@ PLATFORM_LABEL = {"도시": URBAN, "농촌": RURAL}
 
 
 def classify_row(pop: float, apt_ratio: float | None, dispatch_sec: float | None) -> tuple[str, str]:
-    """격자 하나를 판별한다 → (저장값 4분류, 알고리즘 클래스 2분류).
+    """격자 판별 → (저장값 4분류, 알고리즘 클래스 2분류).
 
-    1km 격자이므로 인구수가 곧 밀도(명/km²)다.
-    출동소요가 없으면(화재 이력이 없는 격자) 아파트율만으로 타이브레이크한다 —
-    없는 근거를 있는 것처럼 쓰지 않는다.
+    1km 격자라 인구수=밀도(명/km²). 출동소요 없으면(화재 이력 없는 격자) 아파트율만으로
+    타이브레이크 — 없는 근거를 있는 것처럼 쓰지 않음.
     """
     if pd.isna(pop) or pop <= 0:
         return NO_POP, NO_POP
@@ -51,7 +49,7 @@ def classify_row(pop: float, apt_ratio: float | None, dispatch_sec: float | None
 
 
 def classify(grids: pd.DataFrame) -> pd.DataFrame:
-    """격자 테이블에 `region_type_cd`·`algo_class`·`is_mixed`를 붙인다.
+    """격자 테이블에 `region_type_cd`·`algo_class`·`is_mixed` 부착.
 
     입력 필수 컬럼: `grid1k` · `pop` · `apt_ratio`(nullable) · `dispatch_sec`(nullable)
     """
@@ -64,7 +62,7 @@ def classify(grids: pd.DataFrame) -> pd.DataFrame:
     ]
     out["region_type_cd"] = [s for s, _ in pairs]
     out["algo_class"] = [a for _, a in pairs]
-    # 도농 복합(Rururban) — 자동 처방 대신 가구 확인을 우선하라는 표식이다.
+    # 도농 복합(Rururban) — 자동 처방 대신 가구 확인 우선 표식.
     out["is_mixed"] = (
         out["region_type_cd"].eq(BUFFER)
         & out["nonapt_ratio"].between(MIXED_NONAPT_LO, MIXED_NONAPT_HI)
@@ -75,8 +73,8 @@ def classify(grids: pd.DataFrame) -> pd.DataFrame:
 def promote_no_pop(grids: pd.DataFrame, residential_fires: pd.Series) -> pd.DataFrame:
     """`P=0 ∧ 주거화재>0` → '비정형 주거 확인 큐'로 승격.
 
-    센서스에 안 잡히는 컨테이너·비닐하우스 거주 가능성이 높다 —
-    **통계 부재가 곧 최고 취약의 신호**다. 반대로 주거화재도 0이면 임야·공장으로 보고 제외한다.
+    센서스 미포착 컨테이너·비닐하우스 거주 가능성 — 통계 부재가 곧 최고 취약 신호.
+    주거화재도 0이면 임야·공장으로 간주 제외.
     """
     out = grids.copy()
     fires = out["grid1k"].map(residential_fires).fillna(0)
@@ -88,15 +86,14 @@ def promote_no_pop(grids: pd.DataFrame, residential_fires: pd.Series) -> pd.Data
 class AgreementReport:
     """플랫폼 라벨 대조 — v0 성적표 1. 목표 URBAN 95% / RURAL 80%.
 
-    ⚠️ 대조 규약을 정의서와 맞추는 것이 핵심이다(2026-08-04 실측으로 확정).
-      · 유니버스 = **3개 시도 합산**, 화재 이력이 있는 격자
-      · **저장값 `region_type_cd`가 URBAN/RURAL인 것만** — BUFFER·NO_POP 제외
-      · 분모는 **판별 기준**(행 방향). 플랫폼 기준(열 방향)으로 재면 다른 수가 나온다
-    이 규약으로 879/925=95.0%, 985/1236=79.7%가 정의서와 숫자 단위까지 일치한다.
+    ⚠️ 대조 규약(2026-08-04 실측 확정, 정의서와 일치):
+      · 유니버스 = 3개 시도 합산, 화재 이력 있는 격자
+      · 저장값 `region_type_cd`가 URBAN/RURAL인 것만 — BUFFER·NO_POP 제외
+      · 분모는 판별 기준(행 방향) — 플랫폼 기준(열 방향)이면 다른 수
+    이 규약으로 879/925=95.0%, 985/1236=79.7%가 정의서와 숫자 단위까지 일치.
 
-    플랫폼 라벨의 정체도 실측으로 확인해 뒀다 — `CTY_FRMVL_SE_NM`은 밀도가 아니라
-    **행정 구분**이다(동→도시, 읍·면→농촌, 교차표 100% 결정적). 우리 판별은 DEGURBA
-    밀도 기준이므로 두 지표는 서로 다른 것을 재며, 100% 일치는 애초에 목표가 아니다.
+    플랫폼 라벨 `CTY_FRMVL_SE_NM`은 밀도 아닌 행정 구분(동→도시, 읍·면→농촌, 교차표 100% 결정적) —
+    우리 판별은 DEGURBA 밀도 기준이라 서로 다른 지표를 잼, 100% 일치는 목표가 아님.
     """
 
     matrix: pd.DataFrame  # index=판별(저장값), columns=플랫폼 라벨
@@ -142,8 +139,7 @@ def agreement(labeled: pd.DataFrame) -> AgreementReport:
 def dispatch_monotonicity(labeled: pd.DataFrame) -> pd.DataFrame:
     """출동소요가 클래스 순서대로 단조 증가하는가 — v0 성적표 2.
 
-    일치도보다 이쪽이 중요하다. 이 분류가 **골든타임 7분 도달 가능권과 불가능권을
-    실제로 가르는가**라는 외적 타당성이기 때문이다.
+    일치도보다 중요 — 골든타임 7분 도달/불가권을 실제로 가르는가라는 외적 타당성 검증.
     """
     order = [URBAN, BUFFER, RURAL, NO_POP]
     g = (

@@ -1,16 +1,15 @@
 """③ β 재학습 — pairwise Learning-to-Rank (numpy만).
 
-**왜 pairwise인가.** 우리가 배우려는 건 확률이 아니라 **순위**다. 그리고 쌍을
-**같은 격자 안에서만** 만들면 ①λ̂와 ②V⊥가 두 건물에 똑같이 걸려 상쇄되므로,
-남는 신호가 정확히 ③의 β다. 곱 구조에서 다른 항을 분리해내는 자연스러운 방법이다.
+왜 pairwise인가 — 배우려는 건 확률이 아닌 순위. 쌍을 같은 격자 안에서만 만들면 ①λ̂·②V⊥가
+두 건물에 동일하게 걸려 상쇄, 남는 신호가 정확히 ③의 β — 곱 구조에서 항을 분리하는 자연스러운 방법.
 
     P(i가 j보다 위험) = σ(β·(xᵢ − xⱼ))
 
-로그를 취하면 선형이라 로지스틱 회귀가 그대로 붙는다
+로그를 취하면 선형이라 로지스틱 회귀가 그대로 적용됨.
 
-⚠️ **소표본 경고.** 이 프로젝트의 사망 라벨은 시연 지역에서 2건이다(관악 2 · 임실 0).
-3개 파라미터를 추정할 수 없다. 대체 라벨을 쓰더라도 부트스트랩 신뢰구간을 반드시 병기하고,
-구간이 0을 포함하면 **학습값을 채택하지 않는다** — 노이즈를 계수로 굳히는 것이기 때문이다.
+⚠️ 소표본 경고 — 사망 라벨은 시연 지역 2건(관악 2·임실 0), 3개 파라미터 추정 불가.
+대체 라벨 사용 시에도 부트스트랩 신뢰구간 필수 병기, 구간이 0을 포함하면 학습값 미채택
+(노이즈를 계수로 굳히는 것이기 때문).
 """
 
 from __future__ import annotations
@@ -59,10 +58,10 @@ def make_pairs(
     df: pd.DataFrame, *, label: str, group: str, rng: np.random.Generator,
     features: tuple[str, ...] = FEATURES, max_neg: int = MAX_NEG_PER_POS,
 ) -> tuple[np.ndarray, np.ndarray]:
-    """같은 그룹(격자) 안에서 (양성, 음성) 차이 벡터를 만든다.
+    """같은 그룹(격자) 안에서 (양성, 음성) 차이 벡터 생성.
 
-    그룹 밖의 쌍은 만들지 않는다 — ①②가 상쇄되지 않아 β에 다른 항의 신호가 섞인다.
-    반환: (차이 벡터 Δx, 양성이 속한 그룹 id) — 뒤의 것은 부트스트랩 재표집 단위다.
+    그룹 밖 쌍 생성 금지 — ①②가 상쇄 안 돼 β에 다른 항 신호 혼입.
+    반환: (차이 벡터 Δx, 양성 소속 그룹 id) — 후자는 부트스트랩 재표집 단위.
     """
     deltas, owners = [], []
     for gid, grp in df.groupby(group):
@@ -85,7 +84,7 @@ def make_pairs(
 def fit_pairwise(delta: np.ndarray, *, l2: float = 1.0, iters: int = 400, lr: float = 0.5) -> np.ndarray:
     """모든 쌍의 라벨이 1인 로지스틱 회귀 — 경사하강.
 
-    L2를 넣는 이유는 표본이 작아서다. 규제 없이는 분리 가능한 방향으로 계수가 발산한다.
+    L2 규제는 소표본 대응 — 규제 없으면 분리 가능한 방향으로 계수 발산.
     """
     if len(delta) == 0:
         return np.zeros(delta.shape[1] if delta.ndim == 2 else 0)
@@ -101,10 +100,10 @@ def fit_with_ci(
     df: pd.DataFrame, *, label: str, group: str, features: tuple[str, ...] = FEATURES,
     n_boot: int = 300, seed: int = 20260805, l2: float = 1.0,
 ) -> LtrResult:
-    """β 추정 + **양성 단위 부트스트랩** 신뢰구간.
+    """β 추정 + 양성 단위 부트스트랩 신뢰구간.
 
-    재표집 단위가 쌍이 아니라 **양성**인 것이 핵심이다. 쌍은 양성 하나에서 여러 개가
-    파생되므로 쌍을 재표집하면 실제보다 표본이 커 보이고 구간이 거짓으로 좁아진다.
+    재표집 단위는 쌍이 아닌 양성 — 쌍은 양성 하나에서 다수 파생되므로 쌍 재표집 시
+    표본이 실제보다 커 보여 구간이 거짓으로 좁아짐.
     """
     rng = np.random.default_rng(seed)
     delta, owners = make_pairs(df, label=label, group=group, rng=rng, features=features)
@@ -156,13 +155,13 @@ def capture_rate_ci(
     df: pd.DataFrame, score_col: str, label_col: str, *,
     frac: float = 0.10, n_boot: int = 1000, seed: int = 20260811,
 ) -> CaptureResult:
-    """포집률 + **양성 단위 부트스트랩** 신뢰구간.
+    """포집률 + 양성 단위 부트스트랩 신뢰구간.
 
-    재표집 단위가 건물 전체가 아니라 **양성**인 것이 핵심이다. 포집률의 분모가 양성 수이므로
-    불확실성도 거기서 온다 — 음성까지 섞어 재표집하면 상위 10% 경계가 흔들려 다른 것을 재게 된다.
+    재표집 단위는 건물 전체가 아닌 양성 — 포집률 분모가 양성 수라 불확실성도 거기서 옴,
+    음성까지 섞어 재표집하면 상위 10% 경계가 흔들려 다른 것을 재게 됨.
 
-    ⚠️ 양성이 적으면 구간이 넓다. 눈금 자체가 1/n_positive라 전북(13건)은 7.7%p 단위로 뛴다 —
-    구간이 넓은 것은 계산이 틀린 게 아니라 **표본이 그만큼**이라는 뜻이다.
+    ⚠️ 양성 적으면 구간 넓음 — 눈금이 1/n_positive라 전북(13건)은 7.7%p 단위로 점프,
+    계산 오류가 아니라 표본 크기 그 자체.
     """
     n = max(1, int(len(df) * frac))
     top = set(df.nlargest(n, score_col).index)

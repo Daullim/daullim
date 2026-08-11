@@ -1,10 +1,10 @@
-"""seed 산출 — `buildings.csv` · `units.csv` · GeoJSON을 **한 실행에서 동시 생성**.
+"""seed 산출 — `buildings.csv` · `units.csv` · GeoJSON 한 실행 동시 생성.
 
-ADR-008 §9 산출 원자성: 중간에 실패하면 '버전이 어긋난 CSV와 GeoJSON'이 남는 게 가장
-위험하다. 임시 파일에 전부 쓴 뒤 마지막에 일괄 rename한다(`write_outputs_atomic`).
+ADR-008 §9 산출 원자성 — 중간 실패 시 버전 어긋난 CSV·GeoJSON 잔존이 최대 위험,
+임시 파일 전체 기록 후 일괄 rename(`write_outputs_atomic`).
 
-DDL 계약을 그대로 따른다 — `building_id`(bigserial)와 `address_norm`(GENERATED)은
-파이프라인이 채우지 않는다. `units`는 ADR-015의 **정적 4컬럼만** 낸다.
+DDL 계약 준수 — `building_id`(bigserial)·`address_norm`(GENERATED)은 파이프라인 미기입.
+`units`는 ADR-015의 정적 4컬럼만 산출.
 """
 
 from __future__ import annotations
@@ -27,9 +27,9 @@ BUILDING_COLUMNS = [
 # `units`는 정적 4컬럼 + 조인키. `building_id`는 적재 시 `bld_key`로 해석한다(ADR-015).
 UNIT_COLUMNS = ["bld_key", "unit_seq", "ho_nm", "flr_no", "ho_nm_source_cd"]
 
-# 지역 코드↔명칭 사전. **DB에 적재하지 않는다** — BE가 리소스 파일로 읽는 조회 전용 상수다.
-# `buildings`에는 코드만 있고 명칭 컬럼이 없어서, 이름 없이는 지역 셀렉터를 그릴 수 없다.
-# 원천은 지오코딩 응답(VWorld `level1`·`level2`·`level4A`)이라 추가 API 호출이 0이다.
+# 지역 코드↔명칭 사전 — DB 미적재, BE가 리소스 파일로 읽는 조회 전용 상수.
+# buildings엔 코드만 있고 명칭 컬럼이 없어 이름 없인 지역 셀렉터 불가 — 원천은 지오코딩 응답
+# (VWorld level1·level2·level4A)이라 추가 API 호출 0.
 REGION_COLUMNS = ["level", "code", "name", "parent_code"]
 REGION_LEVELS = ("sido", "sigungu", "dong")
 
@@ -64,10 +64,10 @@ def build_units_csv(units: pd.DataFrame, *, keep_keys: set[str]) -> pd.DataFrame
 def build_regions_csv(buildings: pd.DataFrame, *, names: dict[str, tuple[str, str, str]]) -> pd.DataFrame:
     """지역 코드↔명칭 3계층 사전.
 
-    `names`는 `admin_dong_cd` → (시도명, 시군구명, 행정동명). 코드 계층은 **접두사 관계**가
-    성립함을 실측으로 확인했다 — `admin_dong_cd[:5] == sigungu_cd`, `[:2] == sido_cd`.
+    `names`: `admin_dong_cd` → (시도명, 시군구명, 행정동명). 코드 계층 접두사 관계 실측 확인
+    — `admin_dong_cd[:5] == sigungu_cd`, `[:2] == sido_cd`.
 
-    건물이 실제로 존재하는 지역만 낸다 — 쓰지 않을 전국 사전을 만들 이유가 없다.
+    건물이 실제 존재하는 지역만 산출 — 미사용 전국 사전 불필요.
     """
     rows: dict[tuple[str, str], dict] = {}
     for dong_cd, sido_cd, sigungu_cd in zip(
@@ -94,8 +94,8 @@ def build_regions_csv(buildings: pd.DataFrame, *, names: dict[str, tuple[str, st
 def build_grid_geojson(grids: pd.DataFrame, *, boundaries: dict[str, list]) -> dict:
     """격자 폴리곤 FeatureCollection.
 
-    좌표는 5자리 반올림(ADR-008 §9) — 파일 크기와 git diff 안정성 둘 다를 위해서다.
-    격자 단위 속성의 정본은 DB가 아니라 이 파일이다(ADR-012 결정 23).
+    좌표는 5자리 반올림(ADR-008 §9) — 파일 크기·git diff 안정성 목적.
+    격자 단위 속성의 정본은 DB가 아닌 이 파일(ADR-012 결정 23).
     """
     features = []
     for row in grids.itertuples():
@@ -121,7 +121,7 @@ def write_seed(
     seed_root: Path, buildings: pd.DataFrame, units: pd.DataFrame, geojson: dict,
     regions: pd.DataFrame | None = None,
 ) -> list[Path]:
-    """산출물을 원자적으로 낸다 — 하나라도 실패하면 기존 파일이 그대로 남는다."""
+    """산출물 원자적 기록 — 하나라도 실패 시 기존 파일 그대로 유지."""
     writers = {
         seed_root / "buildings.csv": lambda p: write_csv_kr(buildings, p),
         seed_root / "units.csv": lambda p: write_csv_kr(units, p),
