@@ -4,6 +4,7 @@ import com.daullim.backend.domain.visit.dto.ReplacementItemResponse;
 import com.daullim.backend.domain.visit.dto.VisitDayCount;
 import com.daullim.backend.domain.visit.dto.VisitDetailResponse;
 import com.daullim.backend.domain.visit.dto.VisitListItem;
+import com.daullim.backend.domain.visit.dto.VisitSummary;
 import com.daullim.backend.domain.visit.service.VisitCursor;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -76,6 +77,19 @@ public class VisitQueryRepository {
       """
           + FROM_JOINS;
 
+  /**
+   * 기간 집계 — 승낙 코드별로 한 번에 접는다. 총건수·교체합은 이 결과를 더해서 낸다(왕복 1회).
+   *
+   * <p>{@code effective_replace_count}는 미점검 방문에서 null이라 {@code coalesce}로 0을 만든다 — {@code sum}은
+   * null을 건너뛰지만, 그룹 전체가 null이면 합 자체가 null이 되어 자바에서 다시 분기해야 한다.
+   */
+  private static final String SUMMARY_SELECT =
+      """
+      SELECT v.consent_cd, count(*) AS visit_count,
+             coalesce(sum(coalesce(v.effective_replace_count, 0)), 0) AS replace_sum
+      """
+          + FROM_JOINS;
+
   private final JdbcClient jdbc;
 
   VisitQueryRepository(JdbcClient jdbc) {
@@ -115,6 +129,33 @@ public class VisitQueryRepository {
               .param("afterId", c.after().visitId());
     }
     return spec.query((rs, rowNum) -> toListItem(rs)).list();
+  }
+
+  /** 기간 집계 — 총건수 · 승낙 코드별 건수 · 실효 교체 합. */
+  public VisitSummary summarize(VisitCriteria c) {
+    StringBuilder sql = new StringBuilder(SUMMARY_SELECT);
+    appendFilters(sql, c);
+    sql.append("GROUP BY v.consent_cd");
+
+    // 코드 목록을 자바에 박지 않는다 — 나온 코드만 담고 0 채우기는 화면 몫이다(VisitSummary 참조).
+    Map<String, Long> byConsent = new LinkedHashMap<>();
+    long total = 0;
+    long replaceSum = 0;
+    for (Object[] row :
+        bindFilters(jdbc.sql(sql.toString()), c)
+            .query(
+                (rs, rowNum) ->
+                    new Object[] {
+                      rs.getString("consent_cd"),
+                      rs.getLong("visit_count"),
+                      rs.getLong("replace_sum")
+                    })
+            .list()) {
+      byConsent.put((String) row[0], (Long) row[1]);
+      total += (Long) row[1];
+      replaceSum += (Long) row[2];
+    }
+    return new VisitSummary(total, byConsent, replaceSum);
   }
 
   public List<VisitDayCount> countByDay(VisitCriteria c) {

@@ -5,11 +5,12 @@ import { DataText } from "@/components/core/data-text";
 import { ErrorInline, RowSkeleton } from "@/components/core/system-states";
 import { useApiQuery } from "@/api/use-api-query";
 import { useRegionNames } from "@/api/use-region";
-import { getGridSummary } from "@/api/queries";
+import { getGridSummary, getVisitSummary } from "@/api/queries";
+import { CONSENT_STATUS, type ConsentStatus } from "@/config/domain";
 import { formatDay } from "@/lib/inspection";
 import { todayDay } from "@/lib/units";
 import { useFieldExit } from "@/lib/use-field-exit";
-import type { GridSummary } from "@/api/types";
+import type { GridSummary, VisitSummary } from "@/api/types";
 
 /**
  * 현재 진행 상황 (현장 전용) — "지금 어디까지 왔나"에 답한다.
@@ -30,6 +31,12 @@ export default function FieldProgressPage() {
     getGridSummary(dongCd!, s),
   );
 
+  /* 오늘의 나 — officerId=me로 토큰 주인의 것만. 동을 안 골랐어도 뜬다(진행률과 달리 분모가 필요 없다) */
+  const today = todayDay();
+  const mine = useApiQuery(`visitSummary:${today}`, (s) =>
+    getVisitSummary({ from: today, to: today, officerId: "me" }, s),
+  );
+
   return (
     <div className="flex h-dvh flex-col bg-canvas">
       <TopBar
@@ -40,7 +47,12 @@ export default function FieldProgressPage() {
 
       <main className="min-h-0 flex-1 overflow-y-auto p-3">
         <div className="mx-auto flex max-w-240 flex-col gap-3">
-          <TodayCard />
+          <TodayCard
+            data={mine.data}
+            loading={mine.loading}
+            error={mine.error !== undefined}
+            onRetry={mine.reload}
+          />
           <DongProgressCard
             dongNm={region.dongNm}
             gridId={gridId}
@@ -87,19 +99,59 @@ function NeedsDong() {
 }
 
 /**
- * ① 오늘의 나 — `GET /visits`가 붙기 전까지 수치를 지어내지 않는다.
+ * ① 오늘의 나 — `GET /visits/summary`를 `from=to=오늘`로 부른다.
  *
- * 오늘의 경계는 KST 달력일이다(`visits.visited_day`와 같은 기준).
+ * 오늘의 경계는 KST 달력일이다(`visits.visited_day`와 같은 기준) — 그래서 서버가 오늘을
+ * 정하지 않고 화면이 자기 달력일을 보낸다. 목록으로 세지 않는 이유는 커서로 잘려 오기 때문이다.
  */
-function TodayCard() {
+function TodayCard({
+  data,
+  loading,
+  error,
+  onRetry,
+}: {
+  data?: VisitSummary;
+  loading: boolean;
+  error: boolean;
+  onRetry: () => void;
+}) {
+  const today = todayDay();
   return (
-    <Card
-      title="오늘"
-      aside={<span className="text-body-md text-subtle">{formatDay(todayDay())}</span>}
-    >
-      <p className="py-6 text-center text-body-md text-subtle">
-        오늘 방문 집계는 점검 기록 조회 API가 붙으면 표시됩니다.
-      </p>
+    <Card title="오늘" aside={<span className="text-body-md text-subtle">{formatDay(today)}</span>}>
+      {loading && !data && <RowSkeleton density="field" rows={2} />}
+      {error && <ErrorInline onRetry={onRetry} />}
+      {!error && data && (
+        <div className="space-y-4">
+          <p className="flex items-baseline justify-between">
+            <span className="text-body-md text-body">방문</span>
+            <span className="text-title text-ink">
+              <DataText>{data.total}</DataText>건
+            </span>
+          </p>
+
+          {/* 서버는 0인 코드를 안 내린다 — 열거값 4종을 돌며 0으로 채운다(도메인 정본은 domain.ts) */}
+          <ul className="grid grid-cols-2 gap-2">
+            {(Object.keys(CONSENT_STATUS) as ConsentStatus[]).map((code) => (
+              <li
+                key={code}
+                className="flex items-baseline justify-between rounded-md bg-surface-muted px-3 py-2"
+              >
+                <span className="text-caption text-subtle">{CONSENT_STATUS[code].label}</span>
+                <span className="text-body-md text-ink">
+                  <DataText>{data.byConsent[code] ?? 0}</DataText>
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <p className="flex items-baseline justify-between border-t border-hairline pt-3">
+            <span className="text-body-md text-body">교체</span>
+            <span className="text-body-md text-ink">
+              <DataText>{data.effectiveReplaceCount}</DataText>대
+            </span>
+          </p>
+        </div>
+      )}
     </Card>
   );
 }

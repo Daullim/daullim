@@ -36,8 +36,33 @@ from run_vulnerability import AS_OF, SIDO_OF, load_buildings
 SCORE_VERSION = "v0-20260805"  # varchar(20) — 파라미터는 사이드카에 (ScoreParams 참조)
 FIRE_REFERENCE_DAY = pd.Timestamp("2023-12-31")
 
+# 프로세스 1회분 캐시 — 아래 build_scored()의 주석 참조.
+_SCORED: tuple[pd.DataFrame, ScoreParams] | None = None
 
-def build_scored() -> tuple[pd.DataFrame, ScoreParams]:
+
+def build_scored(*, rebuild: bool = False) -> tuple[pd.DataFrame, ScoreParams]:
+    """점수까지 매겨진 건물 테이블. **같은 프로세스에서는 한 번만 계산한다.**
+
+    `run_all.py`가 8단계를 `import_module(...).main()`으로 **한 프로세스 안에서** 부르는데,
+    6단계(`run_scoring`)와 7단계(`run_seed`)가 각자 이 함수를 호출해 같은 계산을 두 번 했다.
+    실측(4지역·61,803행) — 1회 15.3초, `run_seed.py` 27.6초의 **55%**가 이 중복이었다.
+
+    **파일 캐시(parquet)를 두지 않는 이유**는 무효화 판정이 필요 없어서다. 프로세스가 끝나면
+    캐시도 사라지므로 스크립트를 따로 실행하면 자동으로 다시 계산된다 — '오래된 산출물'이
+    남을 자리가 아예 없다. 15초를 아끼자고 "언제 다시 만들지"를 판단하는 상태를 새로 들이면,
+    그 판정이 틀렸을 때 **조용히 옛 데이터로 산출물이 나온다.**
+
+    재계산이 필요하면 `rebuild=True`. 반환 DataFrame은 **매번 사본**이라 호출부가 제자리에서
+    변형해도 다음 호출이 오염되지 않는다(`ScoreParams`는 frozen이라 그대로 공유한다).
+    """
+    global _SCORED
+    if _SCORED is None or rebuild:
+        _SCORED = _compute_scored()
+    scored, params = _SCORED
+    return scored.copy(), params
+
+
+def _compute_scored() -> tuple[pd.DataFrame, ScoreParams]:
     buildings = load_buildings()
     buildings["x_5179"], buildings["y_5179"] = zip(
         *[to_5179(la, ln) for la, ln in zip(buildings["lat"], buildings["lng"])]

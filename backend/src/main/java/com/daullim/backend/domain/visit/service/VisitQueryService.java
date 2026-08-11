@@ -6,6 +6,7 @@ import com.daullim.backend.common.response.CursorPage;
 import com.daullim.backend.domain.visit.dto.VisitDayCount;
 import com.daullim.backend.domain.visit.dto.VisitDetailResponse;
 import com.daullim.backend.domain.visit.dto.VisitListItem;
+import com.daullim.backend.domain.visit.dto.VisitSummary;
 import com.daullim.backend.domain.visit.repository.VisitQueryRepository;
 import com.daullim.backend.domain.visit.repository.VisitQueryRepository.VisitCriteria;
 import java.util.List;
@@ -47,6 +48,10 @@ public class VisitQueryService {
    */
   public List<VisitDayCount> countByDay(VisitFilter filter) {
     return repository.countByDay(criteria(filter, null, 0));
+  }
+
+  public VisitSummary summarize(VisitFilter filter) {
+    return repository.summarize(criteria(filter, null, 0));
   }
 
   public VisitDetailResponse detail(long visitId) {
