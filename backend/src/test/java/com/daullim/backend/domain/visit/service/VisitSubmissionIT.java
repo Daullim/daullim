@@ -33,7 +33,7 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.annotation.Transactional;
 
-/** 저장 경계 — 방문·교체 항목·외관 플래그·세대 캐시·재산입 기준일이 한 트랜잭션에서 함께 움직이는지. */
+/** 저장 경계 검증 — 방문·교체 항목·외관 플래그·세대 캐시·재산입 기준일의 단일 트랜잭션 처리. */
 @Import({TestcontainersConfiguration.class, VisitSubmissionIT.FixedClock.class})
 @SpringBootTest
 @Transactional

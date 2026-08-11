@@ -105,18 +105,14 @@ def test_습도_100초과는_fail_fast():
 
 
 def test_범위검사만으로는_스왑이_안_잡힌다__충전율이_탐지수단이다():
-    """실측 스왑: 습도 0.1~17(충전 3%) / 적설 7~100(충전 100%).
-
-    두 값 모두 각자의 허용 범위 안이라 범위 검사는 **통과한다.**
-    스왑을 드러내는 건 충전율 비대칭이다 — 그래서 리포트를 항상 함께 낸다.
-    """
+    """실측 스왑: 습도 0.1~17(충전 3%)/적설 7~100(충전 100%) — 둘 다 범위 내라 range 검사 통과, 충전율 비대칭만 드러내 항상 함께 보고."""
     df = pd.DataFrame(
         {
             "HR_UNIT_HUM": [0.1] + [None] * 97 + [17.1, None],
             "HR_UNIT_SNWFL": [50.0] * 100,
         }
     )
-    report = validate_ranges(df, RANGE_SPEC_WEATHER, name="기상")  # 통과한다
+    report = validate_ranges(df, RANGE_SPEC_WEATHER, name="기상")
     assert report.fill_pct["HR_UNIT_HUM"] < 5
     assert report.fill_pct["HR_UNIT_SNWFL"] == 100.0
     assert "충전율" in report.render()

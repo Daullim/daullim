@@ -36,49 +36,76 @@ from run_vulnerability import AS_OF, SIDO_OF, load_buildings
 SCORE_VERSION = "v0-20260805"  # varchar(20) — 파라미터는 사이드카에 (ScoreParams 참조)
 FIRE_REFERENCE_DAY = pd.Timestamp("2023-12-31")
 
-# 프로세스 1회분 캐시 — 아래 build_scored()의 주석 참조.
-_SCORED: tuple[pd.DataFrame, ScoreParams] | None = None
+# 프로세스 캐시 — **학습 범위(fit_sidos)마다 따로** 담는다. 아래 build_scored() 주석 참조.
+_SCORED: dict[tuple[str, ...] | None, tuple[pd.DataFrame, ScoreParams]] = {}
 
 
-def build_scored(*, rebuild: bool = False) -> tuple[pd.DataFrame, ScoreParams]:
-    """점수까지 매겨진 건물 테이블. **같은 프로세스에서는 한 번만 계산한다.**
+def build_scored(
+    *, fit_sidos: tuple[str, ...] | None = None, rebuild: bool = False
+) -> tuple[pd.DataFrame, ScoreParams]:
+    """점수까지 매겨진 건물 테이블. 같은 프로세스·같은 학습 범위에서는 1회만 계산.
 
-    `run_all.py`가 8단계를 `import_module(...).main()`으로 **한 프로세스 안에서** 부르는데,
-    6단계(`run_scoring`)와 7단계(`run_seed`)가 각자 이 함수를 호출해 같은 계산을 두 번 했다.
-    실측(4지역·61,803행) — 1회 15.3초, `run_seed.py` 27.6초의 **55%**가 이 중복이었다.
+    `run_all.py`가 8단계를 한 프로세스에서 `import_module(...).main()`으로 부르는데, 6단계
+    (`run_scoring`)·7단계(`run_seed`)가 각자 호출해 계산이 중복됐다 — 실측(4지역·61,803행)
+    1회 15.3초, `run_seed.py` 27.6초의 55%가 이 중복이었다.
 
-    **파일 캐시(parquet)를 두지 않는 이유**는 무효화 판정이 필요 없어서다. 프로세스가 끝나면
-    캐시도 사라지므로 스크립트를 따로 실행하면 자동으로 다시 계산된다 — '오래된 산출물'이
-    남을 자리가 아예 없다. 15초를 아끼자고 "언제 다시 만들지"를 판단하는 상태를 새로 들이면,
-    그 판정이 틀렸을 때 **조용히 옛 데이터로 산출물이 나온다.**
+    파일 캐시(parquet) 미사용 — 무효화 판정이 불필요해서다. 프로세스 종료 시 캐시도 사라져
+    스크립트 단독 실행은 항상 재계산되므로 '오래된 산출물'이 남을 자리가 없다. 15초 절약을
+    위해 "언제 재생성할지" 판단 상태를 들이면, 오판 시 조용히 옛 데이터가 나온다.
 
-    재계산이 필요하면 `rebuild=True`. 반환 DataFrame은 **매번 사본**이라 호출부가 제자리에서
-    변형해도 다음 호출이 오염되지 않는다(`ScoreParams`는 frozen이라 그대로 공유한다).
+    `fit_sidos`는 LORO 교차검증 전용(`run_loro.py`) — 클래스별 m·λ̄·V⊥ 백분위를 지정 시도에서만
+    적합하고 점수는 전체 건물에 매긴다(홀드아웃 시도를 학습에서 제외한 채 채점). 기본 `None`은
+    기존 동작과 동일.
+
+    ⚠️ 캐시 키에 `fit_sidos` 포함 — 폴드마다 학습 범위가 다른데 키가 하나면 첫 폴드 결과가
+    세 폴드에 재사용돼 조용히 같은 숫자가 나온다.
+
+    `rebuild=True`로 강제 재계산. 반환 DataFrame은 매번 사본(호출부 변형이 다음 호출을 오염
+    안 함) — `ScoreParams`는 frozen이라 그대로 공유.
     """
-    global _SCORED
-    if _SCORED is None or rebuild:
-        _SCORED = _compute_scored()
-    scored, params = _SCORED
+    key = tuple(fit_sidos) if fit_sidos is not None else None
+    if key not in _SCORED or rebuild:
+        _SCORED[key] = _compute_scored(key)
+    scored, params = _SCORED[key]
     return scored.copy(), params
 
 
-def _compute_scored() -> tuple[pd.DataFrame, ScoreParams]:
+def _compute_scored(
+    fit_sidos: tuple[str, ...] | None = None,
+) -> tuple[pd.DataFrame, ScoreParams]:
     buildings = load_buildings()
     buildings["x_5179"], buildings["y_5179"] = zip(
         *[to_5179(la, ln) for la, ln in zip(buildings["lat"], buildings["lng"])]
     )
 
-    grids = pd.concat(
-        [build_grids(s) for s in dict.fromkeys(SIDO_OF.values())], ignore_index=True
-    ).drop_duplicates("grid1k")
+    # 격자별 시도 태깅(LORO 학습/홀드아웃 분리축) — 존 프리픽스가 시도 간 안 겹쳐(서울 다사 /
+    # 부산 마라·마마 / 전북 나마·다마·라마) 격자 하나는 시도 하나에만 속함
+    frames = []
+    for sido in dict.fromkeys(SIDO_OF.values()):
+        g = build_grids(sido)
+        g["sido"] = sido
+        frames.append(g)
+    grids = pd.concat(frames, ignore_index=True).drop_duplicates("grid1k")
     xy = [grid1k_centroid(g) for g in grids["grid1k"]]
     grids["x_5179"] = [p[0] for p in xy]
     grids["y_5179"] = [p[1] for p in xy]
-    grids["v_perp"] = residual_vulnerability(grids)
+
+    # 학습 범위 — None이면 전체(기존 동작). LORO면 홀드아웃 시도가 빠진다.
+    fit_grids = (
+        pd.Series(True, index=grids.index)
+        if fit_sidos is None
+        else grids["sido"].isin(fit_sidos)
+    )
+    grids["v_perp"] = residual_vulnerability(
+        grids, fit_mask=None if fit_sidos is None else fit_grids
+    )
     grids["area_mult"] = area_multiplier(grids["v_perp"])
 
     # ① λ̂ — 주거 화재만, 도농 클래스별 m
     cells = grids.loc[grids["households"].fillna(0) > 0]
+    # m·λ̄ 적합용 셀. 화재 지점(sources)은 줄이지 않음 — 홀드아웃 건물 λ̂는 그 지역 화재로
+    # 계산돼야 유효, 빼면 λ̂가 사전값으로 뭉개져 모델 자체 소실(LORO=파라미터 전이 검증, 예측력 아님)
+    fit_cells = cells.loc[fit_grids.reindex(cells.index, fill_value=True)]
     exposure = spread_exposure(cells[["x_5179", "y_5179", "households"]])
     fires = []
     for sido in dict.fromkeys(SIDO_OF.values()):
@@ -89,15 +116,14 @@ def _compute_scored() -> tuple[pd.DataFrame, ScoreParams]:
     sources = prepare_fires(pd.concat(fires, ignore_index=True), reference_day=FIRE_REFERENCE_DAY)
 
     gmap = grids.set_index("grid1k")
-    # 격자 매핑 실패(SGIS 통계에 없는 셀)와 NO_POP 격자의 건물은 **버리지 않고**
-    # URBAN 기본값으로 넣는다(사용자 결정). NO_POP은 '인구 0'이지 '건물 0'이 아니고,
-    # 실제로 그 격자에 집이 서 있으면 점검 대상이다.
+    # 격자 매핑 실패·NO_POP 격자 건물은 URBAN 기본값 처리(확정 결정) — NO_POP은 '인구 0'이지
+    # '건물 0'이 아니라 점검 대상임
     cls = buildings["grid1k"].map(gmap["algo_class"])
     buildings["algo_class"] = cls.where(cls.isin([URBAN, RURAL]), URBAN)
     ests = {}
     parts = []
     for cls in (URBAN, RURAL):
-        sub_cells = cells.loc[cells["algo_class"] == cls]
+        sub_cells = fit_cells.loc[fit_cells["algo_class"] == cls]
         est = estimate_m(sub_cells["residential_fires"].fillna(0), sub_cells["households"])
         ests[cls] = est
         pts = buildings.loc[buildings["algo_class"] == cls]

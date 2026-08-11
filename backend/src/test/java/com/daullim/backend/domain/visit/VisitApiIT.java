@@ -20,12 +20,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
-/**
- * G-1 점검 결과 저장 — 컨트롤러 경계만 본다.
- *
- * <p>판정·처방·세대 캐시가 한 트랜잭션에서 움직이는지는 {@code VisitSubmissionIT}가 이미 덮는다. 여기서 확인하는 것은 그 서비스에 <b>무엇이
- * 전달되는가</b>다 — 원입력만 받는지, 점검원을 토큰에서 꺼내는지, 멱등 키가 헤더에서 오는지, 위반이 400·422 중 어느 쪽으로 나가는지.
- */
+/** G-1 점검 결과 저장 — 컨트롤러 경계만 검증(판정·트랜잭션은 {@code VisitSubmissionIT}가 덮음). */
 class VisitApiIT extends QueryApiSupport {
 
   /** 서버가 방문일을 찍을 때 쓰는 그 시계 (KST 고정). */
@@ -322,12 +317,7 @@ class VisitApiIT extends QueryApiSupport {
     return "%04d-%02d".formatted(month.getYear(), month.getMonthValue());
   }
 
-  /**
-   * 방문일 — <b>서버와 같은 시계를 쓴다.</b>
-   *
-   * <p>{@code ClockConfig}가 KST로 고정돼 있어 서버의 달력일은 호스트 시간대와 무관하다. 여기서 {@code LocalDate.now()}로 JVM 기본
-   * 시간대를 따르면 러너가 UTC인 CI에서 15시(UTC) 이후에만 하루가 어긋나 깨진다 — 로컬(KST)에서는 재현되지 않는다.
-   */
+  /** 방문일 — 서버와 같은 시계 사용. JVM 기본 시간대로 대체하면 UTC CI에서만 하루 어긋나 깨짐(로컬 KST는 재현 안 됨). */
   private String today() {
     return LocalDate.now(clock).format(DateTimeFormatter.BASIC_ISO_DATE);
   }

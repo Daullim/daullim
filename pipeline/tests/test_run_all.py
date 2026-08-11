@@ -1,8 +1,4 @@
-"""오케스트레이터 — 순서·중단·종료코드·로그를 잠근다.
-
-실제 단계는 돌리지 않는다. `run()`이 단계 호출자를 주입받으므로 가짜 단계로 흐름만 본다 —
-진짜 `main()`들은 각자의 테스트가 이미 덮고 있고, 여기서 검증할 것은 **오케스트레이션**이다.
-"""
+"""오케스트레이터 — 순서·중단·종료코드·로그 잠금. 실제 단계는 미실행, 가짜 단계 주입으로 오케스트레이션만 검증."""
 
 from __future__ import annotations
 
@@ -91,7 +87,7 @@ def test_게이트가_미달이면_거기서_멈추고_1이다():
     code = run([stage(1), stage(2, gate=True), stage(3)], call=call)
 
     assert code == EXIT_FAILED
-    assert called == [1, 2]  # 3은 호출되지 않았다
+    assert called == [1, 2]
 
 
 def test_게이트가_아닌_단계의_실패도_중단시킨다():
@@ -135,11 +131,7 @@ def test_요약에_통과한_단계와_중단된_단계가_남는다(capsys):
 
 # ── 단계 호출 ───────────────────────────────────────────────────────────
 def test_단계는_자기_argv만_본다(monkeypatch):
-    """run_all에 준 옵션이 단계의 argparse로 새면 SystemExit(2)로 죽는다.
-
-    여러 run_*.py가 main() 안에서 parse_args를 돌리므로 이 격리가 없으면
-    `--skip-diagnostics` 하나로 1단계부터 터진다.
-    """
+    """run_all 옵션이 단계 argparse로 새면 SystemExit(2) — main() 내 parse_args 격리 없인 --skip-diagnostics 하나로 전단계 터짐."""
     seen: list[list[str]] = []
     fake = types.ModuleType("run_fake")
     fake.main = lambda: seen.append(list(sys.argv)) or 0  # type: ignore[attr-defined]
@@ -150,7 +142,7 @@ def test_단계는_자기_argv만_본다(monkeypatch):
 
     assert code == EXIT_OK
     assert seen == [["run_fake.py"]]
-    assert sys.argv == ["run_all.py", "--skip-diagnostics"]  # 원래대로 돌려놓는다
+    assert sys.argv == ["run_all.py", "--skip-diagnostics"]
 
 
 def test_단계가_죽어도_argv는_복원된다(monkeypatch):

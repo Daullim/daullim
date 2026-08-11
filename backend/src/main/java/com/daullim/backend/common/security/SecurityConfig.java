@@ -47,12 +47,11 @@ public class SecurityConfig {
                     .permitAll()
                     .requestMatchers(EndpointRequest.toAnyEndpoint())
                     .denyAll()
-                    // prod에서는 springdoc을 꺼서 이 경로가 404가 된다.
+                    // prod springdoc 비활성화 시 404 처리 (permitAll 무해)
                     .requestMatchers(SWAGGER_PATHS)
                     .permitAll()
                     .anyRequest()
                     .authenticated())
-        // 토큰이 붙은 요청은 resource server가, 토큰 없는 요청은 exceptionHandling이 처리.
         .oauth2ResourceServer(
             oauth ->
                 oauth
@@ -61,13 +60,13 @@ public class SecurityConfig {
                     .accessDeniedHandler(accessDeniedHandler))
         .exceptionHandling(
             ex -> ex.authenticationEntryPoint(entryPoint).accessDeniedHandler(accessDeniedHandler))
-        // 토큰이 인증으로 바뀐 직후 — 서명은 멀쩡한데 계정이 탈퇴한 경우를 여기서 걸러 낸다.
+        // 인증 성립 직후 탈퇴 계정 필터링 지점
         .addFilterAfter(activeAccountFilter, BearerTokenAuthenticationFilter.class);
 
     return http.build();
   }
 
-  /** 기본 변환기는 scope 클레임만 본다. */
+  /** 커스텀 권한 변환기 (기본 변환기는 scope 클레임만 인식) */
   @Bean
   JwtAuthenticationConverter jwtAuthenticationConverter() {
     JwtAuthenticationConverter converter = new JwtAuthenticationConverter();

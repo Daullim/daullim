@@ -26,13 +26,12 @@ class DataTrapError(Exception):
 
 
 # ── 1. 인코딩 ───────────────────────────────────────────────────────────
-# 실측: 플랫폼 상품(476·462) = UTF-8-SIG / 소방청 전국·SGIS = cp949.
-# 자동 감지(chardet)는 금지 — 표본에 따라 결과가 흔들려 재현성이 깨진다.
+# 실측: 플랫폼 상품(476·462)=UTF-8-SIG · 소방청 전국/SGIS=cp949 — chardet 자동감지 금지(재현성 붕괴)
 ENCODINGS_KR = ("utf-8-sig", "cp949")
 
 
 def read_csv_kr(path: str | Path, **kwargs) -> pd.DataFrame:
-    """한국 공공데이터 CSV를 UTF-8-SIG → cp949 순서로 시도해 읽는다."""
+    """한국 공공데이터 CSV UTF-8-SIG→cp949 순 읽기 처리."""
     path = Path(path)
     if not path.exists():
         raise DataTrapError(
@@ -50,7 +49,7 @@ def read_csv_kr(path: str | Path, **kwargs) -> pd.DataFrame:
 
 
 def write_csv_kr(df: pd.DataFrame, path: str | Path, **kwargs) -> Path:
-    """산출물은 UTF-8(BOM 없음)로 쓴다 — BE COPY와 git diff 양쪽을 위해."""
+    """산출물 UTF-8(BOM 없음) 쓰기 — BE COPY·git diff 호환."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(path, index=False, encoding="utf-8", **kwargs)
@@ -58,8 +57,7 @@ def write_csv_kr(df: pd.DataFrame, path: str | Path, **kwargs) -> Path:
 
 
 # ── 2. 한글 정규화 ──────────────────────────────────────────────────────
-# 실측: fire·SGIS 원본 파일명은 NFD, call119는 NFC. 섞인 채로 glob/조인하면
-# 예외 없이 조용히 0건이 된다(이번 검수 중 2회 실발생).
+# 실측: fire/SGIS 파일명 NFD · call119는 NFC — 혼재 시 glob/조인 조용히 0건(실측 2회)
 
 
 def nfc(value: str) -> str:
@@ -72,9 +70,9 @@ def nfc_series(s: pd.Series) -> pd.Series:
 
 
 def glob_kr(root: str | Path, pattern: str) -> list[Path]:
-    """파일명 정규화가 섞여 있어도 매칭되는 glob.
+    """파일명 정규화 혼재 대응 glob.
 
-    `Path.glob`은 NFD 파일명을 NFC 패턴으로 찾지 못한다. 전체를 훑어 NFC로 비교한다.
+    Path.glob은 NFD 파일명을 NFC 패턴으로 못 찾음 — 전체 순회 후 NFC 비교.
     """
     root = Path(root)
     want = nfc(pattern)
@@ -105,11 +103,8 @@ def normalize_month(value) -> str | None:
 
 
 # ── 4. 값 범위 검증 + 충전율 리포트 ─────────────────────────────────────
-# 실측(2026-08-04): 2023 화재 상품에서 습도·적설이 뒤바뀌어 있다.
-#   HR_UNIT_HUM   0.1~17.1  충전 3%   ← 값도 충전율도 습도로 볼 수 없다
-#   HR_UNIT_SNWFL 7~100     충전 100% ← 분포가 습도에 가깝다
-# 주의: 범위 검사만으로는 이 스왑이 안 잡힌다(0.1~17은 습도 0~100 안이다).
-# **충전율 리포트가 실제 탐지 수단**이므로 검증과 항상 함께 낸다.
+# 실측 2026-08-04: HR_UNIT_HUM(0.1~17.1,충전3%)↔HR_UNIT_SNWFL(7~100,충전100%) 습도·적설 스왑
+# 범위검사만으론 미탐지(0.1~17이 습도 0~100 안) → 충전율 리포트가 실탐지 수단, 검증과 항상 병행
 RANGE_SPEC_WEATHER: dict[str, tuple[float | None, float | None]] = {
     "HR_UNIT_HUM": (0, 100),  # 습도 %
     "HR_UNIT_SNWFL": (0, None),  # 적설 cm — 음수 불가
@@ -149,7 +144,7 @@ def validate_ranges(
     *,
     name: str,
 ) -> FillReport:
-    """범위 위반 시 fail-fast. 통과해도 충전율 리포트를 돌려준다."""
+    """범위 위반 시 fail-fast, 통과해도 충전율 리포트 반환."""
     violations: list[str] = []
     for col, (lo, hi) in spec.items():
         if col not in df.columns:
@@ -176,7 +171,7 @@ ZONE_PREFIX: dict[str, tuple[str, ...]] = {
 
 
 def clip_to_sido(df: pd.DataFrame, sido: str, *, grid_col: str = "GRID_ID") -> pd.DataFrame:
-    """존 프리픽스 화이트리스트로 시도 경계 밖 격자를 제거한다."""
+    """존 프리픽스 화이트리스트 기반 시도 경계 밖 격자 제거."""
     if sido not in ZONE_PREFIX:
         raise DataTrapError(f"존 프리픽스 미등록 시도: {sido!r} (등록: {list(ZONE_PREFIX)})")
     prefixes = ZONE_PREFIX[sido]
@@ -186,27 +181,23 @@ def clip_to_sido(df: pd.DataFrame, sido: str, *, grid_col: str = "GRID_ID") -> p
 
 
 # ── 6. 격자 조인 (500m → 1km 문자열 유도) ───────────────────────────────
-# 형식 실측: 국토부 500m = 존2 + 숫자2 + 소문자1 + 숫자2 + 소문자1 (예 '다사46a41a')
-#            SGIS   1km  = 존2 + 숫자4                          (예 '다사4641')
-# 검증(2026-08-04, 서울 2023 화재): 5,646/5,646 = 100.00%가 SGIS 경계 격자에 적중.
-# ⚠️ 대조 상대는 **경계 SHP(8,609셀)**여야 한다. 인구통계(7,008셀)로 대조하면
-#    9셀이 빠지는데 그건 유도 실패가 아니라 **무인구 격자 = NO_POP 신호**다(§2-2).
+# 형식: 국토부 500m=존2+숫자2+소문자1+숫자2+소문자1('다사46a41a') / SGIS 1km=존2+숫자4('다사4641')
+# 검증(2026-08-04, 서울 2023 화재): 5,646/5,646=100.00% SGIS 경계 격자 적중
+# ⚠️ 대조 상대는 경계 SHP(8,609셀) — 인구통계(7,008셀) 대조 시 빠지는 9셀은 유도 실패 아닌 무인구=NO_POP 신호(§2-2)
 GRID500_RE = re.compile(r"^(?P<zone>..)(?P<x>\d{2})[a-z](?P<y>\d{2})[a-z]$")
 
 
 def grid500_to_1km(grid_id: str) -> str:
-    """'다사46a41a' → '다사4641'. 좌표 경로(cell_key)와 반드시 자체 대조할 것."""
+    """'다사46a41a' → '다사4641', 좌표 경로(cell_key) 자체 대조 필수."""
     m = GRID500_RE.match(nfc(str(grid_id).strip()))
     if not m:
         raise DataTrapError(f"500m 격자 ID 형식 아님: {grid_id!r}")
     return f"{m['zone']}{m['x']}{m['y']}"
 
 
-# 존 코드는 100km 셀을 '가나다라마바사' 두 글자로 찍은 좌표다.
-# 실측 역산(2026-08-04, 2023 화재 3개 시도)으로 확인된 원점:
-#   다사(900000,1900000) 마라(1100000,1600000) 마마(1100000,1700000)
-#   다마(900000,1700000) 라마(1000000,1700000) 나마(800000,1700000)
-# → x = 700000 + i*100000 / y = 1300000 + j*100000 로 일반화된다(테스트가 6개 전부 잠근다).
+# 존 코드 = 100km 셀 '가나다라마바사' 2글자 좌표. 실측 역산(2026-08-04, 화재 3개 시도) 원점:
+#   다사(900000,1900000) 마라(1100000,1600000) 마마(1100000,1700000) 다마(900000,1700000) 라마(1000000,1700000) 나마(800000,1700000)
+# 일반화: x=700000+i*100000, y=1300000+j*100000 (테스트 6개로 검증)
 ZONE_LETTERS = "가나다라마바사"
 ZONE_X0, ZONE_Y0 = 700_000, 1_300_000
 
@@ -226,10 +217,7 @@ GRID1K_RE = re.compile(r"^(?P<zone>..)(?P<x>\d{2})(?P<y>\d{2})$")
 
 
 def grid1k_centroid(grid1k: str) -> tuple[float, float]:
-    """1km 격자 ID → 셀 중심의 EPSG:5179 좌표.
-
-    커널 계산에서 격자 속성(가구수 등)을 점으로 얹을 때 쓴다.
-    """
+    """1km 격자 ID → 셀 중심 EPSG:5179 좌표. 커널 계산의 격자 속성 점묘화 입력."""
     m = GRID1K_RE.match(nfc(str(grid1k).strip()))
     if not m:
         raise DataTrapError(f"1km 격자 ID 형식 아님: {grid1k!r}")
@@ -238,10 +226,7 @@ def grid1k_centroid(grid1k: str) -> tuple[float, float]:
 
 
 def coord_to_grid500(lat: float, lng: float, zone: str) -> str:
-    """좌표 → 500m 격자 ID. `grid500_to_1km`의 문자열 경로와 자체 대조하는 용도(§4-5).
-
-    두 경로가 어긋나면 좌표계 변환이나 존 원점 중 하나가 틀린 것이다.
-    """
+    """좌표 → 500m 격자 ID. `grid500_to_1km` 문자열 경로 자체 대조용(§4-5) — 불일치 시 좌표계 변환/존 원점 오류 신호."""
     ox, oy = zone_origin(zone)
     x, y = to_5179(lat, lng)
     dx, dy = x - ox, y - oy
@@ -250,11 +235,10 @@ def coord_to_grid500(lat: float, lng: float, zone: str) -> str:
 
 
 def resolve_grid500(lat: float, lng: float, zones: tuple[str, ...]) -> str:
-    """좌표가 실제로 속한 존을 후보 중에서 골라 500m 격자 ID를 만든다.
+    """좌표 소속 존 판별 후 500m 격자 ID 생성.
 
-    시군구가 100km 존 경계에 걸치면(예: 기장군=마라+마마) `zones[0]` 고정은 틀린다 —
-    다른 존 영역의 좌표를 넣으면 dx/dy가 100,000을 넘어서 `{:02d}` 자리수가 깨지고
-    `grid500_to_1km`이 그 시점에야 형식 오류로 죽는다. 여기서 미리 존을 확정한다.
+    시군구가 100km 존 경계에 걸치면(예: 기장군=마라+마마) zones[0] 고정 오류 —
+    dx/dy가 100,000 초과 시 `{:02d}` 자리수 붕괴, `grid500_to_1km`에서야 형식 오류로 실패. 여기서 존 선확정.
     """
     x, y = to_5179(lat, lng)
     for zone in zones:
@@ -295,8 +279,7 @@ def cell_key(lat: float, lng: float, *, size_m: int = CELL_SIZE_M) -> tuple[int,
 
 
 # ── 8. 연도 정규화 ──────────────────────────────────────────────────────
-# 2021년 중반 화재신고 분류 정책 단절로 3개 시도가 동시 계단식 급증한다
-# (실화재 통계는 불변). 라벨 드리프트이므로 시계열 가중 산출 시 필수.
+# 2021 중반 화재신고 분류 정책 단절 — 3개 시도 동시 계단식 급증(실화재 통계는 불변), 라벨 드리프트라 시계열 가중 산출 시 필수 고려
 YEAR_WEIGHTS: dict[int, float] = {2020: 0.15, 2021: 0.20, 2022: 0.25, 2023: 0.40}
 
 
@@ -306,10 +289,9 @@ def year_weight(year: int) -> float:
 
 
 def normalize_year_counts(counts: dict[int, float]) -> dict[int, float]:
-    """연도별 원시 건수를 그 연도의 전체 규모로 나눠 라벨 드리프트를 제거한다.
+    """연도별 원시 건수를 그 연도 전체 규모로 나눠 라벨 드리프트 제거.
 
-    2021 단절은 '건수 자체가 늘어난' 게 아니라 '분류 기준이 바뀐' 것이므로,
-    연도 내 상대값으로 바꾼 뒤에 가중을 곱해야 한다.
+    2021 단절은 건수 증가가 아닌 분류 기준 변경이므로, 연도 내 상대값 변환 후 가중 적용.
     """
     total = sum(counts.values())
     if total <= 0:
@@ -331,10 +313,9 @@ def round_coords(obj):
 
 
 def write_outputs_atomic(writers: dict[Path, "callable"]) -> list[Path]:
-    """CSV와 GeoJSON을 한 실행에서 함께 낸다.
+    """CSV·GeoJSON 동시 산출.
 
-    임시 파일에 전부 쓴 뒤 마지막에 일괄 rename한다 — 중간 실패 시
-    '버전이 어긋난 CSV와 GeoJSON'이 남는 것을 막는다(ADR-008 §9).
+    임시 파일에 전체 기록 후 일괄 rename — 중간 실패 시 버전 어긋난 산출물 잔존 방지(ADR-008 §9).
     """
     temps: list[tuple[Path, Path]] = []
     try:

@@ -17,7 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Handles user registration rules. */
+/** 회원 가입·로그인·탈퇴 처리 */
 @Service
 @Transactional(readOnly = true)
 public class UserService {
@@ -66,10 +66,9 @@ public class UserService {
   }
 
   /**
-   * 회원탈퇴 — 물리 삭제가 아니라 비활성화다.
+   * 회원탈퇴 — 물리 삭제 아닌 비활성화 처리
    *
-   * <p>{@code visits.officer_id}가 {@code ON DELETE RESTRICT}로 과거 점검 이력을 붙들고 있어 행을 지울 수 없다. 지워서도 안
-   * 된다 — 누가 점검했는지가 기록의 일부다. 남은 액세스 토큰은 {@code ActiveAccountFilter}가 막는다.
+   * <p>visits.officer_id ON DELETE RESTRICT로 물리 삭제 불가, 잔여 액세스 토큰은 ActiveAccountFilter가 차단
    */
   @Transactional
   public void withdraw(Long userId) {

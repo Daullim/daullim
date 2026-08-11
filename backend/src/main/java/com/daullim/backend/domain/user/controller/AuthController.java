@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 로그인하지 않은 사용자가 호출하는 인증 관련 API를 제공한다. */
+/** 로그인 전 사용자용 인증 API */
 @RestController
 @RequestMapping("/api/v1/auth")
 public class AuthController {
@@ -41,7 +41,7 @@ public class AuthController {
     return ResponseEntity.ok(ApiResponse.ok(userService.getMyInfo(Long.valueOf(jwt.getSubject()))));
   }
 
-  /** 회원탈퇴 — 비활성화이고 점검 이력은 남는다. 남은 토큰은 ActiveAccountFilter가 막는다. */
+  /** 회원탈퇴 — 비활성화(이력 보존), 잔여 토큰은 ActiveAccountFilter가 차단 */
   @DeleteMapping("/me")
   public ResponseEntity<Void> withdraw(@AuthenticationPrincipal Jwt jwt) {
     userService.withdraw(Long.valueOf(jwt.getSubject()));

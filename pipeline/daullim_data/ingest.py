@@ -35,8 +35,7 @@ from .utils import (
 FIRE_DIR = DATA_ROOT / "platform" / "fire_2023"
 CALL_DIR = DATA_ROOT / "platform" / "call119"
 
-# 실측 단위 확인(2026-08-04): DSPT_REQ_HR 서울 평균 355초 ≈ 5.9분 — 정의서 URBAN 실측과 일치.
-# 즉 **초 단위**이고, 도농 완충대 타이브레이크 임계값 420s와 같은 축이다.
+# 실측 단위 확인(2026-08-04): DSPT_REQ_HR 서울 평균 355초≈5.9분(정의서 URBAN 실측과 일치) — 초 단위, 도농 완충대 타이브레이크 420s와 동일 축
 FIRE_USECOLS = [
     "GRID_ID",
     "LAT",
@@ -65,19 +64,17 @@ GRID500_PATTERN = r"^..\d{2}[a-z]\d{2}[a-z]$"
 RESIDENTIAL = "주거"
 CALL_FIRE = "화재"
 
-# '활동 있는 침묵' — 총신고는 많은데 화재신고가 0인 격자.
-# 총신고량이 있다는 건 사람이 산다는 뜻이므로, 화재 0을 '안전'이 아니라
-# '무관측'으로 읽어야 하는 후보다(PoC 실측: 서울 265·부산 135·전북 481).
+# '활동 있는 침묵' — 총신고는 많은데 화재신고 0인 격자. 총신고량 존재=거주 신호이므로
+# 화재 0을 '안전' 아닌 '무관측' 후보로 읽음(PoC 실측: 서울 265·부산 135·전북 481).
 SILENT_MIN_TOTAL = 50
 
 
 @dataclass
 class IngestReport:
-    """적재 1건의 감사 기록. 발표 자산이므로 사람이 읽을 형태로 남긴다.
+    """적재 1건의 감사 기록. 발표 자산이라 사람이 읽을 형태로 남김.
 
-    **행 손실 사유를 뭉치지 않는다.** '격자 미부여'와 '시도 경계 밖'은 원인도 후속 처리도
-    다르다 — 전자는 읍면동 상향 집계 대상이고, 후자만이 ADR-008 §5가 말하는 클리핑이다.
-    한 숫자로 합치면 14배 팽창 함정이 실제로 있었는지조차 알 수 없게 된다.
+    행 손실 사유 미통합 원칙 — '격자 미부여'(읍면동 상향 집계 대상)와 '시도 경계 밖'(ADR-008 §5
+    클리핑)은 원인·후속 처리가 다름. 한 숫자로 합치면 14배 팽창 함정 발생 여부를 알 수 없게 됨.
     """
 
     source: str
@@ -125,11 +122,11 @@ def load_fires(sido: str, *, path: Path | None = None) -> tuple[pd.DataFrame, In
         if col in raw.columns:
             raw[col] = nfc_series(raw[col].astype("string"))
 
-    # 값 범위 위반은 여기서 죽는다. 통과해도 충전율은 항상 함께 낸다 —
-    # 습도·적설 스왑은 범위 검사를 통과하고 충전율 비대칭으로만 드러난다.
+    # 값 범위 위반은 여기서 fail-fast, 통과해도 충전율은 항상 병기 — 습도·적설 스왑은
+    # 범위검사 통과 후 충전율 비대칭으로만 드러남.
     fills = validate_ranges(raw, RANGE_SPEC_WEATHER, name=f"{sido} 화재 기상")
 
-    # 손실 사유를 분리해서 센다 — 뭉치면 클리핑이 실제로 한 일을 알 수 없다.
+    # 손실 사유 분리 집계 — 뭉치면 클리핑이 실제로 한 일을 알 수 없음.
     has_grid = raw["GRID_ID"].astype("string").str.match(GRID500_PATTERN, na=False)
     rows_no_grid = int((~has_grid).sum())
     df = clip_to_sido(raw.loc[has_grid], sido)
@@ -179,14 +176,12 @@ SGIS_SUBDIRS = ("1. 2024년 격자 통계(인구)", "2. 2024년 격자 통계(�
 
 
 def load_sgis_grid(zones: tuple[str, ...]) -> pd.DataFrame:
-    """SGIS 1km 격자 통계(long)를 격자당 1행(wide)으로 세운다.
+    """SGIS 1km 격자 통계(long) → 격자당 1행(wide) 변환.
 
-    ⚠️ 존은 100km 셀이라 **행정구역과 일치하지 않는다.** '다사'는 서울시가 아니라
-    수도권 전역(7,008격자·인구 2,515만)을 덮는다. 시군구 단위가 필요하면
-    격자가 아니라 좌표나 이벤트의 행정구역명으로 걸러야 한다.
+    ⚠️ 존은 100km 셀이라 행정구역과 불일치 — '다사'는 서울시가 아닌 수도권 전역
+    (7,008격자·인구 2,515만)을 덮음. 시군구 단위 필요 시 격자 아닌 좌표/이벤트 행정구역명으로 필터.
 
-    반환: `grid1k` + SGIS_ITEMS의 값 컬럼 + 파생 비율(`elderly_ratio`·`single_ratio`·
-    `apt_ratio`·`nonapt_ratio`)
+    반환: `grid1k` + SGIS_ITEMS 값 컬럼 + 파생 비율(`elderly_ratio`·`single_ratio`·`apt_ratio`·`nonapt_ratio`)
     """
     frames: list[pd.DataFrame] = []
     for sub in SGIS_SUBDIRS:
@@ -210,12 +205,10 @@ def load_sgis_grid(zones: tuple[str, ...]) -> pd.DataFrame:
     wide = long.pivot_table(index="grid1k", columns="item", values="value", aggfunc="sum")
     wide = wide.reindex(columns=list(dict.fromkeys(SGIS_ITEMS.values())))
 
-    # ⚠️ **SGIS long 포맷은 값이 0인 항목을 행으로 내보내지 않는다.**
-    # 그래서 pivot 후의 결측은 '모름'이 아니라 **0채/0명**이다. NaN으로 두면
-    # 아파트가 한 채도 없는 격자에서 비아파트율이 계산되지 않아, 우리가 찾는
-    # 농촌 취약 지역이 통째로 빠진다(전북 실측: 비아파트율 결측 94.6%,
-    # 남은 격자만 보니 아파트율 중앙값이 0.728이라는 불가능한 수가 나왔다).
-    # 다마존 대조: 총주택 6,912격자 중 아파트 행은 372개뿐 — 나머지는 아파트 0채다.
+    # ⚠️ SGIS long 포맷은 0값 항목을 행으로 미출력 — pivot 후 결측은 '모름' 아닌 '0채/0명'.
+    # NaN 유지 시 아파트 0채 격자의 비아파트율 미계산 → 농촌 취약 지역 통째 누락
+    # (전북 실측: 비아파트율 결측 94.6%, 잔여 격자만으로는 아파트율 중앙값 0.728이라는 불가능한 값 도출).
+    # 다마존 대조: 총주택 6,912격자 중 아파트 행 372개뿐 — 나머지는 아파트 0채.
     wide = wide.fillna(0.0).reset_index()
 
     def ratio(num: str, den: str) -> pd.Series:
@@ -232,10 +225,10 @@ def load_sgis_grid(zones: tuple[str, ...]) -> pd.DataFrame:
 
 @dataclass
 class CallReport:
-    """119신고 집계의 감사 기록. **시도 클리핑이 실제로 한 일**을 격자 수로 보여준다.
+    """119신고 집계의 감사 기록 — 시도 클리핑이 실제로 한 일을 격자 수로 표시.
 
-    PoC의 14배 팽창(서울 신고 격자 34,037 vs 이론 2,420)은 화재 상품이 아니라
-    이 신고 상품의 함정이었다 — 그래서 대조를 여기에 둔다.
+    PoC 14배 팽창(서울 신고 격자 34,037 vs 이론 2,420)은 화재 상품이 아닌 이 신고 상품의 함정 —
+    그래서 대조를 여기 배치.
     """
 
     sido: str
@@ -274,9 +267,9 @@ class CallReport:
 def load_call_counts(
     sido: str, *, years: tuple[int, ...] | None = None
 ) -> tuple[pd.DataFrame, CallReport]:
-    """119신고를 격자×연도 단위 건수로 집계한다.
+    """119신고를 격자×연도 단위 건수로 집계.
 
-    건별 원본은 시도당 수백만 행이라 DataFrame으로 들고 있지 않고 파일마다 즉시 집계한다.
+    건별 원본은 시도당 수백만 행이라 DataFrame 미보유, 파일마다 즉시 집계.
     반환 컬럼: `grid1k` · `year` · `total` · `fire`
     """
     frames: list[pd.DataFrame] = []
@@ -296,9 +289,8 @@ def load_call_counts(
         ok = gid.str.match(GRID500_PATTERN, na=False)
         rows_no_grid += int((~ok).sum())
 
-        # 연도별 커버리지를 따로 적어 둔다. 격자 부여율이 해마다 달라서
-        # (부산 2020 27% → 2021 65%), 격자 기준 건수만 보면 분류 정책 단절과
-        # 커버리지 변화가 한 숫자에 섞인다 — 손실 사유를 분리한 것과 같은 이유다.
+        # 연도별 커버리지 별도 기록 — 격자 부여율 연도차 존재(부산 2020 27%→2021 65%),
+        # 격자 기준 건수만 보면 분류 정책 단절과 커버리지 변화가 혼재(손실 사유 분리와 같은 이유).
         for y, grp in raw.groupby(raw["DCLR_YR"].astype(int)):
             prev = by_year.get(int(y), (0, 0))
             by_year[int(y)] = (prev[0] + len(grp), prev[1] + int(ok.loc[grp.index].sum()))
@@ -347,16 +339,15 @@ def yearly_totals(counts: pd.DataFrame) -> dict[int, float]:
 
 
 def year_share(counts: pd.DataFrame) -> dict[int, float]:
-    """연도별 상대 비중. 분류 정책 단절은 '건수'가 아니라 '기준'이 바뀐 것이므로
-    시계열 가중을 곱하기 전에 연도 내 상대값으로 바꾼다(ADR-008 §8)."""
+    """연도별 상대 비중 — 분류 정책 단절은 건수가 아닌 기준 변경이므로 시계열 가중 전 연도 내 상대값 변환(ADR-008 §8)."""
     return normalize_year_counts(yearly_totals(counts))
 
 
 def silent_activity(counts: pd.DataFrame, *, min_total: int = SILENT_MIN_TOTAL) -> pd.DataFrame:
-    """'활동 있는 침묵' 격자 — 총신고 min_total 이상인데 화재신고가 0.
+    """'활동 있는 침묵' 격자 — 총신고 min_total 이상인데 화재신고 0.
 
-    총신고량이 '안전'과 '무관측'을 가른다. 화재 0이 안전이어서인지 관측이 안 된 것인지를
-    총신고량으로 구별해, 무관측 후보만 큐 승격 대상으로 남긴다.
+    총신고량이 '안전'과 '무관측'을 구별하는 기준 — 화재 0이 안전인지 무관측인지 총신고량으로
+    가려 무관측 후보만 큐 승격 대상으로 남김.
     """
     g = counts.groupby("grid1k", as_index=False).agg(total=("total", "sum"), fire=("fire", "sum"))
     return g.loc[(g["total"] >= min_total) & (g["fire"] == 0)].sort_values(

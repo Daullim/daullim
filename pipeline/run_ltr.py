@@ -24,7 +24,7 @@ from run_scoring import build_scored
 from run_vulnerability import AS_OF
 
 SGG_OF = {key: (r.sido, r.name.split()[-1]) for key, r in REGIONS.items()}
-NEAREST_LIMIT_M = 150.0  # 화재 지점 ↔ 건물 매칭 상한. 넘으면 그 화재는 라벨에서 뺀다.
+NEAREST_LIMIT_M = 150.0  # 화재↔건물 매칭 상한 — 초과 시 라벨 제외
 
 
 def attach_labels(scored: pd.DataFrame) -> pd.DataFrame:

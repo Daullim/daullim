@@ -8,15 +8,12 @@ import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/**
- * 큐·상세 조회 투영 — 엔티티가 아니라 DTO를 바로 만든다.
- *
- * <p>큐는 저장물이 아니라 조회 시 파생이다(ADR-012 결정 18). 세대 집계를 건별로 세면 즉시 N+1이 되므로 LATERAL 한 방으로 붙인다 — 동 필터가 앞서고
- * {@code order_key} 정렬이 LIMIT에서 끊기므로 실제로 도는 건 페이지 크기만큼이다.
- */
+/** 큐·상세 조회 투영 — 엔티티가 아니라 DTO 직접 매핑 */
 @Repository
 public class BuildingQueryRepository {
 
+  // 큐는 저장물이 아닌 조회 시 파생값(ADR-012 결정 18)
+  // 세대 집계를 건별로 세면 N+1 발생 — LATERAL로 일괄 조회
   private static final String QUEUE_SELECT =
       """
       SELECT b.building_id, b.order_key, b.address, b.house_type_cd, b.score, b.risk_level_cd,

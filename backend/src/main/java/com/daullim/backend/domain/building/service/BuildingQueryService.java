@@ -44,10 +44,7 @@ public class BuildingQueryService {
         .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "건물을 찾을 수 없습니다."));
   }
 
-  /**
-   * 주소 검색어 정규화 — {@code address_norm}이 공백을 제거한 GENERATED 컬럼이라 검색어도 같은 규칙으로 눌러야 매칭된다(FE B3 검색과 동일).
-   * LIKE 메타문자는 이스케이프한다 — 사용자가 친 {@code %}가 전체 매칭이 되면 안 된다.
-   */
+  /** 주소 검색어 정규화 — address_norm(공백 제거 GENERATED 컬럼) 매칭 규칙 적용(FE B3 검색과 동일) */
   private static String normalizeAddressQuery(String q) {
     if (q == null) {
       return null;
@@ -56,6 +53,7 @@ public class BuildingQueryService {
     if (stripped.isEmpty()) {
       return null;
     }
+    // LIKE 메타문자 이스케이프 — 사용자 입력 %가 전체 매칭으로 해석되지 않도록
     return stripped.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
   }
 }

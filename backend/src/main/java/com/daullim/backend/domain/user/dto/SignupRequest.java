@@ -7,7 +7,6 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalDate;
 
-/** 회원가입 요청 데이터. */
 public record SignupRequest(
     @NotBlank(message = "로그인 아이디는 필수입니다.") @Size(min = 4, max = 50, message = "로그인 아이디는 4자 이상 50자 이하여야 합니다.") String loginId,
     @NotBlank(message = "비밀번호는 필수입니다.") @Size(min = 8, max = 72, message = "비밀번호는 8자 이상 72자 이하여야 합니다.") String password,

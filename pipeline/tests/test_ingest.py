@@ -1,8 +1,4 @@
-"""원본 적재·검증 — 합성 픽스처로 함정 동작을 고정한다.
-
-실데이터 의존 검증은 `run_ingest.py`의 실행 로그가 맡는다(§9 산출물 5).
-여기서는 '무엇을 어떻게 세는가'의 규칙만 잠근다.
-"""
+"""원본 적재·검증 — 합성 픽스처로 함정 동작(계수 규칙) 고정. 실데이터 검증은 run_ingest.py 로그(§9-5) 담당."""
 
 from __future__ import annotations
 
@@ -100,7 +96,7 @@ def test_2021_계단식_급증을_상대비중으로_흡수한다():
          ("다사4641", 2021, 400, 6), ("다사4641", 2022, 410, 6)]
     )
     totals = yearly_totals(counts)
-    assert totals[2021] / totals[2020] > 3  # 단절이 눈에 보인다
+    assert totals[2021] / totals[2020] > 3
     share = year_share(counts)
     assert abs(sum(share.values()) - 1.0) < 1e-9
     assert share[2021] < 0.5

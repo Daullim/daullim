@@ -7,7 +7,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.web.SecurityFilterChain;
 
-/** 회원가입 요청만 인증 없이 처리하는 우선순위 보안 체인이다. */
+/** 회원가입·로그인 무인증 처리 우선순위 보안 체인 */
 @Configuration
 public class SignupSecurityConfig {
 

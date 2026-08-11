@@ -1,10 +1,7 @@
 """외부 API 호출과 파일 캐시.
 
-**캐시는 선택이 아니라 필수다.** 건축HUB는 일 10,000회, VWorld는 일 40,000회 한도라
-재실행마다 다시 부르면 파이프라인이 며칠 단위로 막힌다.
-
-키 함정: data.go.kr 인증키는 '인코딩'과 '디코딩' 두 형태로 배포되고, 인코딩 형태(`%` 포함)를
-그대로 재인코딩하면 **403**이 난다. 어느 형태를 붙여넣어도 동작하도록 항상 unquote 후 재인코딩한다.
+캐시 필수 — 건축HUB 일 10,000회·VWorld 일 40,000회 한도, 재호출 시 파이프라인 장기 정지 위험.
+키 함정: data.go.kr 인증키 인코딩/디코딩 두 형태 배포, 인코딩 형태 재인코딩 시 403 → 항상 unquote 후 재인코딩.
 """
 
 from __future__ import annotations
@@ -17,9 +14,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-# 재시도 대상 — 공공 API는 간헐적으로 연결을 그냥 끊는다.
-# `RemoteDisconnected`는 URLError가 아니라 HTTPException/ConnectionResetError 계열이라
-# URLError만 잡으면 장시간 수집 중 통째로 죽는다(실측).
+# 재시도 대상 — RemoteDisconnected는 URLError 아닌 HTTPException/ConnectionResetError 계열, URLError만 잡으면 장시간 수집 중 사망(실측)
 RETRYABLE = (
     urllib.error.URLError,
     http.client.HTTPException,
@@ -35,9 +30,9 @@ KEY_PARAMS = ("serviceKey", "key")
 
 
 def load_env() -> dict[str, str]:
-    """`pipeline/.env` → `backend/.env` 순으로 키를 찾는다."""
+    """`pipeline/.env` → `backend/.env` 순 키 탐색."""
     env: dict[str, str] = {}
-    for path in reversed(ENV_CANDIDATES):  # 뒤쪽이 먼저 채워지고 앞쪽이 덮어쓴다
+    for path in reversed(ENV_CANDIDATES):  # 뒤부터 채우고 앞이 덮어씀(우선순위)
         if not path.exists():
             continue
         for line in path.read_text(encoding="utf-8").splitlines():
@@ -58,7 +53,7 @@ def require_key(name: str) -> str:
 
 
 def build_url(base: str, params: dict[str, str]) -> str:
-    """인증키는 항상 unquote 후 재인코딩 — 이중 인코딩 403을 원천 차단한다."""
+    """인증키 unquote 후 재인코딩 — 이중 인코딩 403 방지."""
     normalized = {
         k: (urllib.parse.unquote(str(v)) if k in KEY_PARAMS else str(v))
         for k, v in params.items()
@@ -67,10 +62,7 @@ def build_url(base: str, params: dict[str, str]) -> str:
 
 
 class JsonlCache:
-    """append-only JSONL 캐시. 키 → 레코드.
-
-    중간에 죽어도 이미 받은 것은 남는다 — 한도가 유한한 자원을 다루는 기본 자세다.
-    """
+    """append-only JSONL 캐시(키→레코드) — 중단돼도 기록 보존, 유한 API 한도 대응."""
 
     def __init__(self, path: str | Path):
         self.path = Path(path)
@@ -86,7 +78,7 @@ class JsonlCache:
                         rec = json.loads(line)
                         self._data[rec["k"]] = rec["v"]
                     except (json.JSONDecodeError, KeyError):
-                        continue  # 손상된 줄은 건너뛴다 — 다시 받으면 된다
+                        continue  # 손상된 줄 스킵 — 재수집으로 복구 가능
 
     def __contains__(self, key: str) -> bool:
         return key in self._data
@@ -104,7 +96,7 @@ class JsonlCache:
 
 
 class ApiClient:
-    """호출 간격·재시도·캐시를 한곳에서 관리한다."""
+    """호출 간격·재시도·캐시 통합 관리."""
 
     def __init__(self, cache: JsonlCache, *, min_interval: float = 0.05, retries: int = 5):
         self.cache = cache

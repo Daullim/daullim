@@ -8,7 +8,7 @@ import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Component;
 
-/** 액세스 토큰만 발급한다. 리프레시 토큰은 두지 않는다. */
+/** 액세스 토큰 전용 발급 (리프레시 토큰 미지원) */
 @Component
 public class JwtTokenProvider {
 

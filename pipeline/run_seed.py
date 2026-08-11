@@ -62,9 +62,8 @@ def load_units() -> pd.DataFrame:
 def load_region_names() -> dict[str, tuple[str, str, str]]:
     """지오코딩 캐시 → `admin_dong_cd` → (시도명, 시군구명, 행정동명).
 
-    VWorld 도로명 검색 응답에 `level1`·`level2`·`level4A`가 코드(`level4AC`)와 함께 온다.
-    `buildings`에는 명칭 컬럼이 없으므로 이 캐시가 유일한 원천이며, 이미 받아 둔 것이라
-    추가 호출이 0이다.
+    VWorld 도로명 검색 응답의 `level1`·`level2`·`level4A`가 코드(`level4AC`)와 함께 옴 —
+    `buildings`엔 명칭 컬럼이 없어 이 캐시가 유일한 원천, 기수신 데이터라 추가 호출 0.
     """
     cache = JsonlCache(GEOCODE_CACHE)
     out: dict[str, tuple[str, str, str]] = {}
@@ -131,10 +130,8 @@ def main() -> int:
              region_type_cd=("region_type_cd", "first"), households=("exposure", "max"))
         .reset_index()
     )
-    # 등급은 **화면에 함께 뜨는 avg_score에서** 낸다 — 건물 한 채의 '점수→등급'과 같은 규칙(절대 임계값).
-    # 예전엔 건물 등급의 최빈값을 썼는데, 평균과 최빈값은 서로 다른 통계라 어긋났다:
-    # 마마4907은 평균 36.5(=warn 구간)인데 56채 중 38채가 ok라 배지가 'ok'로 떴고,
-    # 평균이 더 낮은 마마5203(35.6)은 다수가 warn이라 '경고'로 떠서 화면상 역전으로 보였다.
+    # 등급은 avg_score 기준(건물 단위 점수→등급과 동일한 절대 임계값) — 과거 최빈값 사용 시
+    # 마마4907(평균36.5·38/56채 ok→'ok'표시)·마마5203(평균35.6·다수 warn→'경고') 역전 발생해 변경
     per_grid["risk_level_cd"] = risk_level(per_grid["avg_score"]).values
     bounds = load_boundaries(set(per_grid["grid1k"]))
     geojson = build_grid_geojson(per_grid, boundaries=bounds)

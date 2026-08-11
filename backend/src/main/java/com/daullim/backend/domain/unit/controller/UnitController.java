@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-/** 세대는 건물의 하위 리소스라 목록은 건물 경로에 걸고, 수정은 세대 자신의 경로에 건다. */
+/** 세대는 건물 하위 리소스 — 목록은 건물 경로, 수정은 세대 경로 */
 @Tag(name = "세대", description = "세대 목록과 현장 호수 입력")
 @RestController
 public class UnitController {

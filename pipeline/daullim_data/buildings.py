@@ -1,10 +1,10 @@
-"""건물 마스터 + 세대 생성 — `buildings`·`units` 행을 만든다.
+"""건물 마스터 + 세대 생성 — `buildings`·`units` 행 생성.
 
-산출 계약은 `V1__init.sql`의 DDL이다. 이 모듈은 대장 유래 컬럼과 지오코딩 결과까지 채우고,
-점수 계열(`score`·`order_key` 등)은 커밋 7의 몫으로 남긴다.
+산출 계약은 `V1__init.sql` DDL. 이 모듈은 대장 유래 컬럼·지오코딩 결과까지 채우고
+점수 계열(`score`·`order_key` 등)은 커밋 7의 몫으로 남김.
 
-쓰기 경계는 ADR-015를 따른다 — `units`는 **정적 4컬럼만**(`unit_seq`·`ho_nm`·`flr_no`·
-`ho_nm_source_cd`) 만들고 업무 상태 3컬럼은 건드리지 않는다.
+쓰기 경계는 ADR-015 — `units`는 정적 4컬럼만(`unit_seq`·`ho_nm`·`flr_no`·`ho_nm_source_cd`)
+생성, 업무 상태 3컬럼은 미접근.
 """
 
 from __future__ import annotations
@@ -31,13 +31,12 @@ VWORLD_API = "https://api.vworld.kr/req/address"
 PAGE_SIZE = 100  # 건축HUB numOfRows 최대치
 
 # ── 주택 유형 5분류 ─────────────────────────────────────────────────────
-# ⚠️ 표제부는 **건축법 상위 범주**로만 온다(실측 2,258건 중 세부 명시는 11.3%뿐).
-# 그래서 명시값을 우선 쓰고, 없으면 건축법 시행령의 실제 구분 기준으로 추론한다.
-#   · 아파트   = 주택 층수 5개 층 이상            → 스코프 밖(비아파트 사업)이라 제외
-#   · 연립주택 = 4개 층 이하 & 바닥면적 합계 660㎡ **초과**
+# ⚠️ 표제부는 건축법 상위 범주로만 옴(실측 2,258건 중 세부 명시 11.3%뿐) — 명시값 우선, 없으면 건축법 시행령 기준 추론:
+#   · 아파트   = 주택 층수 5개 층 이상 → 스코프 밖(비아파트 사업)이라 제외
+#   · 연립주택 = 4개 층 이하 & 바닥면적 합계 660㎡ 초과
 #   · 다세대   = 4개 층 이하 & 660㎡ 이하
 #   · 다가구   = 단독주택 분류이면서 2가구 이상
-# 교차검증: 명시적 '연립주택'(3층·2,179㎡·19세대)이 추론 규칙으로도 row-house로 떨어진다.
+# 교차검증: 명시적 '연립주택'(3층·2,179㎡·19세대)이 추론 규칙으로도 row-house로 일치.
 APT = "APT"  # DDL 5분류에 없다 = 제외 대상
 DETACHED, MULTI_USER, MULTI_FAMILY, ROW_HOUSE, MULTI_UNIT = (
     "detached", "multi-user", "multi-family", "row-house", "multi-unit"
@@ -79,15 +78,14 @@ MAIN_UNIT_NAME = "본가구"
 
 
 def unit_count_of(house_type: str, *, families: int, households: int, hos: int) -> int:
-    """세대수는 유형별로 다른 필드에 담긴다(실측 확정).
+    """세대수는 유형별로 다른 필드에 담김(실측 확정).
 
     단독 계열 → `fmlyCnt`(가구수) 94~100% / 공동 계열 → `hhldCnt`(세대수) 100%.
-    `hoCnt`는 거의 쓰이지 않아 보조로만 본다. DDL이 `unit_count > 0`을 요구하므로 최소 1.
+    `hoCnt`는 거의 안 쓰여 보조로만 사용. DDL `unit_count > 0` 요구로 최소 1.
 
-    ⚠️ **단독·다중은 무조건 1이다.** ADR-015가 "1행, `ho_nm='본가구'`"로 규정했으므로
-    `unit_count`도 1이어야 `units` 행수와 정합한다. 실제로 `fmlyCnt=0`인데 `hoCnt=16`인
-    단독주택이 있었고(다가구를 단독으로 등록한 것으로 보임), 보조 규칙을 그대로 두면
-    "행 1개인데 unit_count 16"이 되어 검증이 깨진다.
+    ⚠️ 단독·다중은 무조건 1 — ADR-015 "1행, `ho_nm='본가구'`" 규정상 `unit_count`도 1이어야
+    `units` 행수와 정합. 실측 `fmlyCnt=0`·`hoCnt=16` 단독주택 사례(다가구를 단독 등록한 것으로 추정) —
+    보조 규칙을 그대로 두면 "행 1개인데 unit_count 16"으로 검증 붕괴.
     """
     if house_type in IMPLICIT_TYPES:
         return 1
@@ -135,10 +133,10 @@ def fetch_titles(region_key: str, *, client: ApiClient | None = None) -> list[di
 
 
 def fetch_expos(row: dict, *, client: ApiClient | None = None) -> list[dict]:
-    """전유부 — 다세대·연립의 **실제 호수**를 받는다(C안).
+    """전유부 — 다세대·연립의 실제 호수 조회(C안).
 
-    없으면 빈 리스트다. 그 경우 세대수만큼 빈 행을 만들고 `ho_nm_source_cd='field'`로
-    "이 호수는 현장에서 채운다"를 정직하게 기록한다(ADR-015).
+    없으면 빈 리스트 — 세대수만큼 빈 행 생성, `ho_nm_source_cd='field'`로
+    현장 입력 대상임을 기록(ADR-015).
     """
     key = require_key("SERVICE_KEY")
     client = client or ApiClient(JsonlCache(EXPOS_CACHE))
@@ -166,9 +164,9 @@ class GeoResult:
 
 
 def geocode(address: str, *, kind: str = "road", client: ApiClient | None = None) -> GeoResult:
-    """VWorld 지오코딩. 도로명 검색만 행정동코드(`level4AC`)를 준다 — 실측 확인.
+    """VWorld 지오코딩 — 도로명 검색만 행정동코드(`level4AC`) 제공(실측 확인).
 
-    지번 검색은 좌표는 주지만 `level4AC`가 비어 있어, 행정동은 별도로 채워야 한다.
+    지번 검색은 좌표만 주고 `level4AC` 공란 — 행정동은 별도 보완 필요.
     """
     key = require_key("VWORLD_KEY")
     client = client or ApiClient(JsonlCache(GEOCODE_CACHE))
@@ -207,9 +205,9 @@ def road_address(row: dict) -> str:
     return nfc(str(row.get("newPlatPlc") or "")).strip()
 
 
-# 사용승인일의 현실적 하한. 근대적 건축물대장 제도 자체가 20세기라 그 이전은 입력 오류다.
-# 실측: `09970101`(997년) · `10460101`(1046년)이 들어 있었고, DDL CHECK는 형식(`^\d{8}$`)만
-# 보므로 그대로 통과한다. 걸러내지 않으면 x₁(연차)이 1029년이 되어 exp(Σβx)가 폭발한다.
+# 사용승인일 현실적 하한 — 근대 건축물대장 제도가 20세기라 그 이전은 입력 오류.
+# 실측: `09970101`(997년)·`10460101`(1046년) 존재, DDL CHECK는 형식(`^\d{8}$`)만 봐 통과
+# → 미필터 시 x₁(연차) 1029년으로 exp(Σβx) 폭발.
 USE_APR_MIN_YEAR = 1900
 
 
@@ -361,14 +359,13 @@ def build_master(
 
 
 def fill_missing_dong(buildings: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-    """`admin_dong_cd` 결측을 **최근접 건물**의 값으로 채운다 → (보완된 표, 채운 수).
+    """`admin_dong_cd` 결측을 최근접 건물 값으로 채움 → (보완된 표, 채운 수).
 
-    지번 폴백 응답에는 `level4AC`가 없다(실측). 그런데 이 컬럼은 NOT NULL이라
-    비면 그 행은 통째로 적재되지 않는다 — 화면의 지역 셀렉터도 이걸로 돈다.
+    지번 폴백 응답엔 `level4AC` 없음(실측) — NOT NULL 컬럼이라 비면 그 행 통째로 미적재
+    (화면 지역 셀렉터도 이걸로 동작).
 
-    법정동에서 행정동을 역산하는 건 1:다라 불가능하지만, **바로 옆 건물의 행정동**은
-    거의 확실히 같다. 추가 API 호출이 0이고 공간적으로도 타당하다.
-    채운 행은 `is_estimated=true`로 표기해 추정임을 화면까지 전파한다.
+    법정동→행정동 역산은 1:다라 불가능하나 바로 옆 건물의 행정동은 거의 확실히 동일 —
+    추가 API 호출 0, 공간적으로도 타당. 채운 행은 `is_estimated=true`로 표기해 추정을 화면까지 전파.
     """
     out = buildings.copy()
     missing = out["admin_dong_cd"].isna()
@@ -407,12 +404,9 @@ def _units_for(kind, bld_key, count, title_row, expos_fetcher, rep) -> list[dict
             expos = [e for e in expos if str(e.get("dongNm") or "").strip() == dong]
         hos = [e for e in expos if str(e.get("hoNm") or "").strip()]
         names = [nfc(str(e.get("hoNm")).strip()) for e in hos]
-        # 전유부를 신뢰하는 조건은 둘 다 충족일 때뿐이다.
-        #   ① 호수 개수 == 표제부 세대수
-        #   ② 호수명에 중복이 없을 것
-        # 같은 지번에 여러 동이 있으면 '2층201호'가 동마다 반복돼 들어온다(실측 3.9%).
-        # 표제부의 dongNm이 비어 있으면 위의 동 필터가 걸리지 않으므로, 중복 자체를
-        # 신뢰 불가 신호로 삼는다 — DDL의 ux_units_bld_ho(건물 내 호수 유일)에 걸린다.
+        # 전유부 신뢰 조건 — ① 호수 개수 == 표제부 세대수 ② 호수명 중복 없음.
+        # 같은 지번 다동 시 '2층201호'가 동마다 반복 입력됨(실측 3.9%) — dongNm 공란이면
+        # 동 필터가 안 걸리므로 중복 자체를 신뢰 불가 신호로 처리(DDL ux_units_bld_ho 위반 방지).
         if hos and len(hos) == count and len(set(names)) == len(names):
             out = []
             for seq, e in enumerate(sorted(hos, key=lambda x: str(x.get("hoNm"))), start=1):

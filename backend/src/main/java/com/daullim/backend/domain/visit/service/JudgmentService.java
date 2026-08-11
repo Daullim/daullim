@@ -32,7 +32,6 @@ public class JudgmentService {
 
     validateGate(s, cb);
 
-    // 점검 수행 여부는 lookup이 정한다.
     if (!cb.consentStatus(s.consentCode()).isInspectable()) {
       return AlarmJudgment.notInspected();
     }
@@ -160,10 +159,9 @@ public class JudgmentService {
   /* ------------------------------- 판정 ------------------------------- */
 
   /**
-   * 개수·사유 입력 없이 전량 교체가 확정되는 사유. 아니면 null.
+   * 개수·사유 입력 없이 전량 교체가 확정되는 사유.
    *
-   * <p>경과는 연식이 다한 것이고 미표기는 연식을 보증할 수 없는 것이다. 둘 다 실별로 따질 여지가 없다. 제조년월이 없으면 경과 판정 자체가 불가능하므로 두 경우는
-   * 배타적이다.
+   * @return 제조년월 있으면 "expired"(15년 경과) 여부, 없으면 "unmarked"(미표기) 여부 — 두 사유는 배타적, 해당 없으면 null
    */
   private String autoReason(VisitSubmission s) {
     if (s.mfgYm() != null) {
