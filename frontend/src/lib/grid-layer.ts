@@ -42,12 +42,16 @@ function isRiskLevel(value: unknown): value is RiskLevel {
   return value === "danger" || value === "warn" || value === "ok";
 }
 
+const Z_BASE = 1;
+const Z_SELECTED = 100;
+
 export function gridStyles() {
   const stroke = {
     strokeColor: token("--color-hairline-strong"),
     strokeWeight: 1,
     strokeOpacity: 0.8,
     clickable: true,
+    zIndex: Z_BASE,
   };
 
   return {
@@ -67,11 +71,15 @@ export function gridStyles() {
       };
     }) satisfies naver.maps.StylingFunction,
 
-    /** 선택 — 테두리만 바꾼다. 면은 그대로 둬 위험도가 계속 읽힌다. */
+    /**
+     * 선택 — 테두리만 바꾼다. 면은 그대로 둬 위험도가 계속 읽힌다.
+     * `zIndex`로 맨 위에 올려야 맞닿은 이웃 격자의 실선에 덮이지 않는다.
+     */
     selected: {
       strokeColor: token("--color-brand"),
       strokeWeight: 3,
       strokeOpacity: 1,
+      zIndex: Z_SELECTED,
     } satisfies naver.maps.StyleOptions,
   };
 }
