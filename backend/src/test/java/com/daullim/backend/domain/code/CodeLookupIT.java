@@ -15,12 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
-/**
- * lookup seed가 frontend/src/config/domain.ts와 어긋나지 않는지 확인한다. 판정 서비스가 이 값들을 DB에서 읽어 동작하므로, 여기서 깨지면
- * 판정 결과가 통째로 틀린다.
- *
- * <p>이 테스트가 기동한다는 것 자체가 ddl-auto=validate 통과의 증거이기도 하다.
- */
+/** lookup seed ↔ frontend domain.ts 열거값 일치 검증. */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 class CodeLookupIT {

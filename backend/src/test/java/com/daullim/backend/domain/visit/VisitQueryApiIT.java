@@ -175,11 +175,7 @@ class VisitQueryApiIT extends QueryApiSupport {
     }
   }
 
-  /**
-   * 현장 '오늘' 카드가 쓰는 집계.
-   *
-   * <p>픽스처: 승낙 2건(점검함 — 실효 교체 각 1대) · 거부 1건 · 공가 1건(난곡동) · 연락두절 1건은 soft delete.
-   */
+  /** 현장 '오늘' 카드 집계 — 픽스처: 승낙 2(실효교체 각 1)·거부 1·공가 1(난곡동)·연락두절 1(soft delete). */
   @Nested
   @DisplayName("G-2. 기간 집계")
   class Summary {

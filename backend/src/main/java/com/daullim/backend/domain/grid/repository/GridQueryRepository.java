@@ -9,11 +9,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class GridQueryRepository {
 
-  /**
-   * 1km로 유도한 격자 단위 집계.
-   *
-   * <p>격자가 없는 건물은 격자 목록에 오를 수 없어 제외한다 — 실데이터에는 0건이지만 DDL이 nullable이라 막아 둔다.
-   */
+  // 격자 없는 건물 제외 — 실데이터엔 0건이지만 DDL이 nullable이라 방어적으로 필터링
   private static final String SUMMARY_SQL =
       """
       SELECT %s AS grid_id_1km,

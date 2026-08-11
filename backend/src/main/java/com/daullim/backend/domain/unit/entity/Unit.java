@@ -49,7 +49,7 @@ public class Unit {
   @Column(name = "last_inspected_day", length = 8)
   private String lastInspectedDay;
 
-  /** 연차 재산입 스캔의 기준일. 여기서 15년이 재도래하면 큐로 복귀. */
+  /** 연차 재산입 스캔 기준일 — 15년 경과 시 큐 복귀 */
   @JdbcTypeCode(SqlTypes.CHAR)
   @Column(name = "rx_baseline_day", length = 8)
   private String rxBaselineDay;
@@ -77,7 +77,7 @@ public class Unit {
     this.statusCode = statusCode;
   }
 
-  /** 다가구는 전유부가 없어 호수를 현장에서 받는다. */
+  /** 전유부 없는 다가구는 호수를 현장에서 입력받음 */
   public void renameHo(String hoNm, String hoNmSourceCode) {
     this.hoNm = hoNm;
     this.hoNmSourceCode = hoNmSourceCode;
@@ -93,7 +93,7 @@ public class Unit {
     this.rxBaselineDay = day;
   }
 
-  /** 재산입 스캔이 되돌리는 지점 — 기준일이 15년을 넘긴 완료 세대를 대기로 복귀. */
+  /** 재산입 스캔 복귀 지점 — 기준일 15년 초과 완료 세대를 대기로 전환 */
   public void resetToPending(String pendingStatusCode) {
     this.statusCode = pendingStatusCode;
   }

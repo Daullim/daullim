@@ -25,13 +25,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * A-4 회원탈퇴.
- *
- * <p>여기서는 <b>진짜 토큰</b>을 발급해 쓴다. {@code jwt()} 목 후처리기는 필터 체인 앞에서 인증을 심어 버려 {@code
- * ActiveAccountFilter}를 건너뛰므로, 탈퇴한 토큰이 막히는지를 확인할 수 없다.
- *
- * <p><b>트랜잭션을 걸지 않는다.</b> 필터의 계정 조회는 테스트 트랜잭션 밖에서 자기 커넥션으로 돌아 미커밋 변경을 보지 못한다 — 탈퇴가 실제로 커밋돼야 다음 요청이
- * 막히는 것을 볼 수 있다. 롤백이 없으므로 남긴 행은 손으로 지운다.
+ * A-4 회원탈퇴 — 진짜 토큰 사용({@code jwt()} mock은 ActiveAccountFilter를 건너뜀), 트랜잭션 없음(필터가 별도 커넥션이라 커밋 필요).
  */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest

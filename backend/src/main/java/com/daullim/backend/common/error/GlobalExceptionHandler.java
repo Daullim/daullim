@@ -79,7 +79,6 @@ public class GlobalExceptionHandler {
     return toResponse(ErrorCode.NOT_FOUND, ErrorCode.NOT_FOUND.getMessage());
   }
 
-  /** 매핑되지 않은 URL 처리. */
   @ExceptionHandler(NoResourceFoundException.class)
   public ResponseEntity<ApiResponse<Void>> handleNoResource(NoResourceFoundException e) {
     log.warn("no handler for {}", e.getResourcePath());

@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class UnitService {
 
-  /** 대장에서 온 호수(전유부·본가구)는 현장에서 고칠 수 없다. */
+  /** 대장 유래 호수(전유부·본가구) 현장 수정 불가 */
   private static final String SOURCE_FIELD = "field";
 
   private final UnitRepository units;

@@ -19,19 +19,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
-/**
- * TestRestTemplate은 spring-boot-restclient를 요구하는데 그 의존성이 없어 JDK HttpClient로 실제 포트를 때린다. 톰캣을 그대로
- * 태우므로 ERROR 디스패치 재인가 같은 필터 체인 거동까지 검증된다.
- */
+/** TestRestTemplate 의존성 부재로 JDK HttpClient 사용 — 톰캣을 그대로 태워 ERROR 디스패치 재인가까지 검증. */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    // 프로덕션 도메인 1개 + Vercel preview 패턴.
     properties =
         "app.cors.allowed-origins=http://localhost:5173,https://daullim-*-xyunals-projects.vercel.app")
 class SecurityIT {
 
-  /** 아직 컨트롤러가 없어 보호 여부만 본다. 인가를 통과하면 핸들러가 없어 404가 된다. */
+  /** 컨트롤러 미구현 — 인가 통과 시 404(핸들러 없음)로 판정. */
   private static final String PROTECTED_PATH = "/api/any-protected-path";
 
   @Value("${local.server.port}")
@@ -83,7 +79,7 @@ class SecurityIT {
       HttpResponse<String> res =
           send(request(PROTECTED_PATH).header("Authorization", "Bearer " + token).GET());
 
-      // 401이 아니라 404라는 것이 통과의 증거다. ERROR 디스패치가 재인가되지 않는다는 뜻이기도 하다.
+      // 404(인가 통과 증거) — ERROR 디스패치가 재인가되지 않음도 확인
       assertThat(res.statusCode()).isEqualTo(404);
     } finally {
       users.deleteById(user.getId());

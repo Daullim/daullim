@@ -14,22 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * 조회 API IT 공용 픽스처.
- *
- * <p>{@code buildings}는 pipeline 소유라 리포지토리로 넣을 수 없어 SQL로 만든다. 시연 유니버스와 같은 코드를 쓴다 — 신림동 1162069500 ·
- * 난곡동 1162077500 · 관악구 11620 · 서울 11.
- *
- * <p>도메인별 IT가 이 클래스를 상속한다. 설정이 같아 스프링 컨텍스트와 컨테이너는 한 벌만 뜬다.
- *
- * <pre>
- * 건물   동          order_key  격자(500m)   1km      세대  완료  점수    도농
- * B1    신림동       1          다사46a41a   다사4641  2     2     91.20  URBAN
- * B2    신림동       2          다사46b41a   다사4641  2     0     55.00  URBAN
- * B3    신림동       3          다사47a41a   다사4741  1     0     20.00  RURAL
- * B4    난곡동       4          다사48a41a   다사4841  1     0     75.00  BUFFER
- * </pre>
- */
+/** 조회 API IT 공용 픽스처 — buildings는 pipeline 소유라 SQL로 직접 생성함. */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -52,19 +37,15 @@ public abstract class QueryApiSupport {
   protected long b3;
   protected long b4;
 
-  /** 현장 입력 대상(호수 미지정)과 대장에서 온 호수 — F-2 허용·차단 양쪽을 잡는다. */
+  /** 현장 입력 대상(호수 미지정)과 대장 호수 — F-2 허용·차단 양쪽 검증용. */
   protected long b2FieldUnit;
 
   protected long b1ExposUnit;
 
-  /** 토큰의 주인. ActiveAccountFilter가 요청마다 이 계정이 살아 있는지 확인한다. */
+  /** 토큰의 주인 — ActiveAccountFilter가 요청마다 생존 확인. */
   protected long officerId;
 
-  /**
-   * 인증된 요청 — {@code jwt()} 기본 subject는 {@code "user"}라 계정 조회를 통과하지 못한다.
-   *
-   * <p>{@code sub}는 우리가 발급할 때 넣는 {@code user_id}이므로 픽스처가 만든 실제 계정을 가리키게 한다.
-   */
+  /** 인증된 요청 — 기본 {@code jwt()} subject는 계정 조회를 통과 못 해 실제 officerId로 대체. */
   protected RequestPostProcessor officer() {
     return jwt().jwt(builder -> builder.subject(String.valueOf(officerId)));
   }

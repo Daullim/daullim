@@ -5,18 +5,14 @@ import com.daullim.backend.common.error.ErrorCode;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 
-/**
- * 큐 커서 — 정렬이 {@code order_key} 고정이라 커서도 그 값 하나다.
- *
- * <p>클라이언트가 값을 해석해 조작하지 못하도록 Base64로 감싼 불투명 문자열로 내린다({@code order_key:4} →{@code
- * b3JkZXJfa2V5OjQ=}). {@code order_key}는 전역 유일·연속이라 페이지 경계가 흔들리지 않는다.
- */
+/** 큐 커서 — 정렬이 order_key 고정이라 커서도 그 값 하나 */
 public final class QueueCursor {
 
   private static final String PREFIX = "order_key:";
 
   private QueueCursor() {}
 
+  // 클라이언트 조작 방지를 위해 Base64로 감싼 불투명 문자열로 노출
   public static String encode(int orderKey) {
     return Base64.getEncoder().encodeToString((PREFIX + orderKey).getBytes(StandardCharsets.UTF_8));
   }

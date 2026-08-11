@@ -23,10 +23,7 @@ class RegionBoundaryApiIT extends QueryApiSupport {
         .andExpect(jsonPath("$.features.length()").value(58));
   }
 
-  /**
-   * 이 파일만 {@code run_seed.py}의 산출이 아니라 admdongkor에서 손으로 잘라 온 것이라, 시연 지역이 늘어도 조용히 뒤처진다. 큐·목록은 멀쩡한데
-   * 지도만 비어 보이므로 눈으로는 늦게 발견된다 — 사전(regions.csv)과 대조해 못 박는다.
-   */
+  // admdongkor 수동 재절단 파일이라 시연 지역 추가 시 조용히 뒤처짐 — 사전과 대조해 못 박음
   @Test
   @DisplayName("경계 시군구는 지역 사전의 시군구와 정확히 일치한다 — 재절단 누락 방지")
   void coversExactlyTheCatalogSigungus() throws Exception {

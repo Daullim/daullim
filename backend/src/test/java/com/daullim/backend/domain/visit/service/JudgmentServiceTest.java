@@ -18,12 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
-/**
- * 판정 규칙 고정.
- *
- * <p>lookup은 실제 seed를 쓴다 — 엔티티에 공개 생성자가 없어 손으로 만들려면 리플렉션이 필요하고, 어차피 판정이 참조하는 값의 정본이 seed다. 대신 시계는
- * 테스트마다 고정해 15년 경계를 재현 가능하게 만든다.
- */
+/** 판정 규칙 고정 — lookup은 실제 seed 사용(엔티티에 public 생성자 없음), 시계는 테스트마다 고정. */
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest
 class JudgmentServiceTest {
@@ -32,7 +27,7 @@ class JudgmentServiceTest {
 
   @Autowired CodeBookProvider codeBooks;
 
-  /** 그날 현장에 있었다고 치고 판정한다. */
+  /** 지정 시각 고정 판정 서비스. */
   private JudgmentService on(String instant) {
     return new JudgmentService(codeBooks, Clock.fixed(Instant.parse(instant), KST));
   }

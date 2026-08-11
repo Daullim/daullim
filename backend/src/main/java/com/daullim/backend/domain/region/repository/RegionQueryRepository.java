@@ -12,9 +12,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class RegionQueryRepository {
 
-  /**
-   * 시군구 대표 도농 클래스 — 완충대가 대표가 되면 해석이 불가능해 BUFFER·NO_POP을 빼고 다수결한다. 파이프라인 v0 성적표의 대조 규약과 같은 제외 규칙이다.
-   */
+  // 시군구 대표 도농값 — BUFFER·NO_POP 제외 다수결 (pipeline v0 대조 규약과 동일 제외 규칙)
   private static final String MAJORITY_REGION_TYPE_SQL =
       """
       SELECT DISTINCT ON (sigungu_cd) sigungu_cd, region_type_cd
@@ -27,18 +25,8 @@ public class RegionQueryRepository {
       ORDER BY sigungu_cd, cnt DESC, region_type_cd
       """;
 
-  /**
-   * 동별 대상 가구 수·평균 위험도.
-   *
-   * <p>대상 가구는 <b>세대 기준</b>이다({@code count(units)}) — 화면 라벨이 "가구 수"이고 점검의 실제 단위가 세대라, H-3 {@code
-   * targetCount}와 같은 축으로 센다.
-   *
-   * <p>평균 위험도는 <b>건물 기준</b>이다. 위험 점수가 건물 속성이라 세대에 조인해 평균 내면 세대 많은 건물이 그만큼 가중된다 — 그래서 두 집계를 따로 돌린 뒤
-   * 붙인다.
-   *
-   * <p>등급 임계값은 절대값이며 pipeline {@code daullim_data/scoring.py::risk_level}과 같다 — danger ≥70 · warn
-   * ≥35 · ok &lt;35. 표시값과 등급이 어긋나지 않도록 반올림한 평균 하나에서 둘 다 뽑는다.
-   */
+  // 대상 가구는 세대 기준(count(units)), 평균 위험도는 건물 기준 — 축이 달라 따로 집계 후 결합
+  // 등급 임계값 danger>=70·warn>=35·ok<35, pipeline scoring.py::risk_level과 동일
   private static final String DONG_AGGREGATE_SQL =
       """
       SELECT b.admin_dong_cd,

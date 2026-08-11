@@ -14,14 +14,7 @@ import org.springframework.util.StreamUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/**
- * B1 동 선택 지도 — 행정동 경계 정적 GeoJSON 서빙.
- *
- * <p>경계 원본은 admdongkor 2025-07-01판이고, 파이프라인 시연 지역 33개 동만 {@code adm_cd2}(행정표준 10자리)로 잘라 둔다. 화면은
- * {@code sigungu_cd}/{@code dong_cd} 속성으로 필터하고 선택 강조를 한다.
- *
- * <p>봉투({@code ApiResponse})로 감싸지 않는다 — GeoJSON은 그 자체가 표준 문서 형식이고 지도 라이브러리가 바로 먹는다.
- */
+/** B1 동 선택 지도 — 행정동 경계 정적 GeoJSON 서빙 */
 @Tag(name = "지역", description = "지역 셀렉터 3단 — 코드는 행정표준코드")
 @RestController
 public class RegionBoundaryController {
@@ -46,6 +39,9 @@ public class RegionBoundaryController {
     }
   }
 
+  /**
+   * @return GeoJSON 원본 (ApiResponse 봉투 미사용)
+   */
   @Operation(
       summary = "행정동 경계 조회",
       description = "B1 동 선택 지도에 그릴 행정동 경계 정적 GeoJSON. 화면은 sigungu_cd/dong_cd 속성으로 필터한다.")

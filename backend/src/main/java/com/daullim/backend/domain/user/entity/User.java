@@ -11,7 +11,7 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.time.LocalDate;
 
-/** 점검원·예방담당자 계정. 회원탈퇴는 물리 삭제가 아니라 soft-delete다. */
+/** 점검원·예방담당자 계정 — 회원탈퇴는 soft-delete(물리 삭제 아님) */
 @Entity
 @Table(name = "users")
 public class User {
@@ -83,7 +83,7 @@ public class User {
     this.orgName = orgName;
   }
 
-  /** visits.officer_id의 ON DELETE RESTRICT가 과거 점검 이력을 붙들고 있어 물리 삭제할 수 없다. */
+  /** visits.officer_id ON DELETE RESTRICT로 물리 삭제 불가 */
   public void withdraw(Instant at) {
     this.active = false;
     this.withdrawnAt = at;

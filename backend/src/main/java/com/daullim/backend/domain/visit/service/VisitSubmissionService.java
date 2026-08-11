@@ -158,10 +158,9 @@ public class VisitSubmissionService {
   }
 
   /**
-   * 세대가 다음에 어떤 상태로 남는가.
+   * 세대 다음 상태 판정.
    *
-   * <p>기본 전이는 lookup(consent_statuses.unit_status_cd)이 정한다. 재방문이 필요하다고 기록한 방문만 그 결과를 덮어 세대를 큐에 붙잡아
-   * 둔다 — 승낙·거부·공가·연락두절 어느 쪽이든 같다.
+   * @return 기본은 lookup(consent_statuses.unit_status_cd) 값 — 재방문 필요 기록 시에만 덮어써 큐 유지(게이트 결과 무관)
    */
   private String unitStatus(VisitSubmission s, String revisitPlan, CodeBook cb) {
     if ("revisit".equals(revisitPlan)) {
@@ -171,12 +170,9 @@ public class VisitSubmissionService {
   }
 
   /**
-   * 재산입 기준일 — 여기서 15년이 지나면 세대가 다시 큐로 온다.
+   * 재산입 기준일 — 15년 경과 시 세대가 큐로 복귀하는 기준.
    *
-   * <p>교체를 했으면 새 기기의 시계가 방문일에 시작한다. 교체가 없었으면 기존 기기의 시계를 그대로 쓴다(제조년월 기준) — 그래야 권고만 받고 끝난 세대도 남은 기간
-   * 뒤에 제 발로 돌아온다.
-   *
-   * <p>이미 경과한 세대는 비운다. 사유까지 받아 큐에서 뺀 판단을 다음 스캔이 하루 만에 뒤집으면 안 되므로, 예전 방문이 남긴 지난 기준일까지 지워야 한다.
+   * @return 교체 시 방문일, 미교체 시 제조년월(잔여 기간 후 복귀) — 이미 경과한 세대는 지난 기준일을 지우기 위해 empty
    */
   private Optional<String> rxBaselineDay(AlarmJudgment j, String visitedDay, String rxDone) {
     if ("done".equals(rxDone)) {

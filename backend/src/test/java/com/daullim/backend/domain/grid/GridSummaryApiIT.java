@@ -27,7 +27,7 @@ class GridSummaryApiIT extends QueryApiSupport {
         .andExpect(jsonPath("$.data[1].visitedCount").value(0));
   }
 
-  /** 같은 규칙이 자바와 SQL 두 벌로 존재한다 — 어긋나면 화면의 격자가 통째로 0건이 된다. */
+  // 같은 규칙이 자바·SQL 두 벌로 존재 — 어긋나면 화면 격자가 통째로 0건이 됨
   @Test
   @DisplayName("SQL 유도 격자와 자바 유도 격자가 같은 값을 낸다")
   void sqlAndJavaDerivationAgree() {
