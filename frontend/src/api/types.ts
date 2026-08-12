@@ -63,6 +63,10 @@ export interface Sigungu {
   regionTypeCd: "URBAN" | "RURAL" | null;
 }
 
+/**
+ * 건물 축(`buildingCount`·`dangerCount`)과 세대 축(`householdCount`·`doneUnitCount`·
+ * `pendingUnitCount`)이 한 객체에 섞여 있다 — 서로 곱하거나 나누면 세대 많은 건물이 가중된다.
+ */
 export interface Dong {
   dongCd: string;
   dongNm: string;
@@ -71,6 +75,18 @@ export interface Dong {
   /** 건물 평균 점수 (소수 1자리) */
   avgRiskScore: number;
   avgRiskLevelCd: RiskLevel | null;
+  buildingCount: number;
+  /** 건물 축 — 화면 라벨을 "위험 주택"으로 쓴다 */
+  dangerCount: number;
+  /**
+   * 상대위험도(`rr_i`) 평균 — "관할 기준 대비 몇 배". 점수(0~100)와 다른 축이라
+   * 관제 ① 표의 기본 정렬 키다. 건물이 없는 동은 null이고 **0으로 대체하지 않는다**
+   * (0이면 가장 안전한 동으로 정렬돼 올라온다).
+   */
+  avgRrI: number | null;
+  doneUnitCount: number;
+  /** 미완료 세대 — 진행률 잔량이자 관제 ④ 소요 수량 */
+  pendingUnitCount: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -333,6 +349,13 @@ export interface DashboardSummary {
   doneCount: number;
   /** 건물 기준 — 위험 등급이 건물 속성이라 축이 다르다 */
   dangerCount: number;
+  /**
+   * 미완료 세대의 처방 코드별 수 — 0건 코드도 담겨 온다.
+   * 처방 없는 건물의 세대는 어느 칸에도 없어 합이 `targetCount - doneCount`보다 작을 수 있다.
+   */
+  pendingByRxCode: Record<RxCode, number>;
+  /** 점수 산출 시각 (pipeline 월 1회) — 응답 시각인 `updatedAt`과 다른 축 */
+  computedAt: string | null;
   updatedAt: string;
 }
 
