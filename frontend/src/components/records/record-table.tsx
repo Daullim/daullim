@@ -29,7 +29,15 @@ function timeOf(visitedAt: string): string {
   });
 }
 
-export type RecordColumn = "day" | "time" | "address" | "unit" | "consent" | "condition" | "rxDone";
+export type RecordColumn =
+  | "day"
+  | "time"
+  | "officer"
+  | "address"
+  | "unit"
+  | "consent"
+  | "condition"
+  | "rxDone";
 
 interface ColumnSpec {
   label: string;
@@ -42,6 +50,8 @@ interface ColumnSpec {
 const COLUMNS: Record<RecordColumn, ColumnSpec> = {
   day: { label: "날짜", cell: (r) => <DataText>{formatDay(r.visitedDay)}</DataText> },
   time: { label: "시각", cell: (r) => <DataText>{timeOf(r.visitedAt)}</DataText> },
+  /* 관제 5. 실적 통계 전용 — 관할 안 모든 점검원 기록이 섞여 오므로 누가 했는지가 정보값이다 */
+  officer: { label: "점검자", cell: (r) => r.officerName },
   address: { label: "주소", fill: true, cell: (r) => r.address },
   unit: { label: "세대", cell: (r) => unitLabel(r) },
   consent: { label: "승낙", cell: (r) => CONSENT_STATUS[r.consentCd].label },

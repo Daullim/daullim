@@ -85,6 +85,8 @@ export interface VisitQueryParams {
   from?: string;
   to?: string;
   consentCd?: string;
+  /** 관할 스코프 — 관제 5. 실적 통계의 일자별 표가 쓴다 */
+  sigunguCd?: string;
   dongCd?: string;
   cursor?: string;
   /** 기본 20 · 최대 100 */
@@ -100,7 +102,14 @@ export const getVisits = (params: VisitQueryParams, signal?: AbortSignal) =>
  * 목록은 커서로 잘려 오므로 이걸로 점을 찍어야 한다 — 첫 페이지만 보고 찍으면 달력이 거짓말을 한다.
  */
 export const getVisitCalendar = (
-  params: { from: string; to: string; officerId?: string; dongCd?: string },
+  params: {
+    from: string;
+    to: string;
+    officerId?: string;
+    /** 관할 스코프 — `/records`는 `officerId=me`, 관제 5. 실적 통계는 이쪽으로 부른다 */
+    sigunguCd?: string;
+    dongCd?: string;
+  },
   signal?: AbortSignal,
 ) => apiGet<VisitDayCount[]>(`/visits/calendar${query({ ...params })}`, signal);
 
@@ -109,7 +118,15 @@ export const getVisitCalendar = (
  * 오늘의 경계가 KST 달력일이라 서버가 정하지 않고 화면이 자기 날짜를 보낸다.
  */
 export const getVisitSummary = (
-  params: { from: string; to: string; officerId?: string; consentCd?: string; dongCd?: string },
+  params: {
+    from: string;
+    to: string;
+    officerId?: string;
+    consentCd?: string;
+    /** 관제 5. 실적 통계의 관할 축. `dongCd`와 함께 주면 둘 다 걸린다 */
+    sigunguCd?: string;
+    dongCd?: string;
+  },
   signal?: AbortSignal,
 ) => apiGet<VisitSummary>(`/visits/summary${query({ ...params })}`, signal);
 

@@ -1,4 +1,4 @@
-import type React from "react";
+import { ControlPanel } from "@/components/layout/control-panel";
 import { BarRow } from "@/components/core/bar-row";
 import { DataText } from "@/components/core/data-text";
 import { StackedBar, type StackedBarSegment } from "@/components/core/stacked-bar";
@@ -8,7 +8,6 @@ import { useApiQuery } from "@/api/use-api-query";
 import type { DashboardComposition } from "@/api/types";
 import { HOUSE_TYPE, REGION_TYPE, RISK_LEVEL, type RiskLevel } from "@/config/domain";
 import { useControlScope } from "@/lib/use-control-scope";
-import { cn } from "@/lib/utils";
 
 const RISK_ORDER: RiskLevel[] = ["danger", "warn", "ok"];
 const RR_STATS: { label: string; key: keyof DashboardComposition["rrDistribution"] }[] = [
@@ -17,23 +16,6 @@ const RR_STATS: { label: string; key: keyof DashboardComposition["rrDistribution
   { label: "상위 1%", key: "p99" },
   { label: "최대", key: "max" },
 ];
-
-function Panel({
-  title,
-  children,
-  className,
-}: {
-  title: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <section className={cn("rounded-md border border-hairline bg-surface p-4", className)}>
-      <h2 className="mb-4 text-title-sm text-ink">{title}</h2>
-      {children}
-    </section>
-  );
-}
 
 function riskSegments(composition: DashboardComposition): StackedBarSegment[] {
   return RISK_ORDER.map((level) => {
@@ -85,7 +67,7 @@ export default function ControlRiskPage() {
       </header>
 
       <div className="grid gap-3 xl:grid-cols-2">
-        <Panel title="위험 등급 구성">
+        <ControlPanel title="위험 등급 구성">
           <StackedBar segments={riskSegments(data)} />
           <div className="mt-4 grid grid-cols-3 gap-2 border-t border-hairline pt-3">
             {data.byRiskLevel.map((row) => (
@@ -98,9 +80,9 @@ export default function ControlRiskPage() {
               </div>
             ))}
           </div>
-        </Panel>
+        </ControlPanel>
 
-        <Panel title="도농 × 등급">
+        <ControlPanel title="도농 × 등급">
           <div className="space-y-4">
             {data.byRegionType.map((row) => (
               <div key={row.code} className="space-y-2">
@@ -120,9 +102,9 @@ export default function ControlRiskPage() {
               </div>
             ))}
           </div>
-        </Panel>
+        </ControlPanel>
 
-        <Panel title="주택 유형">
+        <ControlPanel title="주택 유형">
           <div className="space-y-3">
             {data.byHouseType.map((row) => (
               <BarRow
@@ -134,9 +116,9 @@ export default function ControlRiskPage() {
               />
             ))}
           </div>
-        </Panel>
+        </ControlPanel>
 
-        <Panel title="건축 연대">
+        <ControlPanel title="건축 연대">
           <div className="space-y-3">
             {data.byUseAprDecade.map((row) => (
               <BarRow
@@ -149,9 +131,9 @@ export default function ControlRiskPage() {
               />
             ))}
           </div>
-        </Panel>
+        </ControlPanel>
 
-        <Panel title="상대위험도 분포" className="xl:col-span-2">
+        <ControlPanel title="상대위험도 분포" className="xl:col-span-2">
           <div className="grid gap-3 sm:grid-cols-4">
             {RR_STATS.map((stat) => (
               <div
@@ -168,7 +150,7 @@ export default function ControlRiskPage() {
           <p className="mt-3 text-caption text-subtle">
             좌표 추정 주택 <DataText>{data.estimatedBuildingCount.toLocaleString()}</DataText>
           </p>
-        </Panel>
+        </ControlPanel>
       </div>
     </div>
   );
