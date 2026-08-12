@@ -60,7 +60,7 @@ export default function ControlRiskPage() {
     getDashboardComposition({ sidoCd: sigunguCd ? undefined : sidoCd, sigunguCd }, signal),
   );
 
-  if (composition.loading && !composition.data) {
+  if (composition.loading) {
     return <RowSkeleton rows={8} />;
   }
 

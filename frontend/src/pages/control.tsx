@@ -99,7 +99,7 @@ export default function ControlLayout() {
         <Counter label={pendingLabel(summary.data)} value={pendingTotal(summary.data)} />
         <Counter label="점검 완료" value={summary.data?.doneCount ?? 0} />
         <span className="ml-auto text-caption text-on-dark-soft">
-          {sigunguNm ?? "관할 미선택"}
+          {sigunguNm ?? sidoNm ?? "관할 미선택"}
         </span>
       </footer>
     </div>
