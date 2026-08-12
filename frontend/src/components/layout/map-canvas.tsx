@@ -134,14 +134,26 @@ export function MapCanvas({
     const el = wrapperRef.current;
     if (!el || !ready) return;
 
+    let lastSize: { width: number; height: number } | null = null;
+    let frame: number | null = null;
     const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      if (width > 0 && height > 0) {
+      const width = Math.round(entry.contentRect.width);
+      const height = Math.round(entry.contentRect.height);
+      if (width <= 0 || height <= 0) return;
+      if (lastSize?.width === width && lastSize.height === height) return;
+
+      lastSize = { width, height };
+      if (frame !== null) cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        frame = null;
         mapRef.current?.setSize(new naver.maps.Size(width, height));
-      }
+      });
     });
     observer.observe(el);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (frame !== null) cancelAnimationFrame(frame);
+    };
   }, [ready]);
 
   return (
