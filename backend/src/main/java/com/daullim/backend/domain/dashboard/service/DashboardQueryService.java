@@ -1,5 +1,6 @@
 package com.daullim.backend.domain.dashboard.service;
 
+import com.daullim.backend.domain.dashboard.dto.DashboardCompositionResponse;
 import com.daullim.backend.domain.dashboard.dto.DashboardSummaryResponse;
 import com.daullim.backend.domain.dashboard.repository.DashboardQueryRepository;
 import com.daullim.backend.domain.dashboard.repository.DashboardQueryRepository.Counts;
@@ -35,6 +36,10 @@ public class DashboardQueryService {
         pendingByRxCode(sigunguCd),
         counts.computedAt(),
         Instant.now(clock));
+  }
+
+  public DashboardCompositionResponse composition(String sigunguCd) {
+    return repository.composition(sigunguCd);
   }
 
   /** 0건 코드까지 채움 — "전지 0대"가 떠야 소요 없음이 전달됨. */

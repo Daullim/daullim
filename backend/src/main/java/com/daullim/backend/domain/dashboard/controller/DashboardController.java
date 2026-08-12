@@ -1,6 +1,7 @@
 package com.daullim.backend.domain.dashboard.controller;
 
 import com.daullim.backend.common.response.ApiResponse;
+import com.daullim.backend.domain.dashboard.dto.DashboardCompositionResponse;
 import com.daullim.backend.domain.dashboard.dto.DashboardSummaryResponse;
 import com.daullim.backend.domain.dashboard.service.DashboardQueryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,5 +30,12 @@ public class DashboardController {
   public ApiResponse<DashboardSummaryResponse> summary(
       @RequestParam(required = false) @Pattern(regexp = "\\d{5}", message = "시군구코드는 5자리 숫자입니다.") String sigunguCd) {
     return ApiResponse.ok(service.summary(sigunguCd));
+  }
+
+  @Operation(summary = "관할 위험 구성 조회", description = "sigunguCd를 생략하면 전 지역 집계다.")
+  @GetMapping("/composition")
+  public ApiResponse<DashboardCompositionResponse> composition(
+      @RequestParam(required = false) @Pattern(regexp = "\\d{5}", message = "시군구코드는 5자리 숫자입니다.") String sigunguCd) {
+    return ApiResponse.ok(service.composition(sigunguCd));
   }
 }

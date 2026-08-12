@@ -1,18 +1,28 @@
 package com.daullim.backend.domain.dashboard.repository;
 
+import com.daullim.backend.domain.dashboard.dto.DashboardCompositionResponse;
+import com.daullim.backend.domain.dashboard.dto.DashboardCompositionResponse.HouseTypeCount;
+import com.daullim.backend.domain.dashboard.dto.DashboardCompositionResponse.RegionTypeRiskCount;
+import com.daullim.backend.domain.dashboard.dto.DashboardCompositionResponse.RiskLevelCount;
+import com.daullim.backend.domain.dashboard.dto.DashboardCompositionResponse.RrDistribution;
+import com.daullim.backend.domain.dashboard.dto.DashboardCompositionResponse.UseAprDecadeCount;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
 
 @Repository
 public class DashboardQueryRepository {
 
-  /** {@code %s}에 시군구 필터가 들어간다 — 없으면 전 지역이다. */
+  /** {@code %s} = 시군구 필터 */
   private static final String SUMMARY_SQL =
       """
       SELECT
@@ -35,13 +45,134 @@ public class DashboardQueryRepository {
       GROUP BY b.rx_code_cd
       """;
 
+  private static final String COMPOSITION_SQL =
+      """
+      WITH filtered_buildings AS (
+        SELECT *
+        FROM buildings b
+        WHERE %1$s
+      ),
+      building_units AS (
+        SELECT b.building_id, b.risk_level_cd, b.region_type_cd, b.house_type_cd,
+               b.use_apr_day, b.rr_i, b.is_estimated, coalesce(u.unit_count, 0) AS unit_count
+        FROM filtered_buildings b
+        LEFT JOIN (
+          SELECT building_id, count(*) AS unit_count
+          FROM units
+          GROUP BY building_id
+        ) u ON u.building_id = b.building_id
+      ),
+      risk_order(code, sort_order) AS (
+        VALUES ('danger', 1), ('warn', 2), ('ok', 3)
+      ),
+      region_order(code, sort_order) AS (
+        VALUES ('URBAN', 1), ('RURAL', 2), ('BUFFER', 3)
+      ),
+      risk_counts AS (
+        SELECT risk_level_cd, count(*) AS building_count, coalesce(sum(unit_count), 0) AS unit_count
+        FROM building_units
+        GROUP BY risk_level_cd
+      ),
+      region_counts AS (
+        SELECT region_type_cd,
+               count(*) FILTER (WHERE risk_level_cd = 'danger') AS danger,
+               count(*) FILTER (WHERE risk_level_cd = 'warn') AS warn,
+               count(*) FILTER (WHERE risk_level_cd = 'ok') AS ok
+        FROM building_units
+        WHERE region_type_cd <> 'NO_POP'
+        GROUP BY region_type_cd
+      ),
+      house_counts AS (
+        SELECT house_type_cd, count(*) AS building_count, coalesce(sum(unit_count), 0) AS unit_count
+        FROM building_units
+        GROUP BY house_type_cd
+      ),
+      decade_counts AS (
+        SELECT CASE
+                 WHEN use_apr_day IS NULL THEN NULL
+                 ELSE (substring(use_apr_day, 1, 3) || '0')::int
+               END AS decade,
+               count(*) AS building_count
+        FROM building_units
+        GROUP BY decade
+      ),
+      rr_stats AS (
+        SELECT round(min(rr_i), 2) AS min,
+               round((percentile_cont(0.5) WITHIN GROUP (ORDER BY rr_i))::numeric, 2) AS p50,
+               round((percentile_cont(0.99) WITHIN GROUP (ORDER BY rr_i))::numeric, 2) AS p99,
+               round(max(rr_i), 2) AS max
+        FROM building_units
+        WHERE rr_i IS NOT NULL
+      )
+      SELECT
+        (
+          SELECT jsonb_agg(
+            jsonb_build_object(
+              'code', r.code,
+              'buildingCount', coalesce(c.building_count, 0),
+              'unitCount', coalesce(c.unit_count, 0)
+            )
+            ORDER BY r.sort_order
+          )
+          FROM risk_order r
+          LEFT JOIN risk_counts c ON c.risk_level_cd = r.code
+        ) AS by_risk_level,
+        (
+          SELECT coalesce(
+            jsonb_agg(
+              jsonb_build_object(
+                'code', r.code,
+                'danger', coalesce(c.danger, 0),
+                'warn', coalesce(c.warn, 0),
+                'ok', coalesce(c.ok, 0)
+              )
+              ORDER BY r.sort_order
+            ) FILTER (WHERE c.region_type_cd IS NOT NULL),
+            '[]'::jsonb
+          )
+          FROM region_order r
+          LEFT JOIN region_counts c ON c.region_type_cd = r.code
+        ) AS by_region_type,
+        (
+          SELECT coalesce(
+            jsonb_agg(
+              jsonb_build_object(
+                'code', house_type_cd,
+                'buildingCount', building_count,
+                'unitCount', unit_count
+              )
+              ORDER BY building_count DESC, house_type_cd
+            ),
+            '[]'::jsonb
+          )
+          FROM house_counts
+        ) AS by_house_type,
+        (
+          SELECT coalesce(
+            jsonb_agg(
+              jsonb_build_object('decade', decade, 'buildingCount', building_count)
+              ORDER BY decade NULLS LAST
+            ),
+            '[]'::jsonb
+          )
+          FROM decade_counts
+        ) AS by_use_apr_decade,
+        (
+          SELECT jsonb_build_object('min', min, 'p50', p50, 'p99', p99, 'max', max)
+          FROM rr_stats
+        ) AS rr_distribution,
+        (SELECT count(*) FROM building_units WHERE is_estimated) AS estimated_building_count
+      """;
+
   private static final String NO_FILTER = "true";
   private static final String SIGUNGU_FILTER = "b.sigungu_cd = :sigunguCd";
 
   private final JdbcClient jdbc;
+  private final ObjectMapper objectMapper;
 
-  DashboardQueryRepository(JdbcClient jdbc) {
+  DashboardQueryRepository(JdbcClient jdbc, ObjectMapper objectMapper) {
     this.jdbc = jdbc;
+    this.objectMapper = objectMapper;
   }
 
   /**
@@ -76,9 +207,47 @@ public class DashboardQueryRepository {
                 LinkedHashMap::new));
   }
 
+  public DashboardCompositionResponse composition(String sigunguCd) {
+    return bind(COMPOSITION_SQL, sigunguCd)
+        .query(
+            (rs, rowNum) ->
+                new DashboardCompositionResponse(
+                    read(
+                        rs.getString("by_risk_level"),
+                        new TypeReference<List<RiskLevelCount>>() {}),
+                    read(
+                        rs.getString("by_region_type"),
+                        new TypeReference<List<RegionTypeRiskCount>>() {}),
+                    read(
+                        rs.getString("by_house_type"),
+                        new TypeReference<List<HouseTypeCount>>() {}),
+                    read(
+                        rs.getString("by_use_apr_decade"),
+                        new TypeReference<List<UseAprDecadeCount>>() {}),
+                    read(rs.getString("rr_distribution"), RrDistribution.class),
+                    rs.getLong("estimated_building_count")))
+        .single();
+  }
+
   private JdbcClient.StatementSpec bind(String sqlTemplate, String sigunguCd) {
     String sql = sqlTemplate.formatted(sigunguCd == null ? NO_FILTER : SIGUNGU_FILTER);
     JdbcClient.StatementSpec spec = jdbc.sql(sql);
     return sigunguCd == null ? spec : spec.param("sigunguCd", sigunguCd);
+  }
+
+  private <T> T read(String json, TypeReference<T> type) {
+    try {
+      return objectMapper.readValue(json, type);
+    } catch (JacksonException e) {
+      throw new IllegalStateException("관제 집계 JSON 역직렬화 실패", e);
+    }
+  }
+
+  private <T> T read(String json, Class<T> type) {
+    try {
+      return objectMapper.readValue(json, type);
+    } catch (JacksonException e) {
+      throw new IllegalStateException("관제 집계 JSON 역직렬화 실패", e);
+    }
   }
 }
