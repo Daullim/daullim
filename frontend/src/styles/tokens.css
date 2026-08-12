@@ -186,6 +186,10 @@
   --text-display: 28px;
   --text-display--line-height: 1.25;
   --text-display--font-weight: 600;
+  /* 관제 섹션 제목 — 화면 제목(28px)과 패널 내 소제목(16px) 사이 (DESIGN.md § 관제 제목 3단) */
+  --text-title-lg: 20px;
+  --text-title-lg--line-height: 1.4;
+  --text-title-lg--font-weight: 600;
   --text-title: 18px;
   --text-title--line-height: 1.4;
   --text-title--font-weight: 600;

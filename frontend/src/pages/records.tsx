@@ -24,7 +24,12 @@ function monthRange(month: string): { from: string; to: string } {
 /** 날짜는 패널 헤더에 있어 컬럼에서 뺀다 */
 const LIST_COLUMNS = ["time", "address", "unit", "consent", "condition", "rxDone"] as const;
 
-/** 점검 기록 조회 — 좌 캘린더로 날짜를 고르고 우 표에서 그 날의 기록을 본다 */
+/**
+ * 점검 기록 조회 — 좌 캘린더로 날짜를 고르고 우 표에서 그 날의 기록을 본다.
+ *
+ * **내 기록만 본다**(`officerId=me`). 관할 전체를 점검원 구분 없이 보는 축은 관제 5. 실적 통계이고,
+ * 이쪽은 드로어에서 열리는 개인 이력이다 — 같은 표를 두 곳에 두되 스코프로 갈린다.
+ */
 export default function RecordsPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -42,7 +47,7 @@ export default function RecordsPage() {
   /* 달력 점 표식·월 총건수 — 목록은 커서로 잘려 오므로 집계를 따로 받는다 */
   const range = monthRange(month);
   const calendar = useApiQuery(`visitCalendar:${month}`, (s) =>
-    getVisitCalendar({ from: range.from, to: range.to }, s),
+    getVisitCalendar({ from: range.from, to: range.to, officerId: "me" }, s),
   );
   const markedDays = useMemo(
     () => new Set((calendar.data ?? []).filter((d) => d.count > 0).map((d) => d.day)),
@@ -51,7 +56,7 @@ export default function RecordsPage() {
   const monthCount = (calendar.data ?? []).reduce((n, d) => n + d.count, 0);
 
   const visits = useApiQuery(selectedDay ? `visits:${selectedDay}` : null, (s) =>
-    getVisits({ from: selectedDay!, to: selectedDay!, size: 100 }, s),
+    getVisits({ from: selectedDay!, to: selectedDay!, officerId: "me", size: 100 }, s),
   );
   const rows = visits.data?.items ?? [];
 

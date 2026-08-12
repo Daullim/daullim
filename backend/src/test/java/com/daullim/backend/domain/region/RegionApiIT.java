@@ -55,6 +55,38 @@ class RegionApiIT extends QueryApiSupport {
   }
 
   @Test
+  @DisplayName("동별 집계는 건물 축과 세대 축을 따로 센다")
+  void dongAggregatesKeepAxesApart() throws Exception {
+    insertInspectedVisit(b2FieldUnit, 2);
+    insertRevisitVisit(b2FieldUnit);
+
+    String dong = "$.data[?(@.dongCd=='" + DONG + "')]";
+    mvc.perform(get("/api/v1/regions/dongs").param("sigunguCd", SIGUNGU).with(officer()))
+        .andExpect(status().isOk())
+        // 건물 축 — 3채 중 danger는 B1 하나
+        .andExpect(jsonPath(dong + ".buildingCount").value(3))
+        .andExpect(jsonPath(dong + ".dangerCount").value(1))
+        // 세대 축 — B1의 2호 캐시 + B2 현장 방문 1호
+        .andExpect(jsonPath(dong + ".doneUnitCount").value(3))
+        .andExpect(jsonPath(dong + ".pendingUnitCount").value(2))
+        // 실제 교체에 사용된 경보기 개수 — 예상 소요가 아니다.
+        .andExpect(jsonPath(dong + ".replacementUsedCount").value(2))
+        // 최신 방문 기준 재방문 대기 세대
+        .andExpect(jsonPath(dong + ".revisitPendingUnitCount").value(1))
+        // 픽스처 rr_i = score/10 → (9.12 + 5.50 + 2.00) / 3 = 5.54 → 5.5
+        .andExpect(jsonPath(dong + ".avgRrI").value(5.5));
+  }
+
+  @Test
+  @DisplayName("건물이 없는 동은 avgRrI가 null이다 — 0으로 채우면 위험이 가장 낮은 동으로 오른다")
+  void emptyDongHasNullRr() throws Exception {
+    mvc.perform(get("/api/v1/regions/dongs").param("sigunguCd", SIGUNGU).with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data[?(@.dongCd=='1162052500')].avgRrI").value((Object) null))
+        .andExpect(jsonPath("$.data[?(@.dongCd=='1162052500')].pendingUnitCount").value(0));
+  }
+
+  @Test
   @DisplayName("코드 형식이 어긋나면 400이다")
   void rejectsMalformedCode() throws Exception {
     mvc.perform(get("/api/v1/regions/dongs").param("sigunguCd", "gwanak").with(officer()))
@@ -66,5 +98,38 @@ class RegionApiIT extends QueryApiSupport {
   @DisplayName("토큰이 없으면 조회 API도 401이다")
   void requiresAuthentication() throws Exception {
     mvc.perform(get("/api/v1/regions/sidos")).andExpect(status().isUnauthorized());
+  }
+
+  private void insertInspectedVisit(long unitId, int effectiveReplaceCount) {
+    jdbc.sql(
+            """
+            INSERT INTO visits (unit_id,officer_id,visited_day,visited_at,consent_cd,is_inspected,
+              respondent_type_cd,room_count,mfg_ym,replace_count,is_expired,
+              effective_replace_count,extinguisher_installed_cd,rx_done_cd,condition_code_cd,
+              revisit_plan_cd)
+            VALUES (:unitId,:officerId,'20260801',TIMESTAMPTZ '2026-08-01T01:00:00Z','accepted',true,
+              'owner',3,'2020-01',:replaceCount,false,
+              :replaceCount,'installed','done','REPLACE_ADVISED','not-needed')
+            """)
+        .param("unitId", unitId)
+        .param("officerId", officerId)
+        .param("replaceCount", effectiveReplaceCount)
+        .update();
+  }
+
+  private void insertRevisitVisit(long unitId) {
+    jdbc.sql(
+            """
+            INSERT INTO visits (unit_id,officer_id,visited_day,visited_at,consent_cd,is_inspected,
+              respondent_type_cd,room_count,mfg_ym,replace_count,is_expired,
+              effective_replace_count,extinguisher_installed_cd,rx_done_cd,condition_code_cd,
+              revisit_plan_cd)
+            VALUES (:unitId,:officerId,'20260802',TIMESTAMPTZ '2026-08-02T01:00:00Z','accepted',true,
+              'owner',3,'2020-01',0,false,
+              0,'installed','advised-only','OK_GOOD','revisit')
+            """)
+        .param("unitId", unitId)
+        .param("officerId", officerId)
+        .update();
   }
 }

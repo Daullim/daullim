@@ -30,4 +30,130 @@ class DashboardApiIT extends QueryApiSupport {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.targetCount").value(6));
   }
+
+  @Test
+  @DisplayName("예상 소요는 미완료 세대를 처방 코드로 묶고 0건 코드도 채운다")
+  void pendingByRxCode() throws Exception {
+    mvc.perform(get("/api/v1/dashboard/summary").param("sigunguCd", SIGUNGU).with(officer()))
+        .andExpect(status().isOk())
+        // B2(RX-IOT)의 2호만 해당 — B1은 완료, B3·B4는 처방이 없어 셀 근거가 없다
+        .andExpect(jsonPath("$.data.pendingByRxCode['RX-IOT']").value(2))
+        .andExpect(jsonPath("$.data.pendingByRxCode['RX-BAT']").value(0));
+  }
+
+  @Test
+  @DisplayName("산출 시각과 응답 시각은 서로 다른 축이라 둘 다 내려간다")
+  void exposesComputedAtBesideUpdatedAt() throws Exception {
+    mvc.perform(get("/api/v1/dashboard/summary").param("sigunguCd", SIGUNGU).with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.computedAt").exists())
+        .andExpect(jsonPath("$.data.updatedAt").exists());
+  }
+
+  @Test
+  @DisplayName("건물이 없는 시군구는 computedAt이 null이다")
+  void nullComputedAtWhenNoBuilding() throws Exception {
+    mvc.perform(get("/api/v1/dashboard/summary").param("sigunguCd", "11680").with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.targetCount").value(0))
+        .andExpect(jsonPath("$.data.computedAt").value((Object) null))
+        .andExpect(jsonPath("$.data.pendingByRxCode['RX-IOT']").value(0));
+  }
+
+  @Test
+  @DisplayName("위험 구성은 건물 축과 세대 축을 함께 내린다")
+  void composition() throws Exception {
+    mvc.perform(get("/api/v1/dashboard/composition").param("sigunguCd", SIGUNGU).with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.byRiskLevel[0].code").value("danger"))
+        .andExpect(jsonPath("$.data.byRiskLevel[0].buildingCount").value(2))
+        .andExpect(jsonPath("$.data.byRiskLevel[0].unitCount").value(3))
+        .andExpect(jsonPath("$.data.byRiskLevel[1].code").value("warn"))
+        .andExpect(jsonPath("$.data.byRiskLevel[1].buildingCount").value(1))
+        .andExpect(jsonPath("$.data.byRiskLevel[1].unitCount").value(2))
+        .andExpect(jsonPath("$.data.byRiskLevel[2].code").value("ok"))
+        .andExpect(jsonPath("$.data.byRiskLevel[2].buildingCount").value(1))
+        .andExpect(jsonPath("$.data.byRiskLevel[2].unitCount").value(1))
+        .andExpect(jsonPath("$.data.estimatedBuildingCount").value(2));
+  }
+
+  @Test
+  @DisplayName("위험 구성은 도농·주택유형·연대·상대위험도 분포를 내린다")
+  void compositionBreakdowns() throws Exception {
+    mvc.perform(get("/api/v1/dashboard/composition").param("sigunguCd", SIGUNGU).with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.byRegionType[?(@.code=='URBAN')].danger").value(1))
+        .andExpect(jsonPath("$.data.byRegionType[?(@.code=='URBAN')].warn").value(1))
+        .andExpect(jsonPath("$.data.byRegionType[?(@.code=='URBAN')].ok").value(0))
+        .andExpect(jsonPath("$.data.byRegionType[?(@.code=='BUFFER')].danger").value(1))
+        .andExpect(jsonPath("$.data.byHouseType[?(@.code=='detached')].buildingCount").value(2))
+        .andExpect(jsonPath("$.data.byHouseType[?(@.code=='multi-family')].unitCount").value(2))
+        .andExpect(jsonPath("$.data.byUseAprDecade[?(@.decade==1990)].buildingCount").value(1))
+        .andExpect(jsonPath("$.data.byUseAprDecade[?(@.decade==2000)].buildingCount").value(1))
+        .andExpect(jsonPath("$.data.byUseAprDecade[?(@.decade==null)].buildingCount").value(2))
+        .andExpect(jsonPath("$.data.rrDistribution.min").value(2.0))
+        .andExpect(jsonPath("$.data.rrDistribution.p50").value(6.5))
+        .andExpect(jsonPath("$.data.rrDistribution.p99").value(9.07))
+        .andExpect(jsonPath("$.data.rrDistribution.max").value(9.12));
+  }
+
+  @Test
+  @DisplayName("건물이 없는 관할은 위험 구성의 분포값이 null이다")
+  void compositionWithoutBuilding() throws Exception {
+    mvc.perform(get("/api/v1/dashboard/composition").param("sigunguCd", "11680").with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.byRiskLevel[0].buildingCount").value(0))
+        .andExpect(jsonPath("$.data.byRegionType.length()").value(0))
+        .andExpect(jsonPath("$.data.byHouseType.length()").value(0))
+        .andExpect(jsonPath("$.data.byUseAprDecade.length()").value(0))
+        .andExpect(jsonPath("$.data.rrDistribution.min").value((Object) null))
+        .andExpect(jsonPath("$.data.estimatedBuildingCount").value(0));
+  }
+
+  @Test
+  @DisplayName("위험 구성은 시도 단위로도 필터링된다")
+  void compositionBySido() throws Exception {
+    insertOtherSidoBuilding();
+
+    mvc.perform(get("/api/v1/dashboard/composition").param("sidoCd", SIDO).with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.byRiskLevel[0].buildingCount").value(2))
+        .andExpect(jsonPath("$.data.byRiskLevel[0].unitCount").value(3));
+
+    mvc.perform(get("/api/v1/dashboard/composition").with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.byRiskLevel[0].buildingCount").value(3))
+        .andExpect(jsonPath("$.data.byRiskLevel[0].unitCount").value(4));
+  }
+
+  @Test
+  @DisplayName("시도 코드 형식이 어긋나면 400이다")
+  void rejectsMalformedSidoCode() throws Exception {
+    mvc.perform(get("/api/v1/dashboard/composition").param("sidoCd", "seoul").with(officer()))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+  }
+
+  private void insertOtherSidoBuilding() {
+    long buildingId =
+        jdbc.sql(
+                """
+                INSERT INTO buildings (bld_key,sido_cd,sigungu_cd,admin_dong_cd,address,lat,lng,
+                  house_type_cd,floor_count,unit_count,use_apr_day,grid_id,region_type_cd,rr_i,score,
+                  risk_level_cd,order_key,is_estimated,basis,rx_code_cd,score_version,computed_at)
+                VALUES ('IT-BUSAN-DASH','26','26230','2623051000','부산광역시 부산진구 중앙대로 1',
+                  35.1,129.0,'detached',2,1,'19800101','마라11a11a','URBAN',4.20,80.00,
+                  'danger',99,false,'테스트','RX-IOT','v0-20260805',now())
+                RETURNING building_id
+                """)
+            .query(Long.class)
+            .single();
+    jdbc.sql(
+            """
+            INSERT INTO units (building_id,unit_seq,ho_nm,flr_no,ho_nm_source_cd,status_cd)
+            VALUES (:buildingId,1,'본가구',NULL,'implicit','pending')
+            """)
+        .param("buildingId", buildingId)
+        .update();
+  }
 }

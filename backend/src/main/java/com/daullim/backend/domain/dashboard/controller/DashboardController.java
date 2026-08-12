@@ -1,6 +1,7 @@
 package com.daullim.backend.domain.dashboard.controller;
 
 import com.daullim.backend.common.response.ApiResponse;
+import com.daullim.backend.domain.dashboard.dto.DashboardCompositionResponse;
 import com.daullim.backend.domain.dashboard.dto.DashboardSummaryResponse;
 import com.daullim.backend.domain.dashboard.service.DashboardQueryService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -12,7 +13,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "관제", description = "관제 화면 하단 요약")
+@Tag(name = "관제", description = "관제 5탭 공용 요약·집계")
 @RestController
 @RequestMapping("/api/v1/dashboard")
 @Validated
@@ -29,5 +30,13 @@ public class DashboardController {
   public ApiResponse<DashboardSummaryResponse> summary(
       @RequestParam(required = false) @Pattern(regexp = "\\d{5}", message = "시군구코드는 5자리 숫자입니다.") String sigunguCd) {
     return ApiResponse.ok(service.summary(sigunguCd));
+  }
+
+  @Operation(summary = "관할 위험 구성 조회", description = "sigunguCd 우선, 없으면 sidoCd, 둘 다 없으면 전 지역 집계다.")
+  @GetMapping("/composition")
+  public ApiResponse<DashboardCompositionResponse> composition(
+      @RequestParam(required = false) @Pattern(regexp = "\\d{2}", message = "시도코드는 2자리 숫자입니다.") String sidoCd,
+      @RequestParam(required = false) @Pattern(regexp = "\\d{5}", message = "시군구코드는 5자리 숫자입니다.") String sigunguCd) {
+    return ApiResponse.ok(service.composition(sidoCd, sigunguCd));
   }
 }

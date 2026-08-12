@@ -11,6 +11,7 @@ import type {
   HouseType,
   Installed,
   RefusalReason,
+  RegionType,
   ReplaceReason,
   RespondentType,
   RevisitPlan,
@@ -63,6 +64,10 @@ export interface Sigungu {
   regionTypeCd: "URBAN" | "RURAL" | null;
 }
 
+/**
+ * 건물 축(`buildingCount`·`dangerCount`)과 세대 축(`householdCount`·`doneUnitCount`·
+ * `pendingUnitCount`)이 한 객체에 섞여 있다 — 서로 곱하거나 나누면 세대 많은 건물이 가중된다.
+ */
 export interface Dong {
   dongCd: string;
   dongNm: string;
@@ -71,6 +76,23 @@ export interface Dong {
   /** 건물 평균 점수 (소수 1자리) */
   avgRiskScore: number;
   avgRiskLevelCd: RiskLevel | null;
+  buildingCount: number;
+  /** 건물 축 — 화면 라벨을 "위험 주택"으로 쓴다 */
+  dangerCount: number;
+  /**
+   * 상대위험도(`rr_i`) 평균 — "관할 기준 대비 몇 배". 점수(0~100)와 다른 축이라
+   * 관제 ① 표의 기본 정렬 키다. 건물이 없는 동은 null이고 **0으로 대체하지 않는다**
+   * (0이면 가장 안전한 동으로 정렬돼 올라온다).
+   */
+  avgRrI: number | null;
+  /** 방문 기록 또는 세대 방문 캐시가 있는 세대 */
+  doneUnitCount: number;
+  /** 미방문 세대 */
+  pendingUnitCount: number;
+  /** 실제 교체에 사용된 경보기 개수 누적 */
+  replacementUsedCount: number;
+  /** 최신 방문 기준 재방문 대기 세대 */
+  revisitPendingUnitCount: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -218,6 +240,34 @@ export interface VisitSummary {
   effectiveReplaceCount: number;
 }
 
+/** 코드 축 1칸 — 라벨은 서버가 내리지 않는다. `config/domain.ts`가 정본이다. */
+export interface CodeCount<T extends string = string> {
+  code: T;
+  count: number;
+}
+
+/**
+ * 관제 3. 추진 현황의 축별 분해.
+ *
+ * `period`와 `current`가 갈려 있는 것은 축이 다르기 때문이다 — 현재 미처리 세대에 기간 라벨을 붙이면 거짓말이 된다.
+ */
+export interface VisitBreakdown {
+  period: {
+    from: string;
+    to: string;
+    /** 미점검 방문은 판정 자체가 없어 빠진다 */
+    byConditionCode: CodeCount<ConditionCode>[];
+    /** `consent_cd='refused'`인 방문에만 값이 있다 */
+    byRefusalReason: CodeCount<RefusalReason>[];
+    /** **방문 건수가 아니라 자재 대수** — 한 방문이 여러 항목을 낳아 총건수와 맞지 않는다 */
+    byRxCode: CodeCount<RxCode>[];
+  };
+  current: {
+    /** 기간과 무관한 현재 재방문 대상 세대 수 */
+    revisitPendingUnitCount: number;
+  };
+}
+
 export interface ReplacementItemDetail {
   itemSeq: number;
   replaceReasonCd: ReplaceReason;
@@ -333,7 +383,44 @@ export interface DashboardSummary {
   doneCount: number;
   /** 건물 기준 — 위험 등급이 건물 속성이라 축이 다르다 */
   dangerCount: number;
+  /**
+   * 미완료 세대의 처방 코드별 수 — 0건 코드도 담겨 온다.
+   * 처방 없는 건물의 세대는 어느 칸에도 없어 합이 `targetCount - doneCount`보다 작을 수 있다.
+   */
+  pendingByRxCode: Record<RxCode, number>;
+  /** 점수 산출 시각 (pipeline 월 1회) — 응답 시각인 `updatedAt`과 다른 축 */
+  computedAt: string | null;
   updatedAt: string;
+}
+
+export interface DashboardComposition {
+  byRiskLevel: {
+    code: RiskLevel;
+    buildingCount: number;
+    unitCount: number;
+  }[];
+  byRegionType: {
+    code: RegionType;
+    danger: number;
+    warn: number;
+    ok: number;
+  }[];
+  byHouseType: {
+    code: HouseType;
+    buildingCount: number;
+    unitCount: number;
+  }[];
+  byUseAprDecade: {
+    decade: number | null;
+    buildingCount: number;
+  }[];
+  rrDistribution: {
+    min: number | null;
+    p50: number | null;
+    p99: number | null;
+    max: number | null;
+  };
+  estimatedBuildingCount: number;
 }
 
 export interface LoginResponse {

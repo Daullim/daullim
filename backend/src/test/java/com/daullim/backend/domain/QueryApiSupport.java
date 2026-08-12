@@ -137,13 +137,15 @@ public abstract class QueryApiSupport {
       String houseTypeCd,
       String rxCodeCd,
       String useAprDay) {
+    // rr_i는 실제로 점수와 별개 축이나, 픽스처는 평균을 예측할 수 있도록 score/10으로 고정함
     return jdbc.sql(
             """
             INSERT INTO buildings (bld_key,sido_cd,sigungu_cd,admin_dong_cd,address,lat,lng,
-              house_type_cd,floor_count,unit_count,use_apr_day,grid_id,region_type_cd,score,
+              house_type_cd,floor_count,unit_count,use_apr_day,grid_id,region_type_cd,rr_i,score,
               risk_level_cd,order_key,is_estimated,basis,rx_code_cd,score_version,computed_at)
             VALUES (:bldKey,:sidoCd,:sigunguCd,:dongCd,:address,37.4,126.9,
-              :houseTypeCd,3,:unitCount,:useAprDay,:gridId,:regionTypeCd,CAST(:score AS numeric),
+              :houseTypeCd,3,:unitCount,:useAprDay,:gridId,:regionTypeCd,
+              CAST(:score AS numeric) / 10,CAST(:score AS numeric),
               :riskLevelCd,:orderKey,:estimated,:basis,:rxCodeCd,'v0-20260805',now())
             RETURNING building_id
             """)

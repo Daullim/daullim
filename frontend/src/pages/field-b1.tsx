@@ -125,13 +125,14 @@ export default function FieldDongPage() {
 
     for (const feature of map.data.getAllFeature()) {
       map.data.revertStyle(feature);
-      if (feature.getProperty("dong_cd") === region.dong) {
+      if (region.dong && feature.getProperty("dong_cd") === region.dong) {
         map.data.overrideStyle(feature, selectedStyle);
       }
     }
 
-    const target = selectedBoundary?.features.length ? selectedBoundary : sigunguBoundaries;
-    const bounds = boundsOfAdminBoundary(target);
+    if (!region.dong || !selectedBoundary?.features.length) return;
+
+    const bounds = boundsOfAdminBoundary(selectedBoundary);
     if (bounds) map.fitBounds(bounds);
   }, [map, region.dong, selectedBoundary, sigunguBoundaries]);
 

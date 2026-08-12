@@ -43,13 +43,21 @@ public class RegionQueryService {
             r -> {
               DongAggregate agg = aggregates.get(r.code());
               return agg == null
-                  ? new DongResponse(r.code(), r.name(), 0L, BigDecimal.ZERO, null)
+                  ? new DongResponse(
+                      r.code(), r.name(), 0L, BigDecimal.ZERO, null, 0L, 0L, null, 0L, 0L, 0L, 0L)
                   : new DongResponse(
                       r.code(),
                       r.name(),
                       agg.householdCount(),
                       agg.avgRiskScore(),
-                      agg.avgRiskLevelCd());
+                      agg.avgRiskLevelCd(),
+                      agg.buildingCount(),
+                      agg.dangerCount(),
+                      agg.avgRrI(),
+                      agg.doneUnitCount(),
+                      agg.pendingUnitCount(),
+                      agg.replacementUsedCount(),
+                      agg.revisitPendingUnitCount());
             })
         .toList();
   }

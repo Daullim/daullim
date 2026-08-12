@@ -2,6 +2,13 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "daullim-backend",
+      "runtimeExecutable": "./gradlew",
+      "runtimeArgs": ["bootRun"],
+      "port": 8080,
+      "cwd": "/Users/yoonseo/Daullim/daullim/backend"
+    },
+    {
       "name": "daullim-frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev"],

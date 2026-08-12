@@ -5,6 +5,7 @@ import type {
   BuildingQueueItem,
   CurrentUser,
   CursorPage,
+  DashboardComposition,
   DashboardSummary,
   Dong,
   GridFeatureCollection,
@@ -12,6 +13,7 @@ import type {
   Sido,
   Sigungu,
   UnitItem,
+  VisitBreakdown,
   VisitDayCount,
   VisitDetail,
   VisitListItem,
@@ -76,7 +78,17 @@ export const renameUnit = (unitId: number, hoNm: string, signal?: AbortSignal) =
 
 /* 점검 기록 조회 (G-2 · H-1) */
 
-export interface VisitQueryParams {
+/**
+ * 관제 관할 스코프 — 세 단계가 함께 오면 전부 AND로 걸린다.
+ * '전체지역'은 시군구를 비우고 `sidoCd`만 보내는 상태다.
+ */
+export interface RegionScope {
+  sidoCd?: string;
+  sigunguCd?: string;
+  dongCd?: string;
+}
+
+export interface VisitQueryParams extends RegionScope {
   /** `me`면 서버가 토큰의 주인으로 푼다 */
   officerId?: string;
   unitId?: number;
@@ -84,7 +96,6 @@ export interface VisitQueryParams {
   from?: string;
   to?: string;
   consentCd?: string;
-  dongCd?: string;
   cursor?: string;
   /** 기본 20 · 최대 100 */
   size?: number;
@@ -99,7 +110,7 @@ export const getVisits = (params: VisitQueryParams, signal?: AbortSignal) =>
  * 목록은 커서로 잘려 오므로 이걸로 점을 찍어야 한다 — 첫 페이지만 보고 찍으면 달력이 거짓말을 한다.
  */
 export const getVisitCalendar = (
-  params: { from: string; to: string; officerId?: string; dongCd?: string },
+  params: RegionScope & { from: string; to: string; officerId?: string },
   signal?: AbortSignal,
 ) => apiGet<VisitDayCount[]>(`/visits/calendar${query({ ...params })}`, signal);
 
@@ -108,9 +119,17 @@ export const getVisitCalendar = (
  * 오늘의 경계가 KST 달력일이라 서버가 정하지 않고 화면이 자기 날짜를 보낸다.
  */
 export const getVisitSummary = (
-  params: { from: string; to: string; officerId?: string; consentCd?: string; dongCd?: string },
+  params: RegionScope & { from: string; to: string; officerId?: string; consentCd?: string },
   signal?: AbortSignal,
 ) => apiGet<VisitSummary>(`/visits/summary${query({ ...params })}`, signal);
+
+/**
+ * 축별 분해 — 관제 3. 추진 현황의 판정·거부·교체 대수 축.
+ */
+export const getVisitBreakdown = (
+  params: RegionScope & { from: string; to: string },
+  signal?: AbortSignal,
+) => apiGet<VisitBreakdown>(`/visits/breakdown${query({ ...params })}`, signal);
 
 export const getVisit = (visitId: number, signal?: AbortSignal) =>
   apiGet<VisitDetail>(`/visits/${visitId}`, signal);
@@ -142,6 +161,11 @@ export const getGridSummary = (dongCd: string, signal?: AbortSignal) =>
 
 export const getDashboardSummary = (sigunguCd?: string, signal?: AbortSignal) =>
   apiGet<DashboardSummary>(`/dashboard/summary${query({ sigunguCd })}`, signal);
+
+export const getDashboardComposition = (
+  params: { sidoCd?: string; sigunguCd?: string } = {},
+  signal?: AbortSignal,
+) => apiGet<DashboardComposition>(`/dashboard/composition${query({ ...params })}`, signal);
 
 /* 인증 — login·signup만 토큰 없이 열려 있다 */
 

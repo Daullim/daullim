@@ -3,6 +3,7 @@ package com.daullim.backend.domain.visit.service;
 import com.daullim.backend.common.error.BusinessException;
 import com.daullim.backend.common.error.ErrorCode;
 import com.daullim.backend.common.response.CursorPage;
+import com.daullim.backend.domain.visit.dto.VisitBreakdown;
 import com.daullim.backend.domain.visit.dto.VisitDayCount;
 import com.daullim.backend.domain.visit.dto.VisitDetailResponse;
 import com.daullim.backend.domain.visit.dto.VisitListItem;
@@ -25,7 +26,14 @@ public class VisitQueryService {
 
   /** 목록 조회 조건 — 컨트롤러가 {@code me}를 풀고 넘긴 뒤라 여기서는 전부 확정값이다. */
   public record VisitFilter(
-      Long officerId, Long unitId, String from, String to, String consentCd, String dongCd) {}
+      Long officerId,
+      Long unitId,
+      String from,
+      String to,
+      String consentCd,
+      String sidoCd,
+      String sigunguCd,
+      String dongCd) {}
 
   public CursorPage<VisitListItem> list(VisitFilter filter, String cursor, int size) {
     VisitCursor.Position after = cursor == null ? null : VisitCursor.decode(cursor);
@@ -54,6 +62,37 @@ public class VisitQueryService {
     return repository.summarize(criteria(filter, null, 0));
   }
 
+  /**
+   * 축별 분해 — 관제 3·4 탭이 같은 응답의 다른 필드를 쓴다.
+   *
+   * <p>재방문 대기만 기간을 떼고 부른다. 잔량은 "지금"이라 기간을 걸면 뜻이 달라진다.
+   */
+  public VisitBreakdown breakdown(VisitFilter filter) {
+    VisitCriteria period = criteria(filter, null, 0);
+    VisitCriteria current = criteria(withoutRange(filter), null, 0);
+
+    return new VisitBreakdown(
+        new VisitBreakdown.Period(
+            filter.from(),
+            filter.to(),
+            repository.countByColumn(period, "condition_code_cd"),
+            repository.countByColumn(period, "refusal_reason_cd"),
+            repository.countReplacementsByRxCode(period)),
+        new VisitBreakdown.Current(repository.countRevisitPendingUnits(current)));
+  }
+
+  private static VisitFilter withoutRange(VisitFilter f) {
+    return new VisitFilter(
+        f.officerId(),
+        f.unitId(),
+        null,
+        null,
+        f.consentCd(),
+        f.sidoCd(),
+        f.sigunguCd(),
+        f.dongCd());
+  }
+
   public VisitDetailResponse detail(long visitId) {
     return repository
         .findDetail(visitId)
@@ -62,6 +101,15 @@ public class VisitQueryService {
 
   private static VisitCriteria criteria(VisitFilter f, VisitCursor.Position after, int limit) {
     return new VisitCriteria(
-        f.officerId(), f.unitId(), f.from(), f.to(), f.consentCd(), f.dongCd(), after, limit);
+        f.officerId(),
+        f.unitId(),
+        f.from(),
+        f.to(),
+        f.consentCd(),
+        f.sidoCd(),
+        f.sigunguCd(),
+        f.dongCd(),
+        after,
+        limit);
   }
 }

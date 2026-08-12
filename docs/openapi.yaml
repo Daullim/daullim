@@ -2,8 +2,17 @@ openapi: 3.1.0
 
 # 계약 정본 (ADR-005). 변경은 "계약 변경 PR"로만 한다.
 #
-# 범위: Issue #25 조회 API 9종 + 지도 정적 GeoJSON + 점검 결과 저장·조회 + 계정(/auth/me).
+# 범위: Issue #25 조회 API 9종 + 지도 정적 GeoJSON + 점검 결과 저장·조회 + 계정(/auth/me)
+#      + 관제 분석 5탭 집계(GET /dashboard/composition · GET /visits/breakdown).
 # 로그인·회원가입(#20·#22)·재방문은 아직 없다 — 지어내지 않는다.
+#
+# 관제 집계에서 의도적으로 만들지 않은 것 (다시 올리기 전에 근거부터 볼 것):
+# - 점검원·팀별 실적 — visits.officer_id는 있으나 users에 조직 축이 없어(org_nm 자유문자열 1개)
+#   "3팀 실적"을 물을 수 없다. /field/progress를 관제 드로어에서 감춘 것과 같은 이유다.
+# - 세대당 소요시간·1일 처리량 — visits에 visited_at 하나뿐이라 시작·종료가 없다.
+# - 단가·예산 집행률·재고 — 금액 축이 스키마에 없다. 자재관리 시스템의 일이다.
+# - 완료 예정일·소진 예상 — 분모가 15만 세대인데 표본이 한 자릿수라 외삽이 성립하지 않는다.
+# - 내용연수 도래 예정 — units.rx_baseline_day가 전 행 NULL이다.
 #
 # 폐기 확정 (다시 올리지 말 것):
 # - GET /codes — FE 라벨 정본은 config/domain.ts라 런타임 의존이 없고, CodeLookupIT가
@@ -519,6 +528,17 @@ paths:
         - name: consentCd
           in: query
           schema: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        - name: sidoCd
+          in: query
+          description: |
+            관제의 **'전체지역'** — 시군구를 비우고 시도만 보내는 상태다. 시군구와 함께 오면 둘 다 걸린다.
+          schema: { type: string, pattern: "^\\d{2}$" }
+        - name: sigunguCd
+          in: query
+          description: |
+            관할 스코프. 관제 5. 실적 통계의 일자별 기록 표가 쓴다 — 그 화면은 **점검원을 가리지 않아서**
+            (`officerId` 없이) 관할 안의 모든 점검원 기록이 나온다. 드로어의 `/records`와 갈리는 지점이다.
+          schema: { type: string, pattern: "^\\d{5}$" }
         - name: dongCd
           in: query
           schema: { type: string, pattern: "^\\d{10}$" }
@@ -575,6 +595,18 @@ paths:
         - name: consentCd
           in: query
           schema: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        - name: sidoCd
+          in: query
+          description: |
+            관제의 **'전체지역'** — 시군구를 비우고 시도만 보내는 상태다. 시군구와 함께 오면 둘 다 걸린다.
+          schema: { type: string, pattern: "^\\d{2}$" }
+        - name: sigunguCd
+          in: query
+          description: |
+            관할 스코프. **달력을 쓰는 화면이 둘이고 스코프가 갈린다** — 드로어 `/records`는
+            `officerId=me`(내 기록)로, 관제 5. 실적 통계는 `sigunguCd`(관할 안 모든 점검원)로 부른다.
+            같은 달에 찍히는 점이 서로 다르다.
+          schema: { type: string, pattern: "^\\d{5}$" }
         - name: dongCd
           in: query
           schema: { type: string, pattern: "^\\d{10}$" }
@@ -627,6 +659,19 @@ paths:
         - name: consentCd
           in: query
           schema: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        - name: sidoCd
+          in: query
+          description: |
+            관제의 **'전체지역'** — 시군구를 비우고 시도만 보내는 상태다. 시군구와 함께 오면 둘 다 걸린다.
+          schema: { type: string, pattern: "^\\d{2}$" }
+        - name: sigunguCd
+          in: query
+          description: |
+            관제 ⑤ 실적 통계의 스코프. `dongCd`와 함께 주면 둘 다 AND로 걸린다(동이 그 시군구 밖이면 0건).
+
+            관제는 시군구 단위로 보고하는데 이 계열 집계가 `dongCd`만 받고 있었다 — 그래서 추가했다.
+            `/visits/calendar`에는 넣지 않는다. 그쪽은 `/records` 전용이고 `/records`에 지역 축이 없다.
+          schema: { type: string, pattern: "^\\d{5}$" }
         - name: dongCd
           in: query
           schema: { type: string, pattern: "^\\d{10}$" }
@@ -648,6 +693,71 @@ paths:
                   total: 11
                   byConsent: { accepted: 8, refused: 2, vacant: 1 }
                   effectiveReplaceCount: 9
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /visits/breakdown:
+    get:
+      tags: [관제]
+      summary: 점검 결과 축별 분해 (관제 ③)
+      operationId: getVisitBreakdown
+      description: |
+        기간 내 `visits`를 **축만 바꿔 세는** 집계 하나. 관제 ③ 추진 현황이 판정·거부 사유·교체 항목을
+        나눠 보여줄 때 쓴다.
+
+        `/visits/summary`와 나누는 기준: 저쪽은 **보고에 올리는 총계**(총건수·게이트별·교체 대수)이고
+        이쪽은 **왜·무엇을**(판정·거부 사유·자재 코드) 분해한다. 저쪽은 `visits`만 보지만
+        이쪽은 `replacement_items`까지 조인해야 해서 비용도 다르다.
+
+        **`period`와 `current`를 응답에서 가른다.** 판정·거부 사유는 "그 기간에 무슨 일이 있었나"이고
+        재방문 대기는 "지금 다시 가야 할 세대가 얼마나 있나"다. 한 덩어리로 내리면 화면이 재방문 대기에도 기간 라벨을
+        붙여 거짓말을 한다 — `/visits/summary`와 `/visits/calendar`를 따로 둔 것과 같은 판단이다.
+
+        soft delete된 방문은 어느 축에도 나오지 않는다.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          schema: { type: string, pattern: "^\\d{8}$" }
+        - name: to
+          in: query
+          required: true
+          schema: { type: string, pattern: "^\\d{8}$" }
+        - name: sidoCd
+          in: query
+          description: |
+            관제의 **'전체지역'** — 시군구를 비우고 시도만 보내는 상태다. 시군구와 함께 오면 둘 다 걸린다.
+          schema: { type: string, pattern: "^\\d{2}$" }
+        - name: sigunguCd
+          in: query
+          description: 생략하면 전 지역. `current`(현재 재방문 대상)에도 같이 걸린다.
+          schema: { type: string, pattern: "^\\d{5}$" }
+        - name: dongCd
+          in: query
+          schema: { type: string, pattern: "^\\d{10}$" }
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/VisitBreakdown" }
+              example:
+                code: SUCCESS
+                message: 요청을 처리했습니다.
+                data:
+                  period:
+                    from: "20260801"
+                    to: "20260813"
+                    byConditionCode: [{ code: DEFECTIVE, count: 2 }, { code: OK_GOOD, count: 6 }]
+                    byRefusalReason: [{ code: no-need, count: 3 }]
+                    byRxCode: [{ code: RX-IOT, count: 9 }]
+                  current:
+                    revisitPendingUnitCount: 7
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
@@ -782,6 +892,71 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /dashboard/composition:
+    get:
+      tags: [관제]
+      summary: 관할 위험 구성 조회 (관제 ②)
+      operationId: getDashboardComposition
+      description: |
+        관제 ② 위험 분석 탭을 **통째로** 덮는 분포 집계. 전부 같은 `buildings` 한 번의 스캔이고
+        화면이 한 번에 다 쓰므로 축마다 쪼개지 않는다 — 넷으로 나누면 화면 진입에 왕복 4회가 되고
+        얻는 게 없다.
+
+        `visits`를 보지 않는다 — 이 응답은 **점검 전에도 꽉 차 있다**. 그래서 시연 첫 화면이 0으로
+        덮이지 않는다.
+
+        **건물 축과 세대 축을 둘 다 내린다.** 위험은 건물 속성이고 자원은 세대 단위라, 화면이 한쪽만
+        받아 다른 쪽을 곱으로 만들면 틀린다.
+      parameters:
+        - name: sidoCd
+          in: query
+          required: false
+          description: |
+            시도 단위 집계. `sigunguCd`와 함께 주면 `sigunguCd`가 우선한다.
+            시만 선택한 관제 ② 위험 분석 탭이 이 값을 보낸다.
+          schema: { type: string, pattern: "^\\d{2}$" }
+          example: "11"
+        - name: sigunguCd
+          in: query
+          required: false
+          description: 시군구 단위 집계. 생략하고 `sidoCd`도 없으면 전 지역 집계
+          schema: { type: string, pattern: "^\\d{5}$" }
+          example: "11620"
+      responses:
+        "200":
+          description: 성공
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/ApiResponse"
+                  - type: object
+                    properties:
+                      data: { $ref: "#/components/schemas/DashboardComposition" }
+              example:
+                code: SUCCESS
+                message: 요청을 처리했습니다.
+                data:
+                  byRiskLevel:
+                    - { code: danger, buildingCount: 9004, unitCount: 21033 }
+                    - { code: warn, buildingCount: 31362, unitCount: 78120 }
+                    - { code: ok, buildingCount: 7099, unitCount: 15044 }
+                  byRegionType:
+                    - { code: URBAN, danger: 9004, warn: 31362, ok: 7099 }
+                    - { code: RURAL, danger: 705, warn: 2494, ok: 6908 }
+                    - { code: BUFFER, danger: 597, warn: 1124, ok: 2508 }
+                  byHouseType:
+                    - { code: detached, buildingCount: 43482, unitCount: 43482 }
+                    - { code: multi-family, buildingCount: 10229, unitCount: 66552 }
+                  byUseAprDecade:
+                    - { decade: 1970, buildingCount: 9462 }
+                    - { decade: 1990, buildingCount: 14423 }
+                    - { decade: null, buildingCount: 5711 }
+                  rrDistribution: { min: 0.73, p50: 2.32, p99: 5.51, max: 7.20 }
+                  estimatedBuildingCount: 5636
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
 components:
   securitySchemes:
     bearerAuth:
@@ -890,7 +1065,15 @@ components:
 
     Dong:
       type: object
-      required: [dongCd, dongNm, householdCount, avgRiskScore, avgRiskLevelCd]
+      description: |
+        관제 ① 관내 현황의 동별 표 · ③ 추진 현황이 **전부 이 하나를 쓴다.**
+        축이 둘 섞여 있으니 화면이 곱하지 않도록 주의한다 — `buildingCount`·`dangerCount`는 **건물**,
+        `householdCount`·`doneUnitCount`·`pendingUnitCount`·`revisitPendingUnitCount`는 **세대**다.
+        `replacementUsedCount`는 실제 교체에 사용된 경보기 개수 누적이다.
+      required:
+        [dongCd, dongNm, householdCount, avgRiskScore, avgRiskLevelCd,
+         buildingCount, dangerCount, avgRrI, doneUnitCount, pendingUnitCount, replacementUsedCount,
+         revisitPendingUnitCount]
       properties:
         dongCd: { type: string, description: 행정표준코드 10자리, example: "1162069500" }
         dongNm: { type: string, example: 신림동 }
@@ -912,6 +1095,48 @@ components:
           description: |
             `avgRiskScore`에서 파생. 절대 임계값이며 pipeline `scoring.py::risk_level`과 같다 —
             danger ≥70 · warn ≥35 · ok <35. 건물이 없는 동은 null.
+        buildingCount:
+          type: integer
+          format: int64
+          description: 동 안의 **건물** 수. `householdCount`(세대)의 분모가 아니다 — 축이 다르다.
+        dangerCount:
+          type: integer
+          format: int64
+          description: "`count(buildings WHERE risk_level_cd='danger')` — 건물 축."
+        avgRrI:
+          type: [number, "null"]
+          description: |
+            동 안 건물의 **상대위험도**(`buildings.rr_i`) 평균, 소수 1자리. "관할 기준 대비 몇 배"를
+            그대로 읽는 값이라 관제 ① 표의 **기본 정렬 키**다. 건물이 없는 동은 null.
+
+            점수(`avgRiskScore`, 0~100)와 **다른 축이다** — 점수는 순위용 정규화값이고 이쪽은 배수다.
+            실측 분포는 최소 0.73 · 중앙 2.32 · 상위 1% 5.51 · 최대 7.20.
+          example: 3.1
+        doneUnitCount:
+          type: integer
+          format: int64
+          description: |
+            방문 기록 또는 세대 방문 캐시가 있는 **세대** 수. 화면 라벨은 "방문 세대"이며 진행률의 분자다.
+            `visits`는 있지만 `units.status_cd` 캐시가 아직 반영되지 않은 데이터도 이쪽으로 센다.
+        pendingUnitCount:
+          type: integer
+          format: int64
+          description: |
+            방문 기록과 세대 방문 캐시가 모두 없는 **세대** 수. 화면 라벨은 "미방문 세대"다.
+            `householdCount - doneUnitCount`와 같지만 서버가 세어 내린다 — 화면이 빼기로 만들면
+            직접 적재된 방문 기록과 세대 캐시가 엇갈릴 때 화면마다 갈린다.
+        replacementUsedCount:
+          type: integer
+          format: int64
+          description: |
+            실제 교체에 사용된 경보기 개수 누적. `visits.effective_replace_count`의 동별 합계이며,
+            예상 소요(`pendingByRxCode`)가 아니다.
+        revisitPendingUnitCount:
+          type: integer
+          format: int64
+          description: |
+            최신 방문이 `revisit_plan_cd='revisit'`인 세대 수. 과거 방문이 재방문이어도 이후 방문에서 종결되면
+            제외한다.
 
     BuildingQueuePage:
       type: object
@@ -1391,12 +1616,157 @@ components:
 
     DashboardSummary:
       type: object
-      required: [targetCount, doneCount, dangerCount, updatedAt]
+      required: [targetCount, doneCount, dangerCount, pendingByRxCode, computedAt, updatedAt]
       properties:
         targetCount: { type: integer, format: int64, description: "`count(units)`" }
         doneCount: { type: integer, format: int64, description: "`count(units WHERE status_cd='done')`" }
         dangerCount: { type: integer, format: int64, description: "`count(buildings WHERE risk_level_cd='danger')`" }
-        updatedAt: { type: string, format: date-time }
+        pendingByRxCode:
+          type: object
+          additionalProperties: { type: integer, format: int64, minimum: 0 }
+          description: |
+            미완료 **세대**를 그 건물의 처방 코드로 묶은 수 — 관제 다크 바의 "예상 소요" 총량이다.
+
+            ⚠️ **지금은 `RX-IOT` 한 칸뿐이다.** 보급 이력이 전 행 NULL이라 pipeline이 `rx_code_cd`를
+            전량 `RX-IOT`로 낸다(파이프라인 확정 결정 2). 그래도 **맵으로 열어 두는 것은**
+            값이 갈리기 시작해도 계약과 화면이 안 바뀌게 하기 위해서다.
+            `byConsent`와 달리 **0인 코드도 담는다** — 화면이 "전지 0대"를 표시해야 소요가 없다는 뜻이 전달된다.
+            **처방이 없는 건물(`rx_code_cd IS NULL`)의 세대는 어느 칸에도 넣지 않는다** — 소요를 셀 근거가 없다.
+            그래서 값의 합은 `targetCount - doneCount`보다 작을 수 있다.
+          example: { RX-IOT: 152202, RX-BAT: 0 }
+        computedAt:
+          type: string
+          format: date-time
+          description: |
+            **점수를 산출한 시각**(`buildings.computed_at`의 최대값). pipeline이 월 1회 도므로
+            보통 며칠~몇 주 전이다.
+
+            `updatedAt`과 **섞지 않는다** — 그쪽은 이 응답을 만든 시각이라 항상 방금이다.
+            화면의 `LastUpdated`("N초 전")는 `updatedAt` 축이고, 관제 ① 신선도 띠가 이 값을 쓴다.
+        updatedAt:
+          type: string
+          format: date-time
+          description: 이 응답을 만든 시각. 큐가 조회 시 파생이라 마지막 집계 시각이 곧 응답 시각이다.
+
+    CodeCount:
+      type: object
+      description: 코드 축 1칸. `code`는 `config/domain.ts`의 열거값과 1:1이라 라벨은 내리지 않는다.
+      required: [code, count]
+      properties:
+        code: { type: string }
+        count: { type: integer, format: int64, minimum: 0 }
+
+    DashboardComposition:
+      type: object
+      required:
+        [byRiskLevel, byRegionType, byHouseType, byUseAprDecade, rrDistribution, estimatedBuildingCount]
+      properties:
+        byRiskLevel:
+          type: array
+          description: 등급별 건물·세대 수. 순서는 danger → warn → ok 고정.
+          items:
+            type: object
+            required: [code, buildingCount, unitCount]
+            properties:
+              code: { $ref: "#/components/schemas/RiskLevelCd" }
+              buildingCount: { type: integer, format: int64 }
+              unitCount: { type: integer, format: int64 }
+        byRegionType:
+          type: array
+          description: |
+            도농 × 등급 교차(건물 축). **`NO_POP`은 내리지 않는다** — 실측 2행이라 막대가 렌더돼도
+            보이지 않으면서 범례만 늘린다. `region_type_cd`의 4분류 중 화면에 서는 것은 3종이다.
+          items:
+            type: object
+            required: [code, danger, warn, ok]
+            properties:
+              code: { type: string, enum: [URBAN, RURAL, BUFFER] }
+              danger: { type: integer, format: int64 }
+              warn: { type: integer, format: int64 }
+              ok: { type: integer, format: int64 }
+        byHouseType:
+          type: array
+          items:
+            type: object
+            required: [code, buildingCount, unitCount]
+            properties:
+              code: { $ref: "#/components/schemas/HouseTypeCd" }
+              buildingCount: { type: integer, format: int64 }
+              unitCount: { type: integer, format: int64 }
+        byUseAprDecade:
+          type: array
+          description: |
+            사용승인 **연대**별 건물 수 — 관할이 얼마나 노후했나를 재는 유일한 축이다
+            (보급 이력이 전 행 NULL이라 '설치 후 경과연차'는 존재하지 않는다).
+
+            `decade: null`은 대장 미등재다. 실측 채움률 90.8%이고, 화면은 이 칸을 **점선 보더**로
+            그린다(실측/추정을 형태로 구분하는 기존 문법). 오름차순, 건물이 0인 연대는 담지 않는다.
+          items:
+            type: object
+            required: [decade, buildingCount]
+            properties:
+              decade: { type: [integer, "null"], example: 1970 }
+              buildingCount: { type: integer, format: int64, minimum: 1 }
+        rrDistribution:
+          type: object
+          description: |
+            상대위험도(`buildings.rr_i`) 분포. **점수(0~100)와 다른 축이다** — 점수는 순위용
+            정규화값이고 이쪽은 "기준 대비 몇 배"라 그대로 읽힌다.
+            건물이 없으면 전 필드 null.
+          required: [min, p50, p99, max]
+          properties:
+            min: { type: [number, "null"] }
+            p50: { type: [number, "null"] }
+            p99: { type: [number, "null"] }
+            max: { type: [number, "null"] }
+        estimatedBuildingCount:
+          type: integer
+          format: int64
+          description: |
+            `count(buildings WHERE is_estimated)` — 좌표를 지번 최근접으로 채운 건물 수.
+            관제 ① 신뢰도 띠가 "이 명단을 얼마나 믿을 수 있나"에 답하는 데 쓴다.
+            `HonestyLabel`이 문구로 말하던 것의 수치판이다.
+
+    VisitBreakdown:
+      type: object
+      required: [period, current]
+      properties:
+        period:
+          type: object
+          description: 기간 안에서 일어난 일. 0인 코드는 담지 않는다(화면이 자기 열거값을 돌며 0으로 채운다).
+          required: [from, to, byConditionCode, byRefusalReason, byRxCode]
+          properties:
+            from: { type: string, pattern: "^\\d{8}$" }
+            to: { type: string, pattern: "^\\d{8}$" }
+            byConditionCode:
+              type: array
+              description: 세대 종합 판정(`visits.condition_code_cd`)별 건수. 미점검 방문은 판정이 없어 빠진다.
+              items: { $ref: "#/components/schemas/CodeCount" }
+            byRefusalReason:
+              type: array
+              description: 거부 사유(`visits.refusal_reason_cd`)별 건수. `consent_cd='refused'`인 방문에만 값이 있다.
+              items: { $ref: "#/components/schemas/CodeCount" }
+            byRxCode:
+              type: array
+              description: |
+                **교체 항목**(`replacement_items.rx_code_cd`)별 개수 — 방문 건수가 아니라 자재 대수다.
+                한 방문이 여러 항목을 낳으므로 합이 `total`과 맞지 않는다.
+              items: { $ref: "#/components/schemas/CodeCount" }
+        current:
+          type: object
+          description: |
+            **기간과 무관한 현재 재방문 대상.** `period`와 한 덩어리로 내리지 않는 이유가 여기 있다 —
+            화면이 이 값에 기간 라벨을 붙이면 거짓말이 된다.
+          required: [revisitPendingUnitCount]
+          properties:
+            revisitPendingUnitCount:
+              type: integer
+              format: int64
+              minimum: 0
+              description: |
+                최근 방문이 `revisit_plan_cd='revisit'`이라 아직 큐에 남은 세대 수.
+                ADR-013상 재방문 필요면 `units.status_cd`가 `pending`이므로 **이미 큐에 있다** —
+                화면은 이 수를 보여 주고 해당 동으로 보내면 되고, 큐에 밀어넣는 조작은 없다.
 
     HouseTypeCd:
       type: string

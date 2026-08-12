@@ -134,6 +134,40 @@ class VisitQueryApiIT extends QueryApiSupport {
     }
 
     @Test
+    @DisplayName("sigunguCd로 거른다 — 관제 5. 실적 통계의 일자별 표가 쓰는 축")
+    void filtersBySigungu() throws Exception {
+      mvc.perform(get("/api/v1/visits?sigunguCd={sigungu}", SIGUNGU).with(officer()))
+          .andExpect(jsonPath("$.data.items.length()").value(4));
+
+      mvc.perform(get("/api/v1/visits?sigunguCd=11680").with(officer()))
+          .andExpect(jsonPath("$.data.items.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("점검원을 가리지 않으면 관할 안 모든 점검원의 기록이 나온다")
+    void listsEveryOfficerWhenNotFiltered() throws Exception {
+      long otherOfficer =
+          jdbc.sql(
+                  """
+                  INSERT INTO users (login_id,password_hash,name,phone,birth_on,role_cd)
+                  VALUES (:loginId,'{bcrypt}stub','김점검','010-9999-8888',DATE '1988-03-03','officer')
+                  RETURNING user_id
+                  """)
+              .param("loginId", "it-other-" + java.util.UUID.randomUUID())
+              .query(Long.class)
+              .single();
+      insertVisit(b2FieldUnit, otherOfficer, "20260716", NOON.plusSeconds(90000), "accepted", true);
+
+      // officerId를 주지 않으면 두 사람 것이 함께 — /records가 officerId=me로 좁히는 것과 갈린다
+      mvc.perform(get("/api/v1/visits?sigunguCd={sigungu}", SIGUNGU).with(officer()))
+          .andExpect(jsonPath("$.data.items.length()").value(5))
+          .andExpect(jsonPath("$.data.items[0].officerName").value("김점검"));
+
+      mvc.perform(get("/api/v1/visits?officerId=me").with(officer()))
+          .andExpect(jsonPath("$.data.items.length()").value(4));
+    }
+
+    @Test
     @DisplayName("깨진 커서는 400이다")
     void rejectsBrokenCursor() throws Exception {
       mvc.perform(get("/api/v1/visits?cursor=not-a-cursor").with(officer()))
@@ -165,6 +199,21 @@ class VisitQueryApiIT extends QueryApiSupport {
           .andExpect(jsonPath("$.data[2].day").value("20260715"))
           // soft delete된 1건은 세지 않는다
           .andExpect(jsonPath("$.data[2].count").value(2));
+    }
+
+    @Test
+    @DisplayName("sigunguCd로 좁혀진다 — 관제 5. 실적 통계의 달력이 쓰는 축")
+    void filtersBySigungu() throws Exception {
+      mvc.perform(
+              get("/api/v1/visits/calendar?from=20260701&to=20260731&sigunguCd={sigungu}", SIGUNGU)
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.length()").value(3));
+
+      // 건물이 없는 관할은 찍을 날이 없다
+      mvc.perform(
+              get("/api/v1/visits/calendar?from=20260701&to=20260731&sigunguCd=11680")
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.length()").value(0));
     }
 
     @Test
@@ -232,9 +281,148 @@ class VisitQueryApiIT extends QueryApiSupport {
     }
 
     @Test
+    @DisplayName("sigunguCd로 좁혀진다 — 관제 5. 실적 통계가 부르는 축")
+    void filtersBySigungu() throws Exception {
+      mvc.perform(
+              get("/api/v1/visits/summary?from=20260701&to=20260731&sigunguCd={sigungu}", SIGUNGU)
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.total").value(4))
+          .andExpect(jsonPath("$.data.effectiveReplaceCount").value(2));
+    }
+
+    @Test
+    @DisplayName("건물이 없는 시군구는 0이다 — 관할을 바꿔도 화면이 분기하지 않게")
+    void emptySigunguYieldsZeros() throws Exception {
+      mvc.perform(
+              get("/api/v1/visits/summary?from=20260701&to=20260731&sigunguCd=11680")
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.total").value(0))
+          .andExpect(jsonPath("$.data.byConsent").isEmpty());
+    }
+
+    @Test
+    @DisplayName("시군구와 동을 함께 주면 둘 다 걸린다 — 동이 그 시군구 밖이면 0건")
+    void combinesSigunguAndDong() throws Exception {
+      mvc.perform(
+              get(
+                      "/api/v1/visits/summary?from=20260701&to=20260731&sigunguCd={sigungu}&dongCd={dong}",
+                      SIGUNGU,
+                      OTHER_DONG)
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.total").value(1));
+
+      mvc.perform(
+              get(
+                      "/api/v1/visits/summary?from=20260701&to=20260731&sigunguCd=11680&dongCd={dong}",
+                      OTHER_DONG)
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
     @DisplayName("from·to는 필수다")
     void requiresRange() throws Exception {
       mvc.perform(get("/api/v1/visits/summary?to=20260731").with(officer()))
+          .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("시군구코드 형식이 어긋나면 400이다")
+    void rejectsMalformedSigungu() throws Exception {
+      mvc.perform(
+              get("/api/v1/visits/summary?from=20260701&to=20260731&sigunguCd=gwanak")
+                  .with(officer()))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+  }
+
+  /** 관제 3. 추진 현황 · 4. 소요 물량이 나눠 쓰는 축별 분해. */
+  @Nested
+  @DisplayName("G-2. 축별 분해")
+  class Breakdown {
+
+    private static final String RANGE = "from=20260701&to=20260731";
+
+    @Test
+    @DisplayName("판정·거부 사유를 축별로 세고 값이 없는 행은 그 축에 담기지 않는다")
+    void countsByColumn() throws Exception {
+      mvc.perform(get("/api/v1/visits/breakdown?" + RANGE).with(officer()))
+          .andExpect(status().isOk())
+          // 점검한 두 건만 판정을 갖는다 — 미점검 방문은 판정 자체가 없다
+          .andExpect(jsonPath("$.data.period.byConditionCode.length()").value(1))
+          .andExpect(jsonPath("$.data.period.byConditionCode[0].code").value("DEFECTIVE"))
+          .andExpect(jsonPath("$.data.period.byConditionCode[0].count").value(2))
+          // 거부 사유는 거부 건에만 있다 — 공가는 사유를 가질 수 없다(ck_v_gate1)
+          .andExpect(jsonPath("$.data.period.byRefusalReason.length()").value(1))
+          .andExpect(jsonPath("$.data.period.byRefusalReason[0].code").value("no-time"))
+          .andExpect(jsonPath("$.data.period.byRefusalReason[0].count").value(1));
+    }
+
+    @Test
+    @DisplayName("byRxCode는 방문이 아니라 자재 대수를 센다 — 처방 없는 항목은 빠진다")
+    void countsReplacementItemsNotVisits() throws Exception {
+      insertReplacementItem(tiedEarlier, 1, "expired", "RX-IOT");
+      insertReplacementItem(tiedEarlier, 2, "appearance", "RX-IOT");
+      insertReplacementItem(tiedEarlier, 3, "battery-dead", "RX-BAT");
+      // '기타'는 처방이 없어 소요로 셀 근거가 없다
+      insertReplacementItem(tiedLater, 1, "etc", null);
+
+      mvc.perform(get("/api/v1/visits/breakdown?" + RANGE).with(officer()))
+          .andExpect(status().isOk())
+          // 방문은 2건인데 항목은 3대 — 두 수가 맞지 않는 것이 정상이다
+          .andExpect(jsonPath("$.data.period.byRxCode.length()").value(2))
+          .andExpect(jsonPath("$.data.period.byRxCode[0].code").value("RX-IOT"))
+          .andExpect(jsonPath("$.data.period.byRxCode[0].count").value(2))
+          .andExpect(jsonPath("$.data.period.byRxCode[1].code").value("RX-BAT"))
+          .andExpect(jsonPath("$.data.period.byRxCode[1].count").value(1));
+    }
+
+    @Test
+    @DisplayName("재방문 대기는 세대의 최근 방문만 본다 — 뒤에 끝냈으면 대기가 아니다")
+    void countsOnlyLatestVisitPerUnit() throws Exception {
+      long stillWaiting = unitOf(b3);
+      long resolved = unitOf(b4);
+
+      insertRevisitVisit(stillWaiting, "20260720", NOON.plusSeconds(432_000), "revisit");
+      // 같은 세대에 재방문 필요 → 그 뒤 불필요. 최근 것만 보므로 대기에서 빠져야 한다
+      insertRevisitVisit(resolved, "20260721", NOON.plusSeconds(518_400), "revisit");
+      insertRevisitVisit(resolved, "20260722", NOON.plusSeconds(604_800), "not-needed");
+
+      mvc.perform(get("/api/v1/visits/breakdown?" + RANGE).with(officer()))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.data.current.revisitPendingUnitCount").value(1));
+    }
+
+    @Test
+    @DisplayName("재방문 대기는 기간을 타지 않는다 — 기간 밖을 물어도 잔량은 그대로다")
+    void remnantIgnoresRange() throws Exception {
+      insertRevisitVisit(unitOf(b3), "20260720", NOON.plusSeconds(432_000), "revisit");
+
+      mvc.perform(get("/api/v1/visits/breakdown?from=20260101&to=20260131").with(officer()))
+          .andExpect(status().isOk())
+          // 기간 축은 비었는데
+          .andExpect(jsonPath("$.data.period.byConditionCode").isEmpty())
+          // 잔량은 그대로다 — 한 덩어리로 내렸다면 여기서 0이 됐을 것이다
+          .andExpect(jsonPath("$.data.current.revisitPendingUnitCount").value(1));
+    }
+
+    @Test
+    @DisplayName("전체지역(sidoCd)으로 거른다 — 시군구를 비운 관제 상태")
+    void filtersBySido() throws Exception {
+      mvc.perform(get("/api/v1/visits/breakdown?" + RANGE + "&sidoCd=" + SIDO).with(officer()))
+          .andExpect(jsonPath("$.data.period.byConditionCode[0].count").value(2));
+
+      // 다른 시도를 물으면 전부 빈다 — 예전엔 sidoCd가 없어 전국이 합산됐다
+      mvc.perform(get("/api/v1/visits/breakdown?" + RANGE + "&sidoCd=26").with(officer()))
+          .andExpect(jsonPath("$.data.period.byConditionCode").isEmpty())
+          .andExpect(jsonPath("$.data.current.revisitPendingUnitCount").value(0));
+    }
+
+    @Test
+    @DisplayName("from·to는 필수다")
+    void requiresRange() throws Exception {
+      mvc.perform(get("/api/v1/visits/breakdown?from=20260701").with(officer()))
           .andExpect(status().isBadRequest());
     }
   }
@@ -347,6 +535,40 @@ class VisitQueryApiIT extends QueryApiSupport {
       spec = spec.param("refusalReasonCd", "refused".equals(consentCd) ? "no-time" : null);
     }
     return spec.query(Long.class).single();
+  }
+
+  /** 재방문 여부만 달리 세우는 방문 — 미점검이라 경보기 필드가 전부 null이어야 한다(ck_v_na). */
+  private long insertRevisitVisit(long unitId, String day, Instant at, String revisitPlanCd) {
+    return jdbc.sql(
+            """
+            INSERT INTO visits (unit_id,officer_id,visited_day,visited_at,consent_cd,is_inspected,
+              revisit_plan_cd)
+            VALUES (:unitId,:officerId,:day,:at,'vacant',false,:revisitPlanCd)
+            RETURNING visit_id
+            """)
+        .param("unitId", unitId)
+        .param("officerId", officerId)
+        .param("day", day)
+        .param("at", at.atOffset(ZoneOffset.UTC))
+        .param("revisitPlanCd", revisitPlanCd)
+        .query(Long.class)
+        .single();
+  }
+
+  /** 전지 유형은 방전 사유에만 있고, 방전이면 반드시 있어야 한다(ck_ri_battery). */
+  private void insertReplacementItem(long visitId, int seq, String reasonCd, String rxCodeCd) {
+    jdbc.sql(
+            """
+            INSERT INTO replacement_items (visit_id,item_seq,replace_reason_cd,battery_type_cd,
+              rx_code_cd)
+            VALUES (:visitId,:seq,:reasonCd,:batteryTypeCd,:rxCodeCd)
+            """)
+        .param("visitId", visitId)
+        .param("seq", seq)
+        .param("reasonCd", reasonCd)
+        .param("batteryTypeCd", "battery-dead".equals(reasonCd) ? "replaceable" : null)
+        .param("rxCodeCd", rxCodeCd)
+        .update();
   }
 
   private long unitOf(long buildingId) {

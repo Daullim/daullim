@@ -25,20 +25,23 @@ function token(name: string): string {
  *
  * `ok`도 0이 아닌 이유는 클릭 판정 때문이다 — `fillOpacity: 0`이면 면이 이벤트를 받지 않아
  * 격자를 눌러도 선택되지 않는다.
+ *
+ * 관제 ①의 **동 경계 코로플레스도 이 값을 그대로 쓴다**(`admin-boundary-layer.ts`) —
+ * 같은 규칙이 두 곳에 복제되면 한쪽만 고쳐져 지도마다 농도가 달라진다.
  */
-const FILL_OPACITY: Record<RiskLevel, number> = {
+export const FILL_OPACITY: Record<RiskLevel, number> = {
   danger: 0.14,
   warn: 0.08,
   ok: 0.03,
 };
 
-const RISK_TOKEN: Record<RiskLevel, string> = {
+export const RISK_TOKEN: Record<RiskLevel, string> = {
   danger: "--color-risk-danger",
   warn: "--color-risk-warn",
   ok: "--color-risk-ok",
 };
 
-function isRiskLevel(value: unknown): value is RiskLevel {
+export function isRiskLevel(value: unknown): value is RiskLevel {
   return value === "danger" || value === "warn" || value === "ok";
 }
 
