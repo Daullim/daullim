@@ -159,7 +159,7 @@ export default function ControlOverviewPage() {
           className="flex h-140 shrink-0 flex-col overflow-hidden rounded-md border border-hairline bg-surface lg:h-auto lg:min-h-0 lg:w-100 xl:w-120 2xl:w-140"
         >
           <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-hairline px-3">
-            <h2 className="text-title-sm text-ink">동별 현황</h2>
+            <h2 className="text-title-lg text-ink">동별 현황</h2>
             <span className="flex items-center gap-1">
               {SORTS.map((s) => (
                 <button

@@ -79,6 +79,11 @@ typography: # 굵기는 400/600 두 단계만. 전 텍스트 단일 서체(Prete
     fontSize: 28px
     fontWeight: 600
     lineHeight: 1.25
+  title-lg:
+    fontFamily: "Pretendard Variable, Pretendard, sans-serif"
+    fontSize: 20px      # 관제 섹션 제목 — 화면 제목(28px)과 패널 내 소제목(16px) 사이
+    fontWeight: 600
+    lineHeight: 1.4
   title:
     fontFamily: "Pretendard Variable, Pretendard, sans-serif"
     fontSize: 18px
@@ -314,6 +319,7 @@ B2 지도의 1km 격자는 **면을 위험 등급 본색으로 채우되 농도�
 | Token | 서체 | 크기 | 굵기 | 행간 | 용도 |
 |---|---|---|---|---|---|
 | `{typography.display-sm}` | Pretendard | 28px | 600 | 1.25 | 화면 제목 (드릴다운 단계 제목) |
+| `{typography.title-lg}` | Pretendard | 20px | 600 | 1.4 | **관제 섹션 제목** — `ControlPanel`이 쓰는 유일한 제목 크기. 아래 § 관제 제목 3단 |
 | `{typography.title}` | Pretendard | 18px | 600 | 1.4 | 패널·카드 제목 |
 | `{typography.title-sm}` | Pretendard | 16px | 600 | 1.4 | 폼 섹션 라벨, 리스트 소제목 |
 | `{typography.body-md}` | Pretendard | 16px | 400 | 1.5 | `/field` 본문 (최소값 — 더 줄이지 않는다) |
@@ -322,6 +328,22 @@ B2 지도의 1km 격자는 **면을 위험 등급 본색으로 채우되 농도�
 | `{typography.data}` | Pretendard (tabular 숫자) | 상속 | 400 | 상속 | 모든 데이터 값 |
 | `{typography.data-lg}` | Pretendard (tabular 숫자) | 24px | 600 | 1.2 | 요약 카운터 숫자 |
 | `{typography.button}` | Pretendard | 15px | 600 | 1 | 버튼 라벨 |
+
+### 관제 제목 3단 (2026-08-13 확정)
+
+관제 5탭은 제목 위계를 **세 단으로 고정**한다. 탭마다 다르게 고르지 않는다.
+
+| 단 | 토큰 | 무엇 |
+|---|---|---|
+| 화면 | `{typography.display-sm}` 28px | 관할명 + 탭명 (`관악구 실적 통계`) |
+| **섹션** | **`{typography.title-lg}` 20px** | **`ControlPanel`의 제목** — 화면을 가르는 구획 |
+| 소제목 | `{typography.title-sm}` 16px | 패널 **안에서** 블록을 가르는 제목 (`방문 결과 내역`·`운영 지표`) |
+
+20px를 새로 판 이유는 계단이 18 → 28로 끊겨 있어서다. 18px은 소제목(16px)과 붙어 구획이 안 서고,
+28px은 화면 제목과 같아져 위계가 사라진다. 22px은 24px(`data-lg`)과 붙어 구분되지 않는다.
+
+**`ControlPanel`은 크기 선택지를 두지 않는다** — 제목 크기가 prop이면 탭마다 갈리고, 그게 이 3단을
+만든 이유다. 더 큰 제목이 필요하면 그건 패널이 아니라 화면 제목이다.
 
 ### 원칙 — 단일 서체(Pretendard), 데이터 값은 tabular 숫자
 전 텍스트는 Pretendard 하나로 통일한다. `risk_score`, `grid_id`, `rx_code`, 좌표, 건수, 순위 등 **데이터 값은 `DataText`로 감싼다** — 별도 서체를 쓰지 않고 Pretendard의 tabular 숫자(`tabular-nums`)만 적용해 리스트·카운터의 숫자 열 정렬을 지키는 것이 목적이다. 굵기는 400/600 두 단계만 — 500·700 금지. 디스플레이 전용 서체 도입 금지(업무 도구).
