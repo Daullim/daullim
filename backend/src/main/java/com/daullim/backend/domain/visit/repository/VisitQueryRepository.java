@@ -107,6 +107,7 @@ public class VisitQueryRepository {
       String from,
       String to,
       String consentCd,
+      String sigunguCd,
       String dongCd,
       VisitCursor.Position after,
       int limit) {}
@@ -266,6 +267,10 @@ public class VisitQueryRepository {
     if (c.consentCd() != null) {
       sql.append("  AND v.consent_cd = :consentCd\n");
     }
+    // 관제는 시군구로 보고한다. 동과 함께 오면 둘 다 걸린다 — 동이 그 시군구 밖이면 0건.
+    if (c.sigunguCd() != null) {
+      sql.append("  AND b.sigungu_cd = :sigunguCd\n");
+    }
     if (c.dongCd() != null) {
       sql.append("  AND b.admin_dong_cd = :dongCd\n");
     }
@@ -287,6 +292,9 @@ public class VisitQueryRepository {
     }
     if (c.consentCd() != null) {
       spec = spec.param("consentCd", c.consentCd());
+    }
+    if (c.sigunguCd() != null) {
+      spec = spec.param("sigunguCd", c.sigunguCd());
     }
     if (c.dongCd() != null) {
       spec = spec.param("dongCd", c.dongCd());

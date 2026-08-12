@@ -134,6 +134,40 @@ class VisitQueryApiIT extends QueryApiSupport {
     }
 
     @Test
+    @DisplayName("sigunguCd로 거른다 — 관제 5. 실적 통계의 일자별 표가 쓰는 축")
+    void filtersBySigungu() throws Exception {
+      mvc.perform(get("/api/v1/visits?sigunguCd={sigungu}", SIGUNGU).with(officer()))
+          .andExpect(jsonPath("$.data.items.length()").value(4));
+
+      mvc.perform(get("/api/v1/visits?sigunguCd=11680").with(officer()))
+          .andExpect(jsonPath("$.data.items.length()").value(0));
+    }
+
+    @Test
+    @DisplayName("점검원을 가리지 않으면 관할 안 모든 점검원의 기록이 나온다")
+    void listsEveryOfficerWhenNotFiltered() throws Exception {
+      long otherOfficer =
+          jdbc.sql(
+                  """
+                  INSERT INTO users (login_id,password_hash,name,phone,birth_on,role_cd)
+                  VALUES (:loginId,'{bcrypt}stub','김점검','010-9999-8888',DATE '1988-03-03','officer')
+                  RETURNING user_id
+                  """)
+              .param("loginId", "it-other-" + java.util.UUID.randomUUID())
+              .query(Long.class)
+              .single();
+      insertVisit(b2FieldUnit, otherOfficer, "20260716", NOON.plusSeconds(90000), "accepted", true);
+
+      // officerId를 주지 않으면 두 사람 것이 함께 — /records가 officerId=me로 좁히는 것과 갈린다
+      mvc.perform(get("/api/v1/visits?sigunguCd={sigungu}", SIGUNGU).with(officer()))
+          .andExpect(jsonPath("$.data.items.length()").value(5))
+          .andExpect(jsonPath("$.data.items[0].officerName").value("김점검"));
+
+      mvc.perform(get("/api/v1/visits?officerId=me").with(officer()))
+          .andExpect(jsonPath("$.data.items.length()").value(4));
+    }
+
+    @Test
     @DisplayName("깨진 커서는 400이다")
     void rejectsBrokenCursor() throws Exception {
       mvc.perform(get("/api/v1/visits?cursor=not-a-cursor").with(officer()))
@@ -165,6 +199,21 @@ class VisitQueryApiIT extends QueryApiSupport {
           .andExpect(jsonPath("$.data[2].day").value("20260715"))
           // soft delete된 1건은 세지 않는다
           .andExpect(jsonPath("$.data[2].count").value(2));
+    }
+
+    @Test
+    @DisplayName("sigunguCd로 좁혀진다 — 관제 5. 실적 통계의 달력이 쓰는 축")
+    void filtersBySigungu() throws Exception {
+      mvc.perform(
+              get("/api/v1/visits/calendar?from=20260701&to=20260731&sigunguCd={sigungu}", SIGUNGU)
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.length()").value(3));
+
+      // 건물이 없는 관할은 찍을 날이 없다
+      mvc.perform(
+              get("/api/v1/visits/calendar?from=20260701&to=20260731&sigunguCd=11680")
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.length()").value(0));
     }
 
     @Test
@@ -232,10 +281,59 @@ class VisitQueryApiIT extends QueryApiSupport {
     }
 
     @Test
+    @DisplayName("sigunguCd로 좁혀진다 — 관제 5. 실적 통계가 부르는 축")
+    void filtersBySigungu() throws Exception {
+      mvc.perform(
+              get("/api/v1/visits/summary?from=20260701&to=20260731&sigunguCd={sigungu}", SIGUNGU)
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.total").value(4))
+          .andExpect(jsonPath("$.data.effectiveReplaceCount").value(2));
+    }
+
+    @Test
+    @DisplayName("건물이 없는 시군구는 0이다 — 관할을 바꿔도 화면이 분기하지 않게")
+    void emptySigunguYieldsZeros() throws Exception {
+      mvc.perform(
+              get("/api/v1/visits/summary?from=20260701&to=20260731&sigunguCd=11680")
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.total").value(0))
+          .andExpect(jsonPath("$.data.byConsent").isEmpty());
+    }
+
+    @Test
+    @DisplayName("시군구와 동을 함께 주면 둘 다 걸린다 — 동이 그 시군구 밖이면 0건")
+    void combinesSigunguAndDong() throws Exception {
+      mvc.perform(
+              get(
+                      "/api/v1/visits/summary?from=20260701&to=20260731&sigunguCd={sigungu}&dongCd={dong}",
+                      SIGUNGU,
+                      OTHER_DONG)
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.total").value(1));
+
+      mvc.perform(
+              get(
+                      "/api/v1/visits/summary?from=20260701&to=20260731&sigunguCd=11680&dongCd={dong}",
+                      OTHER_DONG)
+                  .with(officer()))
+          .andExpect(jsonPath("$.data.total").value(0));
+    }
+
+    @Test
     @DisplayName("from·to는 필수다")
     void requiresRange() throws Exception {
       mvc.perform(get("/api/v1/visits/summary?to=20260731").with(officer()))
           .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("시군구코드 형식이 어긋나면 400이다")
+    void rejectsMalformedSigungu() throws Exception {
+      mvc.perform(
+              get("/api/v1/visits/summary?from=20260701&to=20260731&sigunguCd=gwanak")
+                  .with(officer()))
+          .andExpect(status().isBadRequest())
+          .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
   }
 

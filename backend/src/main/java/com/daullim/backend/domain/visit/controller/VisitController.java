@@ -97,6 +97,7 @@ public class VisitController {
       @RequestParam(required = false) @Pattern(regexp = "\\d{8}", message = "from은 YYYYMMDD입니다.") String from,
       @RequestParam(required = false) @Pattern(regexp = "\\d{8}", message = "to는 YYYYMMDD입니다.") String to,
       @RequestParam(required = false) String consentCd,
+      @RequestParam(required = false) @Pattern(regexp = "\\d{5}", message = "시군구코드는 5자리 숫자입니다.") String sigunguCd,
       @RequestParam(required = false) @Pattern(regexp = "\\d{10}", message = "행정동코드는 10자리 숫자입니다.") String dongCd,
       @RequestParam(required = false) String cursor,
       @RequestParam(required = false, defaultValue = "" + DEFAULT_SIZE)
@@ -105,7 +106,7 @@ public class VisitController {
 
     return ApiResponse.ok(
         queryService.list(
-            filter(officerId, unitId, from, to, consentCd, dongCd, jwt), cursor, size));
+            filter(officerId, unitId, from, to, consentCd, sigunguCd, dongCd, jwt), cursor, size));
   }
 
   @Operation(
@@ -114,6 +115,7 @@ public class VisitController {
           """
           일자별 건수. 목록은 커서로 잘려 오므로 "이 달에 기록이 있는 날"을 만들 수 없다 —
           첫 페이지만 보고 점을 찍으면 달력이 거짓말을 한다. 건수가 0인 날은 내리지 않는다.
+          드로어 /records는 officerId=me로, 관제 5. 실적 통계는 sigunguCd로 부른다 — 같은 달력이 스코프로 갈린다.
           """)
   @GetMapping("/api/v1/visits/calendar")
   public ApiResponse<List<VisitDayCount>> calendar(
@@ -122,11 +124,13 @@ public class VisitController {
       @RequestParam @Pattern(regexp = "\\d{8}", message = "from은 YYYYMMDD입니다.") String from,
       @RequestParam @Pattern(regexp = "\\d{8}", message = "to는 YYYYMMDD입니다.") String to,
       @RequestParam(required = false) String consentCd,
+      @RequestParam(required = false) @Pattern(regexp = "\\d{5}", message = "시군구코드는 5자리 숫자입니다.") String sigunguCd,
       @RequestParam(required = false) @Pattern(regexp = "\\d{10}", message = "행정동코드는 10자리 숫자입니다.") String dongCd,
       @AuthenticationPrincipal Jwt jwt) {
 
     return ApiResponse.ok(
-        queryService.countByDay(filter(officerId, null, from, to, consentCd, dongCd, jwt)));
+        queryService.countByDay(
+            filter(officerId, null, from, to, consentCd, sigunguCd, dongCd, jwt)));
   }
 
   @Operation(
@@ -137,6 +141,7 @@ public class VisitController {
           목록으로는 만들 수 없다 — 커서로 잘려 와 첫 페이지만 세면 실제보다 적게 나온다.
           '오늘'을 서버가 정하지 않고 기간을 받는다 — 오늘의 경계가 KST 달력일이라 화면이 자기 날짜를 보낸다.
           건수가 0인 승낙 코드는 담지 않는다.
+          관제 5. 실적 통계가 sigunguCd로 부른다 — 달력 집계는 /records 전용이라 그쪽엔 두지 않는다.
           """)
   @GetMapping("/api/v1/visits/summary")
   public ApiResponse<VisitSummary> summary(
@@ -145,11 +150,13 @@ public class VisitController {
       @RequestParam @Pattern(regexp = "\\d{8}", message = "from은 YYYYMMDD입니다.") String from,
       @RequestParam @Pattern(regexp = "\\d{8}", message = "to는 YYYYMMDD입니다.") String to,
       @RequestParam(required = false) String consentCd,
+      @RequestParam(required = false) @Pattern(regexp = "\\d{5}", message = "시군구코드는 5자리 숫자입니다.") String sigunguCd,
       @RequestParam(required = false) @Pattern(regexp = "\\d{10}", message = "행정동코드는 10자리 숫자입니다.") String dongCd,
       @AuthenticationPrincipal Jwt jwt) {
 
     return ApiResponse.ok(
-        queryService.summarize(filter(officerId, null, from, to, consentCd, dongCd, jwt)));
+        queryService.summarize(
+            filter(officerId, null, from, to, consentCd, sigunguCd, dongCd, jwt)));
   }
 
   @Operation(summary = "점검 기록 상세 조회", description = "현장 원입력 + 서버가 계산한 판정 스냅샷 + 교체 항목(외관 세부 항목 포함).")
@@ -165,13 +172,15 @@ public class VisitController {
       String from,
       String to,
       String consentCd,
+      String sigunguCd,
       String dongCd,
       Jwt jwt) {
     Long resolved =
         officerId == null
             ? null
             : ME.equals(officerId) ? Long.valueOf(jwt.getSubject()) : Long.valueOf(officerId);
-    return new VisitQueryService.VisitFilter(resolved, unitId, from, to, consentCd, dongCd);
+    return new VisitQueryService.VisitFilter(
+        resolved, unitId, from, to, consentCd, sigunguCd, dongCd);
   }
 
   /** 형식이 틀린 키는 되받아야 한다 — 조용히 무시하면 재전송이 중복 저장이 된다. */

@@ -25,7 +25,13 @@ public class VisitQueryService {
 
   /** 목록 조회 조건 — 컨트롤러가 {@code me}를 풀고 넘긴 뒤라 여기서는 전부 확정값이다. */
   public record VisitFilter(
-      Long officerId, Long unitId, String from, String to, String consentCd, String dongCd) {}
+      Long officerId,
+      Long unitId,
+      String from,
+      String to,
+      String consentCd,
+      String sigunguCd,
+      String dongCd) {}
 
   public CursorPage<VisitListItem> list(VisitFilter filter, String cursor, int size) {
     VisitCursor.Position after = cursor == null ? null : VisitCursor.decode(cursor);
@@ -62,6 +68,14 @@ public class VisitQueryService {
 
   private static VisitCriteria criteria(VisitFilter f, VisitCursor.Position after, int limit) {
     return new VisitCriteria(
-        f.officerId(), f.unitId(), f.from(), f.to(), f.consentCd(), f.dongCd(), after, limit);
+        f.officerId(),
+        f.unitId(),
+        f.from(),
+        f.to(),
+        f.consentCd(),
+        f.sigunguCd(),
+        f.dongCd(),
+        after,
+        limit);
   }
 }

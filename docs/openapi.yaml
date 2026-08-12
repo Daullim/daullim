@@ -528,6 +528,12 @@ paths:
         - name: consentCd
           in: query
           schema: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        - name: sigunguCd
+          in: query
+          description: |
+            관할 스코프. 관제 5. 실적 통계의 일자별 기록 표가 쓴다 — 그 화면은 **점검원을 가리지 않아서**
+            (`officerId` 없이) 관할 안의 모든 점검원 기록이 나온다. 드로어의 `/records`와 갈리는 지점이다.
+          schema: { type: string, pattern: "^\\d{5}$" }
         - name: dongCd
           in: query
           schema: { type: string, pattern: "^\\d{10}$" }
@@ -584,6 +590,13 @@ paths:
         - name: consentCd
           in: query
           schema: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        - name: sigunguCd
+          in: query
+          description: |
+            관할 스코프. **달력을 쓰는 화면이 둘이고 스코프가 갈린다** — 드로어 `/records`는
+            `officerId=me`(내 기록)로, 관제 5. 실적 통계는 `sigunguCd`(관할 안 모든 점검원)로 부른다.
+            같은 달에 찍히는 점이 서로 다르다.
+          schema: { type: string, pattern: "^\\d{5}$" }
         - name: dongCd
           in: query
           schema: { type: string, pattern: "^\\d{10}$" }
