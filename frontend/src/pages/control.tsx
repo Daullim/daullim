@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Outlet, useNavigate } from "react-router-dom";
+import { Outlet, useLocation, useNavigate } from "react-router-dom";
 import { TopBar } from "@/components/layout/top-bar";
 import { ControlTabs } from "@/components/layout/control-tabs";
 import { Button } from "@/components/core/button";
@@ -43,8 +43,10 @@ function pendingLabel(summary: DashboardSummary | undefined): string {
  */
 export default function ControlLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   /* 값은 행정표준코드다. 관제는 시군구까지만 고르고 동은 표·지도에서 고른다 */
-  const [region, setRegion] = useState<RegionValue>({});
+  const [region, setRegion] = useState<RegionValue>({ sido: "11", sigungu: "11620" });
+  const isOverview = location.pathname.replace(/\/$/, "") === "/control";
 
   const summary = useApiQuery(region.sigungu ? `summary:${region.sigungu}` : null, (s) =>
     getDashboardSummary(region.sigungu, s),
@@ -67,8 +69,9 @@ export default function ControlLayout() {
           value={region}
           onChange={setRegion}
           density="control"
-          autoSelect="none"
+          autoSelect={isOverview ? "sigungu" : "none"}
           levels="sigungu"
+          allowAllSigungu={!isOverview}
           className="ml-auto"
         />
         <Button variant="primary" onClick={() => navigate("/field")}>

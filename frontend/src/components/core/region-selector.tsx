@@ -42,6 +42,8 @@ export interface RegionSelectorProps {
   autoSelect?: "none" | "sigungu" | "dong";
   /** 노출할 마지막 단계. 관제는 시군구까지만 — 동은 표·지도에서 고른다. */
   levels?: "sigungu" | "dong";
+  /** 시군구 단계의 전체지역 옵션 노출 여부 */
+  allowAllSigungu?: boolean;
   className?: string;
 }
 
@@ -90,11 +92,12 @@ export function RegionSelector({
   density = "control",
   autoSelect = "sigungu",
   levels = "dong",
+  allowAllSigungu = levels === "sigungu",
   className,
 }: RegionSelectorProps) {
   const triggerClass = TRIGGER_CLASS[density];
   const showDong = levels === "dong";
-  const showSigunguAll = levels === "sigungu";
+  const showSigunguAll = levels === "sigungu" && allowAllSigungu;
 
   const sidos = useApiQuery("sidos", (s) => getSidos(s));
   /* 상위가 비면 조회하지 않는다 — key가 null이면 훅이 호출을 건너뛴다 */
