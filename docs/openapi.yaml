@@ -699,18 +699,18 @@ paths:
   /visits/breakdown:
     get:
       tags: [관제]
-      summary: 점검 결과 축별 분해 (관제 ③·④)
+      summary: 점검 결과 축별 분해 (관제 ③)
       operationId: getVisitBreakdown
       description: |
-        기간 내 `visits`를 **축만 바꿔 세는** 집계 하나. 관제 ③ 추진 현황과 ④ 소요 물량이
-        같은 응답의 서로 다른 필드를 쓴다(각자 기간 필터를 가지므로 호출은 별개다).
+        기간 내 `visits`를 **축만 바꿔 세는** 집계 하나. 관제 ③ 추진 현황이 판정·거부 사유·교체 항목을
+        나눠 보여줄 때 쓴다.
 
         `/visits/summary`와 나누는 기준: 저쪽은 **보고에 올리는 총계**(총건수·게이트별·교체 대수)이고
         이쪽은 **왜·무엇을**(판정·거부 사유·자재 코드) 분해한다. 저쪽은 `visits`만 보지만
         이쪽은 `replacement_items`까지 조인해야 해서 비용도 다르다.
 
         **`period`와 `current`를 응답에서 가른다.** 판정·거부 사유는 "그 기간에 무슨 일이 있었나"이고
-        재방문 대기는 "지금 얼마나 밀려 있나"다. 한 덩어리로 내리면 화면이 재방문 대기에도 기간 라벨을
+        재방문 대기는 "지금 다시 가야 할 세대가 얼마나 있나"다. 한 덩어리로 내리면 화면이 재방문 대기에도 기간 라벨을
         붙여 거짓말을 한다 — `/visits/summary`와 `/visits/calendar`를 따로 둔 것과 같은 판단이다.
 
         soft delete된 방문은 어느 축에도 나오지 않는다.
@@ -730,7 +730,7 @@ paths:
           schema: { type: string, pattern: "^\\d{2}$" }
         - name: sigunguCd
           in: query
-          description: 생략하면 전 지역. `current`(현재 잔량)에도 같이 걸린다.
+          description: 생략하면 전 지역. `current`(현재 재방문 대상)에도 같이 걸린다.
           schema: { type: string, pattern: "^\\d{5}$" }
         - name: dongCd
           in: query
@@ -1066,12 +1066,14 @@ components:
     Dong:
       type: object
       description: |
-        관제 ① 관내 현황의 동별 표 · ③ 진행률 · ④ 소요 배부표가 **전부 이 하나를 쓴다.**
+        관제 ① 관내 현황의 동별 표 · ③ 추진 현황이 **전부 이 하나를 쓴다.**
         축이 둘 섞여 있으니 화면이 곱하지 않도록 주의한다 — `buildingCount`·`dangerCount`는 **건물**,
-        `householdCount`·`doneUnitCount`·`pendingUnitCount`는 **세대**다.
+        `householdCount`·`doneUnitCount`·`pendingUnitCount`·`revisitPendingUnitCount`는 **세대**다.
+        `replacementUsedCount`는 실제 교체에 사용된 경보기 개수 누적이다.
       required:
         [dongCd, dongNm, householdCount, avgRiskScore, avgRiskLevelCd,
-         buildingCount, dangerCount, avgRrI, doneUnitCount, pendingUnitCount]
+         buildingCount, dangerCount, avgRrI, doneUnitCount, pendingUnitCount, replacementUsedCount,
+         revisitPendingUnitCount]
       properties:
         dongCd: { type: string, description: 행정표준코드 10자리, example: "1162069500" }
         dongNm: { type: string, example: 신림동 }
@@ -1113,14 +1115,28 @@ components:
         doneUnitCount:
           type: integer
           format: int64
-          description: "`count(units WHERE status_cd='done')` — 세대 축. 진행률의 분자."
+          description: |
+            방문 기록 또는 세대 방문 캐시가 있는 **세대** 수. 화면 라벨은 "방문 세대"이며 진행률의 분자다.
+            `visits`는 있지만 `units.status_cd` 캐시가 아직 반영되지 않은 데이터도 이쪽으로 센다.
         pendingUnitCount:
           type: integer
           format: int64
           description: |
-            아직 완료되지 않은 **세대** 수. 진행률의 잔량이자 관제 ④ 소요 배부표의 수량이다.
+            방문 기록과 세대 방문 캐시가 모두 없는 **세대** 수. 화면 라벨은 "미방문 세대"다.
             `householdCount - doneUnitCount`와 같지만 서버가 세어 내린다 — 화면이 빼기로 만들면
-            `refused`가 어느 쪽에 들어가는지가 화면마다 갈린다.
+            직접 적재된 방문 기록과 세대 캐시가 엇갈릴 때 화면마다 갈린다.
+        replacementUsedCount:
+          type: integer
+          format: int64
+          description: |
+            실제 교체에 사용된 경보기 개수 누적. `visits.effective_replace_count`의 동별 합계이며,
+            예상 소요(`pendingByRxCode`)가 아니다.
+        revisitPendingUnitCount:
+          type: integer
+          format: int64
+          description: |
+            최신 방문이 `revisit_plan_cd='revisit'`인 세대 수. 과거 방문이 재방문이어도 이후 방문에서 종결되면
+            제외한다.
 
     BuildingQueuePage:
       type: object
@@ -1609,8 +1625,7 @@ components:
           type: object
           additionalProperties: { type: integer, format: int64, minimum: 0 }
           description: |
-            미완료 **세대**를 그 건물의 처방 코드로 묶은 수 — 관제 다크 바의 "예상 소요"이자
-            ④ 소요 물량의 총량이다.
+            미완료 **세대**를 그 건물의 처방 코드로 묶은 수 — 관제 다크 바의 "예상 소요" 총량이다.
 
             ⚠️ **지금은 `RX-IOT` 한 칸뿐이다.** 보급 이력이 전 행 NULL이라 pipeline이 `rx_code_cd`를
             전량 `RX-IOT`로 낸다(파이프라인 확정 결정 2). 그래도 **맵으로 열어 두는 것은**
@@ -1740,7 +1755,7 @@ components:
         current:
           type: object
           description: |
-            **기간과 무관한 현재 잔량.** `period`와 한 덩어리로 내리지 않는 이유가 여기 있다 —
+            **기간과 무관한 현재 재방문 대상.** `period`와 한 덩어리로 내리지 않는 이유가 여기 있다 —
             화면이 이 값에 기간 라벨을 붙이면 거짓말이 된다.
           required: [revisitPendingUnitCount]
           properties:
