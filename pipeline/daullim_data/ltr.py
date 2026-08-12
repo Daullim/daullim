@@ -136,6 +136,93 @@ def capture_rate(df: pd.DataFrame, score_col: str, label_col: str, *, frac: floa
     return 100.0 * df.nlargest(n, score_col)[label_col].sum() / total
 
 
+# ── 노출량 교란 게이트 ──────────────────────────────────────────────────
+CONFOUND_RATIO = 2.0  # 배율이 이 이상이면 교란으로 본다
+CONFOUND_MIN_POSITIVE = 10  # 이보다 양성이 적은 부분집합은 배율이 노이즈라 판정에서 뺀다
+
+
+@dataclass
+class ConfoundCheck:
+    """부분집합 하나 × 통계 하나의 배율."""
+
+    scope: str
+    statistic: str
+    positive: float
+    negative: float
+    ratio: float
+    n_positive: int
+
+    @property
+    def flagged(self) -> bool:
+        return self.ratio >= CONFOUND_RATIO
+
+
+@dataclass
+class ConfoundAudit:
+    """노출량 교란 감사 — **하나라도 걸리면 교란으로 본다.**
+
+    ⚠️ **전체 중앙값 하나만 보면 뚫린다(2026-08-11 실측).** 2지역에서 5.0 대 1.0으로 잡히던
+    교란이, 부산·전북 단독주택이 대량 유입되자 양성 중앙값이 1.0으로 내려가 배율 1.00이 됐다.
+    교란이 사라진 게 아니라 **혼합 분포가 바뀌어 중앙값이 못 보게 된 것**이다 — 같은 데이터에서
+    서울만 떼면 여전히 5.00배다.
+
+    그래서 (전체·시도별) × (중앙값·평균)을 모두 재고 **하나라도 임계를 넘으면 보류**한다.
+    보수적인 방향이 안전하다 — 잘못 걸면 v0을 쓰는 것이고(현상 유지), 잘못 통과시키면
+    노이즈를 계수로 굳힌다.
+    """
+
+    checks: list[ConfoundCheck]
+
+    @property
+    def confounded(self) -> bool:
+        return any(c.flagged for c in self.checks)
+
+    def render(self) -> str:
+        lines = [f"    {'범위':<8}{'통계':<6}{'양성':>7}{'음성':>7}{'배율':>8}{'양성수':>7}"]
+        for c in self.checks:
+            mark = "  ⚠️" if c.flagged else ""
+            lines.append(
+                f"    {c.scope:<8}{c.statistic:<6}{c.positive:>7.1f}{c.negative:>7.1f}"
+                f"{c.ratio:>7.2f}배{c.n_positive:>7,}{mark}"
+            )
+        hit = [c for c in self.checks if c.flagged]
+        lines.append(
+            f"    → 임계 {CONFOUND_RATIO}배 초과 {len(hit)}건"
+            + (f" ({', '.join(f'{c.scope} {c.statistic}' for c in hit)}) — **교란**" if hit else " — 교란 없음")
+        )
+        return "\n".join(lines)
+
+
+def exposure_confound_audit(
+    df: pd.DataFrame, *, label: str, exposure_col: str = "unit_count", scope_col: str | None = None
+) -> ConfoundAudit:
+    """라벨이 위험이 아니라 **노출량**을 가리키는지 감사한다.
+
+    화재는 세대 단위로 나는데 라벨은 건물 단위라, 세대가 많은 건물이 라벨을 받을 확률이 높다.
+    그 상태로 학습하면 계수는 '위험'이 아니라 '세대가 많음'을 배운다.
+
+    `scope_col`을 주면 그 값별로도 따로 잰다 — 지역을 섞으면 서로의 교란을 가릴 수 있다.
+    """
+    checks: list[ConfoundCheck] = []
+
+    def add(scope: str, sub: pd.DataFrame) -> None:
+        pos = sub.loc[sub[label].astype(bool), exposure_col].dropna()
+        neg = sub.loc[~sub[label].astype(bool), exposure_col].dropna()
+        if len(pos) < CONFOUND_MIN_POSITIVE or neg.empty:
+            return
+        for stat_name, fn in (("중앙", pd.Series.median), ("평균", pd.Series.mean)):
+            p, n = float(fn(pos)), float(fn(neg))
+            checks.append(
+                ConfoundCheck(scope, stat_name, p, n, p / max(n, 1e-9), len(pos))
+            )
+
+    add("전체", df)
+    if scope_col is not None:
+        for scope, sub in df.groupby(scope_col):
+            add(str(scope), sub)
+    return ConfoundAudit(checks)
+
+
 @dataclass
 class CaptureResult:
     """포집률 + 신뢰구간. `n_positive`를 항상 함께 낸다 — 구간 폭을 읽으려면 표본을 알아야 한다."""
