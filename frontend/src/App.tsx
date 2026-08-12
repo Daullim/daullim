@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import ControlLayout from "@/pages/control";
 import ControlOverviewPage from "@/pages/control-overview";
-import ControlPendingPage from "@/pages/control-pending";
+import ControlProgressPage from "@/pages/control-progress";
 import ControlReportPage from "@/pages/control-report";
 import ControlRiskPage from "@/pages/control-risk";
 import FieldDongPage from "@/pages/field-b1";
@@ -42,12 +42,12 @@ export default function App() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/records" element={<RecordsPage />} />
         <Route path="/demo" element={<DemoPage />} />
-        {/* 관제 5탭 — 레이아웃이 관할 스코프·요약 바를 들고 탭이 Outlet으로 들어온다 */}
+        {/* 관제 4탭 — 레이아웃이 관할 스코프·요약 바를 들고 탭이 Outlet으로 들어온다 */}
         <Route path="/control" element={<ControlLayout />}>
           <Route index element={<ControlOverviewPage />} />
           <Route path="risk" element={<ControlRiskPage />} />
-          <Route path="progress" element={<ControlPendingPage tab="추진 현황" />} />
-          <Route path="materials" element={<ControlPendingPage tab="소요 물량" />} />
+          <Route path="progress" element={<ControlProgressPage />} />
+          <Route path="materials" element={<Navigate to="/control/progress" replace />} />
           <Route path="report" element={<ControlReportPage />} />
         </Route>
         <Route path="/field" element={<FieldDongPage />} />

@@ -1,57 +1,19 @@
 import { useMemo, useState } from "react";
 import { ControlPanel } from "@/components/layout/control-panel";
+import { PeriodSelect } from "@/components/layout/period-select";
 import { BarRow } from "@/components/core/bar-row";
 import { DataText } from "@/components/core/data-text";
 import { MonthCalendar } from "@/components/core/month-calendar";
 import { RecordDetailDialog } from "@/components/records/record-detail-dialog";
 import { RecordTable } from "@/components/records/record-table";
 import { EmptyState, ErrorInline, RowSkeleton } from "@/components/core/system-states";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { CONSENT_STATUS, type ConsentStatus } from "@/config/domain";
 import { getVisitCalendar, getVisitSummary, getVisits } from "@/api/queries";
 import { useApiQuery } from "@/api/use-api-query";
 import { useControlScope } from "@/lib/use-control-scope";
+import { dayCount, periodLabel, spanOf, thisMonthRange } from "@/lib/period-range";
 import { todayDay } from "@/lib/units";
 import type { VisitSummary } from "@/api/types";
-
-interface Range {
-  from: string;
-  to: string;
-}
-
-/** YYYYMM 두 개를 포함 구간의 일자 경계로 편다 — 달 경계는 화면이 정한다(`/visits/summary` 규약). */
-function spanOf(fromMonth: string, toMonth: string): Range {
-  const y = Number(toMonth.slice(0, 4));
-  const m = Number(toMonth.slice(4, 6));
-  const lastDate = new Date(y, m, 0).getDate();
-  return { from: `${fromMonth}01`, to: `${toMonth}${String(lastDate).padStart(2, "0")}` };
-}
-
-function monthKey(year: number, month: number): string {
-  return `${year}${String(month).padStart(2, "0")}`;
-}
-
-/** 제목 앞 기간 — 한 달이면 "2026년 8월", 같은 해면 "2026년 6월~8월", 해를 넘으면 양쪽에 연도 */
-function periodLabel(fromMonth: string, toMonth: string): string {
-  const [fy, fm] = [fromMonth.slice(0, 4), Number(fromMonth.slice(4, 6))];
-  const [ty, tm] = [toMonth.slice(0, 4), Number(toMonth.slice(4, 6))];
-  if (fromMonth === toMonth) return `${fy}년 ${fm}월`;
-  if (fy === ty) return `${fy}년 ${fm}월~${tm}월`;
-  return `${fy}년 ${fm}월~${ty}년 ${tm}월`;
-}
-
-/** 포함 구간의 일수 — 일평균의 분모 */
-function dayCount(range: Range): number {
-  const parse = (d: string) =>
-    new Date(Number(d.slice(0, 4)), Number(d.slice(4, 6)) - 1, Number(d.slice(6, 8)));
-  return Math.max(1, Math.round((parse(range.to).getTime() - parse(range.from).getTime()) / 86_400_000) + 1);
-}
 
 /** 게이트 4종을 고정 순서로 편다 — 서버는 0건 코드를 담지 않으므로 0 채우기는 화면 몫이다. */
 const CONSENT_ORDER = Object.keys(CONSENT_STATUS) as ConsentStatus[];
@@ -59,61 +21,49 @@ const CONSENT_ORDER = Object.keys(CONSENT_STATUS) as ConsentStatus[];
 /** 일자별 표 — 점검원을 가리지 않으므로 '점검자' 열이 정보값이다 */
 const DAY_COLUMNS = ["time", "officer", "address", "unit", "consent", "condition", "rxDone"] as const;
 
-const YEAR_SPAN = 3;
-
 /**
  * 관제 5. 실적 통계 — 시간 축.
  *
  * `/records`(드로어)가 **내 기록**이라면 이쪽은 **관할 안 모든 점검원**이다. 그래서 목록·달력에
- * `officerId`를 주지 않고 `sigunguCd`만 건다.
+ * `officerId`를 주지 않고 관할 스코프만 건다.
  */
 export default function ControlReportPage() {
-  const { sigunguCd, sigunguNm, sidoNm, summary: scopeSummary } = useControlScope();
+  const { sidoCd, sigunguCd, sigunguNm, sidoNm, summary: scopeSummary } = useControlScope();
+  /* 전체지역이면 시군구가 비고 시도만 남는다 — 안 넘기면 전국이 합산된다 */
+  const scope = { sidoCd: sigunguCd ? undefined : sidoCd, sigunguCd };
+  const scopeKey = sigunguCd ?? sidoCd ?? "all";
 
-  const thisMonth = todayDay().slice(0, 6);
-  const [fromMonth, setFromMonth] = useState(thisMonth);
-  const [toMonth, setToMonth] = useState(thisMonth);
-  const range = useMemo(() => spanOf(fromMonth, toMonth), [fromMonth, toMonth]);
+  const [period, setPeriod] = useState(thisMonthRange);
+  const range = useMemo(() => spanOf(period), [period]);
 
-  const [month, setMonth] = useState(thisMonth);
+  const [month, setMonth] = useState(() => todayDay().slice(0, 6));
   const [day, setDay] = useState<string>(todayDay);
   const [viewing, setViewing] = useState<number | null>(null);
 
-  const summary = useApiQuery(
-    `visit-summary:${sigunguCd ?? "all"}:${range.from}:${range.to}`,
-    (signal) => getVisitSummary({ ...range, sigunguCd }, signal),
+  const summary = useApiQuery(`visit-summary:${scopeKey}:${range.from}:${range.to}`, (signal) =>
+    getVisitSummary({ ...range, ...scope }, signal),
   );
 
-  const monthSpan = spanOf(month, month);
-  const calendar = useApiQuery(`visit-calendar:${sigunguCd ?? "all"}:${month}`, (signal) =>
-    getVisitCalendar({ ...monthSpan, sigunguCd }, signal),
+  const monthSpan = spanOf({ fromMonth: month, toMonth: month });
+  const calendar = useApiQuery(`visit-calendar:${scopeKey}:${month}`, (signal) =>
+    getVisitCalendar({ ...monthSpan, ...scope }, signal),
   );
   const markedDays = useMemo(
     () => new Set((calendar.data ?? []).filter((d) => d.count > 0).map((d) => d.day)),
     [calendar.data],
   );
 
-  const daySummary = useApiQuery(`visit-summary-day:${sigunguCd ?? "all"}:${day}`, (signal) =>
-    getVisitSummary({ from: day, to: day, sigunguCd }, signal),
+  const daySummary = useApiQuery(`visit-summary-day:${scopeKey}:${day}`, (signal) =>
+    getVisitSummary({ from: day, to: day, ...scope }, signal),
   );
-  const dayVisits = useApiQuery(`visits-day:${sigunguCd ?? "all"}:${day}`, (signal) =>
-    getVisits({ from: day, to: day, sigunguCd, size: 100 }, signal),
+  const dayVisits = useApiQuery(`visits-day:${scopeKey}:${day}`, (signal) =>
+    getVisits({ from: day, to: day, ...scope, size: 100 }, signal),
   );
 
   const data = summary.data;
   const consentMax = Math.max(...CONSENT_ORDER.map((code) => data?.byConsent[code] ?? 0), 0);
   const regionTitle = sigunguNm ?? sidoNm ?? "전체 지역";
   const rows = dayVisits.data?.items ?? [];
-
-  /* 역전을 만들지 않는다 — 시작을 끝 뒤로 밀면 끝이 따라오고, 반대도 같다 */
-  const changeFrom = (next: string) => {
-    setFromMonth(next);
-    if (next > toMonth) setToMonth(next);
-  };
-  const changeTo = (next: string) => {
-    setToMonth(next);
-    if (next < fromMonth) setFromMonth(next);
-  };
 
   return (
     <div className="space-y-3 p-5 pb-3">
@@ -124,16 +74,8 @@ export default function ControlReportPage() {
 
       {/* 기간 축 — 세 블록이 같은 기간을 말하므로 카드 하나 안에 둔다 */}
       <ControlPanel
-        title={`${periodLabel(fromMonth, toMonth)} 기간 실적`}
-        action={
-          <span className="flex flex-wrap items-center gap-1">
-            <MonthSelect value={fromMonth} onChange={changeFrom} label="시작" />
-            <span aria-hidden className="px-1 text-body-md text-subtle">
-              ~
-            </span>
-            <MonthSelect value={toMonth} onChange={changeTo} label="종료" />
-          </span>
-        }
+        title={`${periodLabel(period)} 기간 실적`}
+        action={<PeriodSelect value={period} onChange={setPeriod} />}
       >
         {summary.error ? (
           <ErrorInline onRetry={summary.reload} />
@@ -193,8 +135,7 @@ export default function ControlReportPage() {
               {scopeSummary && (
                 <p className="mt-3 text-caption text-subtle">
                   관할 누적 <DataText>{scopeSummary.doneCount.toLocaleString()}</DataText> /{" "}
-                  <DataText>{scopeSummary.targetCount.toLocaleString()}</DataText> 세대 — 기간과 다른
-                  축이다
+                  <DataText>{scopeSummary.targetCount.toLocaleString()}</DataText> 세대
                 </p>
               )}
             </section>
@@ -312,51 +253,5 @@ function DayFigures({ summary, loading }: { summary?: VisitSummary; loading: boo
         note={`미승낙 ${notAccepted(summary)}건`}
       />
     </div>
-  );
-}
-
-/** 년·월 2단 — 기간 경계를 직접 고른다 */
-function MonthSelect({
-  value,
-  onChange,
-  label,
-}: {
-  value: string;
-  onChange: (next: string) => void;
-  label: string;
-}) {
-  const year = Number(value.slice(0, 4));
-  const month = Number(value.slice(4, 6));
-  const thisYear = Number(todayDay().slice(0, 4));
-  const years = Array.from({ length: YEAR_SPAN }, (_, i) => thisYear - i);
-  const trigger = "h-9 min-w-22 rounded-sm border-hairline-strong bg-surface data-[size=default]:h-9";
-
-  return (
-    <>
-      <Select value={String(year)} onValueChange={(v) => onChange(monthKey(Number(v), month))}>
-        <SelectTrigger aria-label={`${label} 연도 선택`} className={trigger}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {years.map((y) => (
-            <SelectItem key={y} value={String(y)}>
-              {y}년
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <Select value={String(month)} onValueChange={(v) => onChange(monthKey(year, Number(v)))}>
-        <SelectTrigger aria-label={`${label} 월 선택`} className={trigger}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-            <SelectItem key={m} value={String(m)}>
-              {m}월
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </>
   );
 }

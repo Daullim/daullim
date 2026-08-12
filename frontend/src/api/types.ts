@@ -85,9 +85,14 @@ export interface Dong {
    * (0이면 가장 안전한 동으로 정렬돼 올라온다).
    */
   avgRrI: number | null;
+  /** 방문 기록 또는 세대 방문 캐시가 있는 세대 */
   doneUnitCount: number;
-  /** 미완료 세대 — 진행률 잔량이자 관제 ④ 소요 수량 */
+  /** 미방문 세대 */
   pendingUnitCount: number;
+  /** 실제 교체에 사용된 경보기 개수 누적 */
+  replacementUsedCount: number;
+  /** 최신 방문 기준 재방문 대기 세대 */
+  revisitPendingUnitCount: number;
 }
 
 /* ------------------------------------------------------------------ */
@@ -233,6 +238,34 @@ export interface VisitSummary {
   byConsent: Partial<Record<ConsentStatus, number>>;
   /** 실효 교체 대수 합 — 서버 판정 결과다(원입력 아님) */
   effectiveReplaceCount: number;
+}
+
+/** 코드 축 1칸 — 라벨은 서버가 내리지 않는다. `config/domain.ts`가 정본이다. */
+export interface CodeCount<T extends string = string> {
+  code: T;
+  count: number;
+}
+
+/**
+ * 관제 3. 추진 현황의 축별 분해.
+ *
+ * `period`와 `current`가 갈려 있는 것은 축이 다르기 때문이다 — 현재 미처리 세대에 기간 라벨을 붙이면 거짓말이 된다.
+ */
+export interface VisitBreakdown {
+  period: {
+    from: string;
+    to: string;
+    /** 미점검 방문은 판정 자체가 없어 빠진다 */
+    byConditionCode: CodeCount<ConditionCode>[];
+    /** `consent_cd='refused'`인 방문에만 값이 있다 */
+    byRefusalReason: CodeCount<RefusalReason>[];
+    /** **방문 건수가 아니라 자재 대수** — 한 방문이 여러 항목을 낳아 총건수와 맞지 않는다 */
+    byRxCode: CodeCount<RxCode>[];
+  };
+  current: {
+    /** 기간과 무관한 현재 재방문 대상 세대 수 */
+    revisitPendingUnitCount: number;
+  };
 }
 
 export interface ReplacementItemDetail {
