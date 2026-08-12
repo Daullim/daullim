@@ -44,7 +44,7 @@ public class RegionQueryService {
               DongAggregate agg = aggregates.get(r.code());
               return agg == null
                   ? new DongResponse(
-                      r.code(), r.name(), 0L, BigDecimal.ZERO, null, 0L, 0L, null, 0L, 0L)
+                      r.code(), r.name(), 0L, BigDecimal.ZERO, null, 0L, 0L, null, 0L, 0L, 0L, 0L)
                   : new DongResponse(
                       r.code(),
                       r.name(),
@@ -55,7 +55,9 @@ public class RegionQueryService {
                       agg.dangerCount(),
                       agg.avgRrI(),
                       agg.doneUnitCount(),
-                      agg.pendingUnitCount());
+                      agg.pendingUnitCount(),
+                      agg.replacementUsedCount(),
+                      agg.revisitPendingUnitCount());
             })
         .toList();
   }
