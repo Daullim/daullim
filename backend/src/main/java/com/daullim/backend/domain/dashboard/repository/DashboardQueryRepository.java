@@ -165,6 +165,7 @@ public class DashboardQueryRepository {
       """;
 
   private static final String NO_FILTER = "true";
+  private static final String SIDO_FILTER = "b.sido_cd = :sidoCd";
   private static final String SIGUNGU_FILTER = "b.sigungu_cd = :sigunguCd";
 
   private final JdbcClient jdbc;
@@ -207,8 +208,8 @@ public class DashboardQueryRepository {
                 LinkedHashMap::new));
   }
 
-  public DashboardCompositionResponse composition(String sigunguCd) {
-    return bind(COMPOSITION_SQL, sigunguCd)
+  public DashboardCompositionResponse composition(String sidoCd, String sigunguCd) {
+    return bind(COMPOSITION_SQL, sidoCd, sigunguCd)
         .query(
             (rs, rowNum) ->
                 new DashboardCompositionResponse(
@@ -233,6 +234,16 @@ public class DashboardQueryRepository {
     String sql = sqlTemplate.formatted(sigunguCd == null ? NO_FILTER : SIGUNGU_FILTER);
     JdbcClient.StatementSpec spec = jdbc.sql(sql);
     return sigunguCd == null ? spec : spec.param("sigunguCd", sigunguCd);
+  }
+
+  private JdbcClient.StatementSpec bind(String sqlTemplate, String sidoCd, String sigunguCd) {
+    String filter = sigunguCd != null ? SIGUNGU_FILTER : sidoCd != null ? SIDO_FILTER : NO_FILTER;
+    String sql = sqlTemplate.formatted(filter);
+    JdbcClient.StatementSpec spec = jdbc.sql(sql);
+    if (sigunguCd != null) {
+      return spec.param("sigunguCd", sigunguCd);
+    }
+    return sidoCd == null ? spec : spec.param("sidoCd", sidoCd);
   }
 
   private <T> T read(String json, TypeReference<T> type) {

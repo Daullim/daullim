@@ -875,10 +875,18 @@ paths:
         **건물 축과 세대 축을 둘 다 내린다.** 위험은 건물 속성이고 자원은 세대 단위라, 화면이 한쪽만
         받아 다른 쪽을 곱으로 만들면 틀린다.
       parameters:
+        - name: sidoCd
+          in: query
+          required: false
+          description: |
+            시도 단위 집계. `sigunguCd`와 함께 주면 `sigunguCd`가 우선한다.
+            시만 선택한 관제 ② 위험 분석 탭이 이 값을 보낸다.
+          schema: { type: string, pattern: "^\\d{2}$" }
+          example: "11"
         - name: sigunguCd
           in: query
           required: false
-          description: 생략하면 전 지역 집계 (`GET /dashboard/summary`와 같은 규약)
+          description: 시군구 단위 집계. 생략하고 `sidoCd`도 없으면 전 지역 집계
           schema: { type: string, pattern: "^\\d{5}$" }
           example: "11620"
       responses:

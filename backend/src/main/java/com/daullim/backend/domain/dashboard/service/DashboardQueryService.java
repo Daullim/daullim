@@ -38,8 +38,8 @@ public class DashboardQueryService {
         Instant.now(clock));
   }
 
-  public DashboardCompositionResponse composition(String sigunguCd) {
-    return repository.composition(sigunguCd);
+  public DashboardCompositionResponse composition(String sidoCd, String sigunguCd) {
+    return repository.composition(sidoCd, sigunguCd);
   }
 
   /** 0건 코드까지 채움 — "전지 0대"가 떠야 소요 없음이 전달됨. */

@@ -109,4 +109,51 @@ class DashboardApiIT extends QueryApiSupport {
         .andExpect(jsonPath("$.data.rrDistribution.min").value((Object) null))
         .andExpect(jsonPath("$.data.estimatedBuildingCount").value(0));
   }
+
+  @Test
+  @DisplayName("위험 구성은 시도 단위로도 필터링된다")
+  void compositionBySido() throws Exception {
+    insertOtherSidoBuilding();
+
+    mvc.perform(get("/api/v1/dashboard/composition").param("sidoCd", SIDO).with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.byRiskLevel[0].buildingCount").value(2))
+        .andExpect(jsonPath("$.data.byRiskLevel[0].unitCount").value(3));
+
+    mvc.perform(get("/api/v1/dashboard/composition").with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.byRiskLevel[0].buildingCount").value(3))
+        .andExpect(jsonPath("$.data.byRiskLevel[0].unitCount").value(4));
+  }
+
+  @Test
+  @DisplayName("시도 코드 형식이 어긋나면 400이다")
+  void rejectsMalformedSidoCode() throws Exception {
+    mvc.perform(get("/api/v1/dashboard/composition").param("sidoCd", "seoul").with(officer()))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+  }
+
+  private void insertOtherSidoBuilding() {
+    long buildingId =
+        jdbc.sql(
+                """
+                INSERT INTO buildings (bld_key,sido_cd,sigungu_cd,admin_dong_cd,address,lat,lng,
+                  house_type_cd,floor_count,unit_count,use_apr_day,grid_id,region_type_cd,rr_i,score,
+                  risk_level_cd,order_key,is_estimated,basis,rx_code_cd,score_version,computed_at)
+                VALUES ('IT-BUSAN-DASH','26','26230','2623051000','부산광역시 부산진구 중앙대로 1',
+                  35.1,129.0,'detached',2,1,'19800101','마라11a11a','URBAN',4.20,80.00,
+                  'danger',99,false,'테스트','RX-IOT','v0-20260805',now())
+                RETURNING building_id
+                """)
+            .query(Long.class)
+            .single();
+    jdbc.sql(
+            """
+            INSERT INTO units (building_id,unit_seq,ho_nm,flr_no,ho_nm_source_cd,status_cd)
+            VALUES (:buildingId,1,'본가구',NULL,'implicit','pending')
+            """)
+        .param("buildingId", buildingId)
+        .update();
+  }
 }

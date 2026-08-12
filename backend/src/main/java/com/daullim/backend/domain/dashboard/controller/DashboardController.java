@@ -32,10 +32,11 @@ public class DashboardController {
     return ApiResponse.ok(service.summary(sigunguCd));
   }
 
-  @Operation(summary = "관할 위험 구성 조회", description = "sigunguCd를 생략하면 전 지역 집계다.")
+  @Operation(summary = "관할 위험 구성 조회", description = "sigunguCd 우선, 없으면 sidoCd, 둘 다 없으면 전 지역 집계다.")
   @GetMapping("/composition")
   public ApiResponse<DashboardCompositionResponse> composition(
+      @RequestParam(required = false) @Pattern(regexp = "\\d{2}", message = "시도코드는 2자리 숫자입니다.") String sidoCd,
       @RequestParam(required = false) @Pattern(regexp = "\\d{5}", message = "시군구코드는 5자리 숫자입니다.") String sigunguCd) {
-    return ApiResponse.ok(service.composition(sigunguCd));
+    return ApiResponse.ok(service.composition(sidoCd, sigunguCd));
   }
 }
