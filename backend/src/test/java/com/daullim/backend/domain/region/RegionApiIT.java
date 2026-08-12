@@ -55,6 +55,31 @@ class RegionApiIT extends QueryApiSupport {
   }
 
   @Test
+  @DisplayName("동별 집계는 건물 축과 세대 축을 따로 센다")
+  void dongAggregatesKeepAxesApart() throws Exception {
+    String dong = "$.data[?(@.dongCd=='" + DONG + "')]";
+    mvc.perform(get("/api/v1/regions/dongs").param("sigunguCd", SIGUNGU).with(officer()))
+        .andExpect(status().isOk())
+        // 건물 축 — 3채 중 danger는 B1 하나
+        .andExpect(jsonPath(dong + ".buildingCount").value(3))
+        .andExpect(jsonPath(dong + ".dangerCount").value(1))
+        // 세대 축 — B1의 2호만 done, 나머지 3호는 잔량
+        .andExpect(jsonPath(dong + ".doneUnitCount").value(2))
+        .andExpect(jsonPath(dong + ".pendingUnitCount").value(3))
+        // 픽스처 rr_i = score/10 → (9.12 + 5.50 + 2.00) / 3 = 5.54 → 5.5
+        .andExpect(jsonPath(dong + ".avgRrI").value(5.5));
+  }
+
+  @Test
+  @DisplayName("건물이 없는 동은 avgRrI가 null이다 — 0으로 채우면 위험이 가장 낮은 동으로 오른다")
+  void emptyDongHasNullRr() throws Exception {
+    mvc.perform(get("/api/v1/regions/dongs").param("sigunguCd", SIGUNGU).with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data[?(@.dongCd=='1162052500')].avgRrI").value((Object) null))
+        .andExpect(jsonPath("$.data[?(@.dongCd=='1162052500')].pendingUnitCount").value(0));
+  }
+
+  @Test
   @DisplayName("코드 형식이 어긋나면 400이다")
   void rejectsMalformedCode() throws Exception {
     mvc.perform(get("/api/v1/regions/dongs").param("sigunguCd", "gwanak").with(officer()))

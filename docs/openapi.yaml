@@ -1575,6 +1575,8 @@ components:
             전량 `RX-IOT`로 낸다(파이프라인 확정 결정 2). 그래도 **맵으로 열어 두는 것은**
             값이 갈리기 시작해도 계약과 화면이 안 바뀌게 하기 위해서다.
             `byConsent`와 달리 **0인 코드도 담는다** — 화면이 "전지 0대"를 표시해야 소요가 없다는 뜻이 전달된다.
+            **처방이 없는 건물(`rx_code_cd IS NULL`)의 세대는 어느 칸에도 넣지 않는다** — 소요를 셀 근거가 없다.
+            그래서 값의 합은 `targetCount - doneCount`보다 작을 수 있다.
           example: { RX-IOT: 152202, RX-BAT: 0 }
         computedAt:
           type: string

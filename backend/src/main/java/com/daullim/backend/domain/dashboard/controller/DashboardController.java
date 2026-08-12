@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-@Tag(name = "관제", description = "관제 화면 하단 요약")
+@Tag(name = "관제", description = "관제 5탭 공용 요약·집계")
 @RestController
 @RequestMapping("/api/v1/dashboard")
 @Validated

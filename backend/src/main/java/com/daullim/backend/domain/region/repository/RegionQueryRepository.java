@@ -34,15 +34,27 @@ public class RegionQueryRepository {
              round(b.avg_score, 1) AS avg_risk_score,
              CASE WHEN round(b.avg_score, 1) >= 70 THEN 'danger'
                   WHEN round(b.avg_score, 1) >= 35 THEN 'warn'
-                  ELSE 'ok' END AS avg_risk_level_cd
+                  ELSE 'ok' END AS avg_risk_level_cd,
+             b.building_count,
+             b.danger_count,
+             round(b.avg_rr, 1) AS avg_rr_i,
+             coalesce(u.done_unit_count, 0) AS done_unit_count,
+             coalesce(u.pending_unit_count, 0) AS pending_unit_count
       FROM (
-        SELECT admin_dong_cd, avg(score) AS avg_score
+        SELECT admin_dong_cd,
+               avg(score) AS avg_score,
+               count(*) AS building_count,
+               count(*) FILTER (WHERE risk_level_cd = 'danger') AS danger_count,
+               avg(rr_i) AS avg_rr
         FROM buildings
         WHERE sigungu_cd = :sigunguCd
         GROUP BY admin_dong_cd
       ) b
       LEFT JOIN (
-        SELECT bb.admin_dong_cd, count(*) AS household_count
+        SELECT bb.admin_dong_cd,
+               count(*) AS household_count,
+               count(*) FILTER (WHERE un.status_cd = 'done') AS done_unit_count,
+               count(*) FILTER (WHERE un.status_cd <> 'done') AS pending_unit_count
         FROM units un
         JOIN buildings bb ON bb.building_id = un.building_id
         WHERE bb.sigungu_cd = :sigunguCd
@@ -56,9 +68,21 @@ public class RegionQueryRepository {
     this.jdbc = jdbc;
   }
 
-  /** 동 단위 집계 결과. 건물이 없는 동은 아예 행이 없다. */
+  /**
+   * 동 단위 집계 결과. 건물이 없는 동은 아예 행이 없음.
+   *
+   * @param avgRrI 상대위험도 평균 — 점수와 별개 축(정규화값 아닌 배수), 건물 없으면 null
+   */
   public record DongAggregate(
-      String dongCd, long householdCount, BigDecimal avgRiskScore, String avgRiskLevelCd) {}
+      String dongCd,
+      long householdCount,
+      BigDecimal avgRiskScore,
+      String avgRiskLevelCd,
+      long buildingCount,
+      long dangerCount,
+      BigDecimal avgRrI,
+      long doneUnitCount,
+      long pendingUnitCount) {}
 
   public Map<String, String> majorityRegionTypeBySigungu(String sidoCd) {
     return jdbc.sql(MAJORITY_REGION_TYPE_SQL).param("sidoCd", sidoCd).query().listOfRows().stream()
@@ -80,7 +104,12 @@ public class RegionQueryRepository {
                     rs.getString("admin_dong_cd"),
                     rs.getLong("household_count"),
                     rs.getBigDecimal("avg_risk_score"),
-                    rs.getString("avg_risk_level_cd")))
+                    rs.getString("avg_risk_level_cd"),
+                    rs.getLong("building_count"),
+                    rs.getLong("danger_count"),
+                    rs.getBigDecimal("avg_rr_i"),
+                    rs.getLong("done_unit_count"),
+                    rs.getLong("pending_unit_count")))
         .list()
         .stream()
         .collect(

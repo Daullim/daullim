@@ -30,4 +30,33 @@ class DashboardApiIT extends QueryApiSupport {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.targetCount").value(6));
   }
+
+  @Test
+  @DisplayName("예상 소요는 미완료 세대를 처방 코드로 묶고 0건 코드도 채운다")
+  void pendingByRxCode() throws Exception {
+    mvc.perform(get("/api/v1/dashboard/summary").param("sigunguCd", SIGUNGU).with(officer()))
+        .andExpect(status().isOk())
+        // B2(RX-IOT)의 2호만 해당 — B1은 완료, B3·B4는 처방이 없어 셀 근거가 없다
+        .andExpect(jsonPath("$.data.pendingByRxCode['RX-IOT']").value(2))
+        .andExpect(jsonPath("$.data.pendingByRxCode['RX-BAT']").value(0));
+  }
+
+  @Test
+  @DisplayName("산출 시각과 응답 시각은 서로 다른 축이라 둘 다 내려간다")
+  void exposesComputedAtBesideUpdatedAt() throws Exception {
+    mvc.perform(get("/api/v1/dashboard/summary").param("sigunguCd", SIGUNGU).with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.computedAt").exists())
+        .andExpect(jsonPath("$.data.updatedAt").exists());
+  }
+
+  @Test
+  @DisplayName("건물이 없는 시군구는 computedAt이 null이다")
+  void nullComputedAtWhenNoBuilding() throws Exception {
+    mvc.perform(get("/api/v1/dashboard/summary").param("sigunguCd", "11680").with(officer()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.targetCount").value(0))
+        .andExpect(jsonPath("$.data.computedAt").value((Object) null))
+        .andExpect(jsonPath("$.data.pendingByRxCode['RX-IOT']").value(0));
+  }
 }
