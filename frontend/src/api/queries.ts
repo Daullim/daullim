@@ -5,6 +5,7 @@ import type {
   BuildingQueueItem,
   CurrentUser,
   CursorPage,
+  DashboardComposition,
   DashboardSummary,
   Dong,
   GridFeatureCollection,
@@ -142,6 +143,11 @@ export const getGridSummary = (dongCd: string, signal?: AbortSignal) =>
 
 export const getDashboardSummary = (sigunguCd?: string, signal?: AbortSignal) =>
   apiGet<DashboardSummary>(`/dashboard/summary${query({ sigunguCd })}`, signal);
+
+export const getDashboardComposition = (
+  params: { sidoCd?: string; sigunguCd?: string } = {},
+  signal?: AbortSignal,
+) => apiGet<DashboardComposition>(`/dashboard/composition${query({ ...params })}`, signal);
 
 /* 인증 — login·signup만 토큰 없이 열려 있다 */
 

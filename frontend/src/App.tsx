@@ -3,6 +3,7 @@ import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-route
 import ControlLayout from "@/pages/control";
 import ControlOverviewPage from "@/pages/control-overview";
 import ControlPendingPage from "@/pages/control-pending";
+import ControlRiskPage from "@/pages/control-risk";
 import FieldDongPage from "@/pages/field-b1";
 import FieldGridPage from "@/pages/field-b2";
 import FieldUnitsPage from "@/pages/field-b3";
@@ -43,7 +44,7 @@ export default function App() {
         {/* 관제 5탭 — 레이아웃이 관할 스코프·요약 바를 들고 탭이 Outlet으로 들어온다 */}
         <Route path="/control" element={<ControlLayout />}>
           <Route index element={<ControlOverviewPage />} />
-          <Route path="risk" element={<ControlPendingPage tab="위험 분석" />} />
+          <Route path="risk" element={<ControlRiskPage />} />
           <Route path="progress" element={<ControlPendingPage tab="추진 현황" />} />
           <Route path="materials" element={<ControlPendingPage tab="소요 물량" />} />
           <Route path="report" element={<ControlPendingPage tab="실적 통계" />} />

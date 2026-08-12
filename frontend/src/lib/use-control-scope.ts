@@ -8,6 +8,8 @@ import type { DashboardSummary } from "@/api/types";
  * 레이아웃 → 탭 통로가 화면 간 값 공유의 유일한 수단이다.
  */
 export interface ControlScope {
+  sidoCd?: string;
+  sidoNm?: string;
   sigunguCd?: string;
   sigunguNm?: string;
   summary: DashboardSummary | undefined;

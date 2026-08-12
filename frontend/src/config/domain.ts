@@ -35,6 +35,14 @@ export const RISK_LEVEL: Record<RiskLevel, { label: string }> = {
   ok: { label: "양호" },
 };
 
+export type RegionType = "URBAN" | "RURAL" | "BUFFER";
+
+export const REGION_TYPE: Record<RegionType, { label: string }> = {
+  URBAN: { label: "도시" },
+  RURAL: { label: "농촌" },
+  BUFFER: { label: "완충지역" },
+};
+
 export type RxCode = "RX-BAT" | "RX-IOT";
 
 export const RX: Record<RxCode, { label: string }> = {

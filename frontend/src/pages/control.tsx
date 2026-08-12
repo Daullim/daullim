@@ -6,7 +6,7 @@ import { Button } from "@/components/core/button";
 import { DataText } from "@/components/core/data-text";
 import { RegionSelector, type RegionValue } from "@/components/core/region-selector";
 import { RX, type RxCode } from "@/config/domain";
-import { getDashboardSummary, getSigungus } from "@/api/queries";
+import { getDashboardSummary, getSidos, getSigungus } from "@/api/queries";
 import { useApiQuery } from "@/api/use-api-query";
 import type { ControlScope } from "@/lib/use-control-scope";
 import type { DashboardSummary } from "@/api/types";
@@ -49,9 +49,11 @@ export default function ControlLayout() {
   const summary = useApiQuery(region.sigungu ? `summary:${region.sigungu}` : null, (s) =>
     getDashboardSummary(region.sigungu, s),
   );
+  const sidos = useApiQuery("sidos", (s) => getSidos(s));
   const sigungus = useApiQuery(region.sido ? `sigungus:${region.sido}` : null, (s) =>
     getSigungus(region.sido!, s),
   );
+  const sidoNm = sidos.data?.find((r) => r.sidoCd === region.sido)?.sidoNm;
   const sigunguNm = sigungus.data?.find((r) => r.sigunguCd === region.sigungu)?.sigunguNm;
 
   return (
@@ -65,6 +67,7 @@ export default function ControlLayout() {
           value={region}
           onChange={setRegion}
           density="control"
+          autoSelect="none"
           levels="sigungu"
           className="ml-auto"
         />
@@ -78,6 +81,8 @@ export default function ControlLayout() {
         <Outlet
           context={
             {
+              sidoCd: region.sido,
+              sidoNm,
               sigunguCd: region.sigungu,
               sigunguNm,
               summary: summary.data,

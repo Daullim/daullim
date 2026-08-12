@@ -11,6 +11,7 @@ import type {
   HouseType,
   Installed,
   RefusalReason,
+  RegionType,
   ReplaceReason,
   RespondentType,
   RevisitPlan,
@@ -357,6 +358,36 @@ export interface DashboardSummary {
   /** 점수 산출 시각 (pipeline 월 1회) — 응답 시각인 `updatedAt`과 다른 축 */
   computedAt: string | null;
   updatedAt: string;
+}
+
+export interface DashboardComposition {
+  byRiskLevel: {
+    code: RiskLevel;
+    buildingCount: number;
+    unitCount: number;
+  }[];
+  byRegionType: {
+    code: RegionType;
+    danger: number;
+    warn: number;
+    ok: number;
+  }[];
+  byHouseType: {
+    code: HouseType;
+    buildingCount: number;
+    unitCount: number;
+  }[];
+  byUseAprDecade: {
+    decade: number | null;
+    buildingCount: number;
+  }[];
+  rrDistribution: {
+    min: number | null;
+    p50: number | null;
+    p99: number | null;
+    max: number | null;
+  };
+  estimatedBuildingCount: number;
 }
 
 export interface LoginResponse {
