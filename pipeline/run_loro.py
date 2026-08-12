@@ -20,7 +20,7 @@ import sys
 
 import pandas as pd
 
-from daullim_data.ltr import capture_rate_ci, fit_with_ci
+from daullim_data.ltr import capture_rate_ci, exposure_confound_audit, fit_with_ci
 from daullim_data.utils import DataTrapError
 from daullim_data.vulnerability import Betas, relative_risk
 from run_ltr import SGG_OF, attach_labels
@@ -57,13 +57,21 @@ def fold(holdout: str, labels: pd.Series, *, refit_beta: bool) -> dict:
     beta_note = "v0"
     if refit_beta:
         # 학습 시도 안에서만 재학습 — 홀드아웃 라벨을 보면 그 자체가 누수다.
-        tr = scored.loc[scored["sido"].isin(train)]
-        res = fit_with_ci(relative_risk(tr, betas=betas, as_of=AS_OF), label=LABEL, group="grid1k")
-        if res.significant.all():
-            betas = Betas(age=float(res.beta[0]), struct=float(res.beta[1]), prior=float(res.beta[2]))
-            beta_note = "재학습(전 계수 유의)"
+        # 채택 규칙은 `run_ltr.py`와 **같아야 한다**: 노출량 교란이면 전량 보류,
+        # 아니면 계수별로 CI가 0을 포함하지 않는 것만 채택.
+        tr = relative_risk(scored.loc[scored["sido"].isin(train)], betas=betas, as_of=AS_OF)
+        audit = exposure_confound_audit(tr, label=LABEL, scope_col="sido")
+        if audit.confounded:
+            beta_note = "노출량 교란 → 전량 v0 유지"
         else:
-            beta_note = "재학습 시도 → CI가 0 포함, v0 유지"
+            res = fit_with_ci(tr, label=LABEL, group="grid1k")
+            v0 = (betas.age, betas.struct, betas.prior)
+            picked = tuple(
+                float(res.beta[i]) if res.significant[i] else v0[i] for i in range(len(v0))
+            )
+            betas = Betas(age=picked[0], struct=picked[1], prior=picked[2])
+            kept = sum(1 for i in range(len(v0)) if not res.significant[i])
+            beta_note = f"재학습 채택({len(v0) - kept}/{len(v0)} 계수, 나머지 v0)"
 
     scored = relative_risk(scored, betas=betas, as_of=AS_OF)
     scored["model"] = scored["lambda_hat"] * scored["area_mult"] * scored["rr_i"]

@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 from daullim_data.ingest import load_fires
-from daullim_data.ltr import FEATURES, capture_rate, fit_with_ci
+from daullim_data.ltr import FEATURES, capture_rate, exposure_confound_audit, fit_with_ci
 from daullim_data.regions import REGIONS
 from daullim_data.scoring import normalize_score, raw_score
 from daullim_data.utils import DataTrapError, to_5179
@@ -84,14 +84,14 @@ def main() -> int:
     print(res.render(baseline=v0))
 
     # 라벨이 '위험'이 아니라 '노출량'을 가리키면 학습값은 교란을 계수로 굳힌다.
-    pos = labeled.loc[labeled["fire_label"], "unit_count"]
-    neg = labeled.loc[~labeled["fire_label"], "unit_count"]
-    ratio = float(pos.median()) / max(float(neg.median()), 1.0)
+    # 시도별로도 재는 이유는 지역을 섞으면 서로의 교란을 가리기 때문이다(§ ConfoundAudit).
+    labeled["sido"] = labeled["region_key"].map({k: v[0] for k, v in SGG_OF.items()})
+    audit = exposure_confound_audit(labeled, label="fire_label", scope_col="sido")
     print("\n  [노출량 교란 검사] 화재는 세대 단위로 나는데 라벨은 건물 단위다")
-    print(f"    세대수 중앙 — 양성 {pos.median():.1f} vs 음성 {neg.median():.1f} (배율 {ratio:.1f}배)")
-    confounded = ratio >= 2.0
+    print(audit.render())
+    confounded = audit.confounded
     if confounded:
-        print("    ⚠️ 라벨이 세대수에 강하게 교란됐다 — 학습값은 '위험'이 아니라")
+        print("    ⚠️ 라벨이 세대수에 교란됐다 — 학습값은 '위험'이 아니라")
         print("       '세대가 많아 라벨을 받을 확률이 높음'을 배운다. **전량 채택 보류.**")
 
     print("\n  [채택 판정] CI가 0을 포함하거나 노출량 교란이면 v0 유지")
