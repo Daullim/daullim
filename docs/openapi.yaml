@@ -528,6 +528,11 @@ paths:
         - name: consentCd
           in: query
           schema: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        - name: sidoCd
+          in: query
+          description: |
+            관제의 **'전체지역'** — 시군구를 비우고 시도만 보내는 상태다. 시군구와 함께 오면 둘 다 걸린다.
+          schema: { type: string, pattern: "^\\d{2}$" }
         - name: sigunguCd
           in: query
           description: |
@@ -590,6 +595,11 @@ paths:
         - name: consentCd
           in: query
           schema: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        - name: sidoCd
+          in: query
+          description: |
+            관제의 **'전체지역'** — 시군구를 비우고 시도만 보내는 상태다. 시군구와 함께 오면 둘 다 걸린다.
+          schema: { type: string, pattern: "^\\d{2}$" }
         - name: sigunguCd
           in: query
           description: |
@@ -649,6 +659,11 @@ paths:
         - name: consentCd
           in: query
           schema: { type: string, enum: [accepted, refused, vacant, unreachable] }
+        - name: sidoCd
+          in: query
+          description: |
+            관제의 **'전체지역'** — 시군구를 비우고 시도만 보내는 상태다. 시군구와 함께 오면 둘 다 걸린다.
+          schema: { type: string, pattern: "^\\d{2}$" }
         - name: sigunguCd
           in: query
           description: |
@@ -708,6 +723,11 @@ paths:
           in: query
           required: true
           schema: { type: string, pattern: "^\\d{8}$" }
+        - name: sidoCd
+          in: query
+          description: |
+            관제의 **'전체지역'** — 시군구를 비우고 시도만 보내는 상태다. 시군구와 함께 오면 둘 다 걸린다.
+          schema: { type: string, pattern: "^\\d{2}$" }
         - name: sigunguCd
           in: query
           description: 생략하면 전 지역. `current`(현재 잔량)에도 같이 걸린다.

@@ -4,6 +4,7 @@ import com.daullim.backend.common.error.BusinessException;
 import com.daullim.backend.common.error.ErrorCode;
 import com.daullim.backend.common.response.ApiResponse;
 import com.daullim.backend.common.response.CursorPage;
+import com.daullim.backend.domain.visit.dto.VisitBreakdown;
 import com.daullim.backend.domain.visit.dto.VisitDayCount;
 import com.daullim.backend.domain.visit.dto.VisitDetailResponse;
 import com.daullim.backend.domain.visit.dto.VisitListItem;
@@ -97,6 +98,7 @@ public class VisitController {
       @RequestParam(required = false) @Pattern(regexp = "\\d{8}", message = "from은 YYYYMMDD입니다.") String from,
       @RequestParam(required = false) @Pattern(regexp = "\\d{8}", message = "to는 YYYYMMDD입니다.") String to,
       @RequestParam(required = false) String consentCd,
+      @RequestParam(required = false) @Pattern(regexp = "\\d{2}", message = "시도코드는 2자리 숫자입니다.") String sidoCd,
       @RequestParam(required = false) @Pattern(regexp = "\\d{5}", message = "시군구코드는 5자리 숫자입니다.") String sigunguCd,
       @RequestParam(required = false) @Pattern(regexp = "\\d{10}", message = "행정동코드는 10자리 숫자입니다.") String dongCd,
       @RequestParam(required = false) String cursor,
@@ -106,7 +108,9 @@ public class VisitController {
 
     return ApiResponse.ok(
         queryService.list(
-            filter(officerId, unitId, from, to, consentCd, sigunguCd, dongCd, jwt), cursor, size));
+            filter(officerId, unitId, from, to, consentCd, sidoCd, sigunguCd, dongCd, jwt),
+            cursor,
+            size));
   }
 
   @Operation(
@@ -124,13 +128,14 @@ public class VisitController {
       @RequestParam @Pattern(regexp = "\\d{8}", message = "from은 YYYYMMDD입니다.") String from,
       @RequestParam @Pattern(regexp = "\\d{8}", message = "to는 YYYYMMDD입니다.") String to,
       @RequestParam(required = false) String consentCd,
+      @RequestParam(required = false) @Pattern(regexp = "\\d{2}", message = "시도코드는 2자리 숫자입니다.") String sidoCd,
       @RequestParam(required = false) @Pattern(regexp = "\\d{5}", message = "시군구코드는 5자리 숫자입니다.") String sigunguCd,
       @RequestParam(required = false) @Pattern(regexp = "\\d{10}", message = "행정동코드는 10자리 숫자입니다.") String dongCd,
       @AuthenticationPrincipal Jwt jwt) {
 
     return ApiResponse.ok(
         queryService.countByDay(
-            filter(officerId, null, from, to, consentCd, sigunguCd, dongCd, jwt)));
+            filter(officerId, null, from, to, consentCd, sidoCd, sigunguCd, dongCd, jwt)));
   }
 
   @Operation(
@@ -150,13 +155,36 @@ public class VisitController {
       @RequestParam @Pattern(regexp = "\\d{8}", message = "from은 YYYYMMDD입니다.") String from,
       @RequestParam @Pattern(regexp = "\\d{8}", message = "to는 YYYYMMDD입니다.") String to,
       @RequestParam(required = false) String consentCd,
+      @RequestParam(required = false) @Pattern(regexp = "\\d{2}", message = "시도코드는 2자리 숫자입니다.") String sidoCd,
       @RequestParam(required = false) @Pattern(regexp = "\\d{5}", message = "시군구코드는 5자리 숫자입니다.") String sigunguCd,
       @RequestParam(required = false) @Pattern(regexp = "\\d{10}", message = "행정동코드는 10자리 숫자입니다.") String dongCd,
       @AuthenticationPrincipal Jwt jwt) {
 
     return ApiResponse.ok(
         queryService.summarize(
-            filter(officerId, null, from, to, consentCd, sigunguCd, dongCd, jwt)));
+            filter(officerId, null, from, to, consentCd, sidoCd, sigunguCd, dongCd, jwt)));
+  }
+
+  @Operation(
+      summary = "점검 결과 축별 분해",
+      description =
+          """
+          관제 3. 추진 현황 · 4. 소요 물량이 같은 응답의 다른 필드를 쓴다.
+          period는 기간 안에서 일어난 일(판정·거부 사유·자재 대수), current는 기간과 무관한 현재 잔량이다.
+          byRxCode는 방문 건수가 아니라 교체 항목 대수라 총건수와 맞지 않는다.
+          기간 집계(/visits/summary)와 나누는 기준 — 저쪽은 보고에 올리는 총계, 이쪽은 왜·무엇을 분해한다.
+          """)
+  @GetMapping("/api/v1/visits/breakdown")
+  public ApiResponse<VisitBreakdown> breakdown(
+      @RequestParam @Pattern(regexp = "\\d{8}", message = "from은 YYYYMMDD입니다.") String from,
+      @RequestParam @Pattern(regexp = "\\d{8}", message = "to는 YYYYMMDD입니다.") String to,
+      @RequestParam(required = false) @Pattern(regexp = "\\d{2}", message = "시도코드는 2자리 숫자입니다.") String sidoCd,
+      @RequestParam(required = false) @Pattern(regexp = "\\d{5}", message = "시군구코드는 5자리 숫자입니다.") String sigunguCd,
+      @RequestParam(required = false) @Pattern(regexp = "\\d{10}", message = "행정동코드는 10자리 숫자입니다.") String dongCd,
+      @AuthenticationPrincipal Jwt jwt) {
+
+    return ApiResponse.ok(
+        queryService.breakdown(filter(null, null, from, to, null, sidoCd, sigunguCd, dongCd, jwt)));
   }
 
   @Operation(summary = "점검 기록 상세 조회", description = "현장 원입력 + 서버가 계산한 판정 스냅샷 + 교체 항목(외관 세부 항목 포함).")
@@ -172,6 +200,7 @@ public class VisitController {
       String from,
       String to,
       String consentCd,
+      String sidoCd,
       String sigunguCd,
       String dongCd,
       Jwt jwt) {
@@ -180,7 +209,7 @@ public class VisitController {
             ? null
             : ME.equals(officerId) ? Long.valueOf(jwt.getSubject()) : Long.valueOf(officerId);
     return new VisitQueryService.VisitFilter(
-        resolved, unitId, from, to, consentCd, sigunguCd, dongCd);
+        resolved, unitId, from, to, consentCd, sidoCd, sigunguCd, dongCd);
   }
 
   /** 형식이 틀린 키는 되받아야 한다 — 조용히 무시하면 재전송이 중복 저장이 된다. */

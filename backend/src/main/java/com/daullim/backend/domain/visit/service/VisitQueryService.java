@@ -3,6 +3,7 @@ package com.daullim.backend.domain.visit.service;
 import com.daullim.backend.common.error.BusinessException;
 import com.daullim.backend.common.error.ErrorCode;
 import com.daullim.backend.common.response.CursorPage;
+import com.daullim.backend.domain.visit.dto.VisitBreakdown;
 import com.daullim.backend.domain.visit.dto.VisitDayCount;
 import com.daullim.backend.domain.visit.dto.VisitDetailResponse;
 import com.daullim.backend.domain.visit.dto.VisitListItem;
@@ -30,6 +31,7 @@ public class VisitQueryService {
       String from,
       String to,
       String consentCd,
+      String sidoCd,
       String sigunguCd,
       String dongCd) {}
 
@@ -60,6 +62,37 @@ public class VisitQueryService {
     return repository.summarize(criteria(filter, null, 0));
   }
 
+  /**
+   * 축별 분해 — 관제 3·4 탭이 같은 응답의 다른 필드를 쓴다.
+   *
+   * <p>재방문 대기만 기간을 떼고 부른다. 잔량은 "지금"이라 기간을 걸면 뜻이 달라진다.
+   */
+  public VisitBreakdown breakdown(VisitFilter filter) {
+    VisitCriteria period = criteria(filter, null, 0);
+    VisitCriteria current = criteria(withoutRange(filter), null, 0);
+
+    return new VisitBreakdown(
+        new VisitBreakdown.Period(
+            filter.from(),
+            filter.to(),
+            repository.countByColumn(period, "condition_code_cd"),
+            repository.countByColumn(period, "refusal_reason_cd"),
+            repository.countReplacementsByRxCode(period)),
+        new VisitBreakdown.Current(repository.countRevisitPendingUnits(current)));
+  }
+
+  private static VisitFilter withoutRange(VisitFilter f) {
+    return new VisitFilter(
+        f.officerId(),
+        f.unitId(),
+        null,
+        null,
+        f.consentCd(),
+        f.sidoCd(),
+        f.sigunguCd(),
+        f.dongCd());
+  }
+
   public VisitDetailResponse detail(long visitId) {
     return repository
         .findDetail(visitId)
@@ -73,6 +106,7 @@ public class VisitQueryService {
         f.from(),
         f.to(),
         f.consentCd(),
+        f.sidoCd(),
         f.sigunguCd(),
         f.dongCd(),
         after,

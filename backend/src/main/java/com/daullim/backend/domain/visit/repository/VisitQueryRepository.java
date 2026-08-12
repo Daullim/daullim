@@ -1,5 +1,6 @@
 package com.daullim.backend.domain.visit.repository;
 
+import com.daullim.backend.domain.visit.dto.CodeCount;
 import com.daullim.backend.domain.visit.dto.ReplacementItemResponse;
 import com.daullim.backend.domain.visit.dto.VisitDayCount;
 import com.daullim.backend.domain.visit.dto.VisitDetailResponse;
@@ -16,6 +17,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -90,6 +92,47 @@ public class VisitQueryRepository {
       """
           + FROM_JOINS;
 
+  /**
+   * 교체 항목은 방문이 아니라 **자재**를 센다 — 한 방문이 여러 항목을 낳으므로 총건수와 맞지 않는다.
+   *
+   * <p>사유가 '기타'면 처방이 없어({@code rx_code_cd IS NULL}) 소요로 셀 근거가 없다. 점검원 조인은 걸지 않는다 — 필터가 {@code
+   * v}·{@code b}만 참조한다.
+   */
+  private static final String RX_SELECT =
+      """
+      SELECT ri.rx_code_cd AS code, count(*) AS cnt
+      FROM replacement_items ri
+      JOIN visits v    ON v.visit_id = ri.visit_id
+      JOIN units un    ON un.unit_id = v.unit_id
+      JOIN buildings b ON b.building_id = un.building_id
+      WHERE v.deleted_at IS NULL
+        AND ri.rx_code_cd IS NOT NULL
+      """;
+
+  /**
+   * 재방문 대기 세대 — **기간과 무관한 현재 잔량**이라 방문 기간 필터를 걸지 않는다.
+   *
+   * <p>세대의 <b>가장 최근</b> 방문만 본다. 과거에 재방문 필요였어도 그 뒤에 끝냈으면 대기가 아니다. LATERAL은 {@code
+   * ix_visits_unit_recent(unit_id, visited_at DESC)}를 그대로 탄다.
+   */
+  private static final String REVISIT_PENDING_SELECT =
+      """
+      SELECT count(*) AS cnt
+      FROM units un
+      JOIN buildings b ON b.building_id = un.building_id
+      JOIN LATERAL (
+        SELECT v.revisit_plan_cd
+        FROM visits v
+        WHERE v.unit_id = un.unit_id AND v.deleted_at IS NULL
+        ORDER BY v.visited_at DESC, v.visit_id DESC
+        LIMIT 1
+      ) last ON true
+      WHERE last.revisit_plan_cd = 'revisit'
+      """;
+
+  private static final RowMapper<CodeCount> CODE_COUNT =
+      (rs, rowNum) -> new CodeCount(rs.getString("code"), rs.getLong("cnt"));
+
   private final JdbcClient jdbc;
 
   VisitQueryRepository(JdbcClient jdbc) {
@@ -107,6 +150,7 @@ public class VisitQueryRepository {
       String from,
       String to,
       String consentCd,
+      String sidoCd,
       String sigunguCd,
       String dongCd,
       VisitCursor.Position after,
@@ -157,6 +201,36 @@ public class VisitQueryRepository {
       replaceSum += (Long) row[2];
     }
     return new VisitSummary(total, byConsent, replaceSum);
+  }
+
+  /** 판정·거부 사유처럼 {@code visits}의 한 컬럼을 세는 축. null인 행은 애초에 그 축의 값이 아니다. */
+  public List<CodeCount> countByColumn(VisitCriteria c, String column) {
+    // 개행을 빠뜨리면 FROM_JOINS가 바로 붙어 'cntFROM'이 된다 — 다른 SELECT 상수는 텍스트 블록이라 개행을 이미 갖는다
+    StringBuilder sql =
+        new StringBuilder("SELECT v.%1$s AS code, count(*) AS cnt\n".formatted(column));
+    sql.append(FROM_JOINS);
+    appendFilters(sql, c);
+    sql.append(
+        "  AND v.%1$s IS NOT NULL\nGROUP BY v.%1$s\nORDER BY cnt DESC, code".formatted(column));
+
+    return bindFilters(jdbc.sql(sql.toString()), c).query(CODE_COUNT).list();
+  }
+
+  /** 교체 항목의 처방 코드별 대수. */
+  public List<CodeCount> countReplacementsByRxCode(VisitCriteria c) {
+    StringBuilder sql = new StringBuilder(RX_SELECT);
+    appendFilters(sql, c);
+    sql.append("GROUP BY ri.rx_code_cd\nORDER BY cnt DESC, code");
+
+    return bindFilters(jdbc.sql(sql.toString()), c).query(CODE_COUNT).list();
+  }
+
+  /** 최근 방문이 재방문 필요로 끝난 세대 수 — 기간 필터를 받지 않는다. */
+  public long countRevisitPendingUnits(VisitCriteria c) {
+    StringBuilder sql = new StringBuilder(REVISIT_PENDING_SELECT);
+    appendRegionFilters(sql, c);
+
+    return bindRegionFilters(jdbc.sql(sql.toString()), c).query(Long.class).single();
   }
 
   public List<VisitDayCount> countByDay(VisitCriteria c) {
@@ -267,7 +341,18 @@ public class VisitQueryRepository {
     if (c.consentCd() != null) {
       sql.append("  AND v.consent_cd = :consentCd\n");
     }
-    // 관제는 시군구로 보고한다. 동과 함께 오면 둘 다 걸린다 — 동이 그 시군구 밖이면 0건.
+    appendRegionFilters(sql, c);
+  }
+
+  /**
+   * 지역 3단은 {@code b}만 참조한다 — 방문을 세지 않는 잔량 집계도 이 조각을 그대로 쓴다.
+   *
+   * <p>세 단계가 함께 오면 전부 AND로 걸린다. 관제의 '전체지역'은 시군구를 비우고 시도만 보내는 상태다.
+   */
+  private static void appendRegionFilters(StringBuilder sql, VisitCriteria c) {
+    if (c.sidoCd() != null) {
+      sql.append("  AND b.sido_cd = :sidoCd\n");
+    }
     if (c.sigunguCd() != null) {
       sql.append("  AND b.sigungu_cd = :sigunguCd\n");
     }
@@ -292,6 +377,14 @@ public class VisitQueryRepository {
     }
     if (c.consentCd() != null) {
       spec = spec.param("consentCd", c.consentCd());
+    }
+    return bindRegionFilters(spec, c);
+  }
+
+  private static JdbcClient.StatementSpec bindRegionFilters(
+      JdbcClient.StatementSpec spec, VisitCriteria c) {
+    if (c.sidoCd() != null) {
+      spec = spec.param("sidoCd", c.sidoCd());
     }
     if (c.sigunguCd() != null) {
       spec = spec.param("sigunguCd", c.sigunguCd());

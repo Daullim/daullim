@@ -337,6 +337,96 @@ class VisitQueryApiIT extends QueryApiSupport {
     }
   }
 
+  /** 관제 3. 추진 현황 · 4. 소요 물량이 나눠 쓰는 축별 분해. */
+  @Nested
+  @DisplayName("G-2. 축별 분해")
+  class Breakdown {
+
+    private static final String RANGE = "from=20260701&to=20260731";
+
+    @Test
+    @DisplayName("판정·거부 사유를 축별로 세고 값이 없는 행은 그 축에 담기지 않는다")
+    void countsByColumn() throws Exception {
+      mvc.perform(get("/api/v1/visits/breakdown?" + RANGE).with(officer()))
+          .andExpect(status().isOk())
+          // 점검한 두 건만 판정을 갖는다 — 미점검 방문은 판정 자체가 없다
+          .andExpect(jsonPath("$.data.period.byConditionCode.length()").value(1))
+          .andExpect(jsonPath("$.data.period.byConditionCode[0].code").value("DEFECTIVE"))
+          .andExpect(jsonPath("$.data.period.byConditionCode[0].count").value(2))
+          // 거부 사유는 거부 건에만 있다 — 공가는 사유를 가질 수 없다(ck_v_gate1)
+          .andExpect(jsonPath("$.data.period.byRefusalReason.length()").value(1))
+          .andExpect(jsonPath("$.data.period.byRefusalReason[0].code").value("no-time"))
+          .andExpect(jsonPath("$.data.period.byRefusalReason[0].count").value(1));
+    }
+
+    @Test
+    @DisplayName("byRxCode는 방문이 아니라 자재 대수를 센다 — 처방 없는 항목은 빠진다")
+    void countsReplacementItemsNotVisits() throws Exception {
+      insertReplacementItem(tiedEarlier, 1, "expired", "RX-IOT");
+      insertReplacementItem(tiedEarlier, 2, "appearance", "RX-IOT");
+      insertReplacementItem(tiedEarlier, 3, "battery-dead", "RX-BAT");
+      // '기타'는 처방이 없어 소요로 셀 근거가 없다
+      insertReplacementItem(tiedLater, 1, "etc", null);
+
+      mvc.perform(get("/api/v1/visits/breakdown?" + RANGE).with(officer()))
+          .andExpect(status().isOk())
+          // 방문은 2건인데 항목은 3대 — 두 수가 맞지 않는 것이 정상이다
+          .andExpect(jsonPath("$.data.period.byRxCode.length()").value(2))
+          .andExpect(jsonPath("$.data.period.byRxCode[0].code").value("RX-IOT"))
+          .andExpect(jsonPath("$.data.period.byRxCode[0].count").value(2))
+          .andExpect(jsonPath("$.data.period.byRxCode[1].code").value("RX-BAT"))
+          .andExpect(jsonPath("$.data.period.byRxCode[1].count").value(1));
+    }
+
+    @Test
+    @DisplayName("재방문 대기는 세대의 최근 방문만 본다 — 뒤에 끝냈으면 대기가 아니다")
+    void countsOnlyLatestVisitPerUnit() throws Exception {
+      long stillWaiting = unitOf(b3);
+      long resolved = unitOf(b4);
+
+      insertRevisitVisit(stillWaiting, "20260720", NOON.plusSeconds(432_000), "revisit");
+      // 같은 세대에 재방문 필요 → 그 뒤 불필요. 최근 것만 보므로 대기에서 빠져야 한다
+      insertRevisitVisit(resolved, "20260721", NOON.plusSeconds(518_400), "revisit");
+      insertRevisitVisit(resolved, "20260722", NOON.plusSeconds(604_800), "not-needed");
+
+      mvc.perform(get("/api/v1/visits/breakdown?" + RANGE).with(officer()))
+          .andExpect(status().isOk())
+          .andExpect(jsonPath("$.data.current.revisitPendingUnitCount").value(1));
+    }
+
+    @Test
+    @DisplayName("재방문 대기는 기간을 타지 않는다 — 기간 밖을 물어도 잔량은 그대로다")
+    void remnantIgnoresRange() throws Exception {
+      insertRevisitVisit(unitOf(b3), "20260720", NOON.plusSeconds(432_000), "revisit");
+
+      mvc.perform(get("/api/v1/visits/breakdown?from=20260101&to=20260131").with(officer()))
+          .andExpect(status().isOk())
+          // 기간 축은 비었는데
+          .andExpect(jsonPath("$.data.period.byConditionCode").isEmpty())
+          // 잔량은 그대로다 — 한 덩어리로 내렸다면 여기서 0이 됐을 것이다
+          .andExpect(jsonPath("$.data.current.revisitPendingUnitCount").value(1));
+    }
+
+    @Test
+    @DisplayName("전체지역(sidoCd)으로 거른다 — 시군구를 비운 관제 상태")
+    void filtersBySido() throws Exception {
+      mvc.perform(get("/api/v1/visits/breakdown?" + RANGE + "&sidoCd=" + SIDO).with(officer()))
+          .andExpect(jsonPath("$.data.period.byConditionCode[0].count").value(2));
+
+      // 다른 시도를 물으면 전부 빈다 — 예전엔 sidoCd가 없어 전국이 합산됐다
+      mvc.perform(get("/api/v1/visits/breakdown?" + RANGE + "&sidoCd=26").with(officer()))
+          .andExpect(jsonPath("$.data.period.byConditionCode").isEmpty())
+          .andExpect(jsonPath("$.data.current.revisitPendingUnitCount").value(0));
+    }
+
+    @Test
+    @DisplayName("from·to는 필수다")
+    void requiresRange() throws Exception {
+      mvc.perform(get("/api/v1/visits/breakdown?from=20260701").with(officer()))
+          .andExpect(status().isBadRequest());
+    }
+  }
+
   @Nested
   @DisplayName("H-1. 상세")
   class Detail {
@@ -445,6 +535,40 @@ class VisitQueryApiIT extends QueryApiSupport {
       spec = spec.param("refusalReasonCd", "refused".equals(consentCd) ? "no-time" : null);
     }
     return spec.query(Long.class).single();
+  }
+
+  /** 재방문 여부만 달리 세우는 방문 — 미점검이라 경보기 필드가 전부 null이어야 한다(ck_v_na). */
+  private long insertRevisitVisit(long unitId, String day, Instant at, String revisitPlanCd) {
+    return jdbc.sql(
+            """
+            INSERT INTO visits (unit_id,officer_id,visited_day,visited_at,consent_cd,is_inspected,
+              revisit_plan_cd)
+            VALUES (:unitId,:officerId,:day,:at,'vacant',false,:revisitPlanCd)
+            RETURNING visit_id
+            """)
+        .param("unitId", unitId)
+        .param("officerId", officerId)
+        .param("day", day)
+        .param("at", at.atOffset(ZoneOffset.UTC))
+        .param("revisitPlanCd", revisitPlanCd)
+        .query(Long.class)
+        .single();
+  }
+
+  /** 전지 유형은 방전 사유에만 있고, 방전이면 반드시 있어야 한다(ck_ri_battery). */
+  private void insertReplacementItem(long visitId, int seq, String reasonCd, String rxCodeCd) {
+    jdbc.sql(
+            """
+            INSERT INTO replacement_items (visit_id,item_seq,replace_reason_cd,battery_type_cd,
+              rx_code_cd)
+            VALUES (:visitId,:seq,:reasonCd,:batteryTypeCd,:rxCodeCd)
+            """)
+        .param("visitId", visitId)
+        .param("seq", seq)
+        .param("reasonCd", reasonCd)
+        .param("batteryTypeCd", "battery-dead".equals(reasonCd) ? "replaceable" : null)
+        .param("rxCodeCd", rxCodeCd)
+        .update();
   }
 
   private long unitOf(long buildingId) {
