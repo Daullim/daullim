@@ -44,8 +44,8 @@ def test_미등록_지역은_죽는다():
         region("jongno")
 
 
-def test_시연지역은_ADR_010_개정1의_넷이다():
-    assert set(REGIONS) == {"gwanak", "imsil", "gijang", "busanjin"}
+def test_시연지역은_ADR_010_개정2의_여섯이다():
+    assert set(REGIONS) == {"gwanak", "imsil", "gijang", "busanjin", "gangbuk", "gochang"}
 
 
 def test_기장군_부산진구_코드():
@@ -53,6 +53,19 @@ def test_기장군_부산진구_코드():
     assert sigungu_code("gijang", "mois") == "26710"
     assert sigungu_code("busanjin", "kostat") == "21050"
     assert sigungu_code("busanjin", "mois") == "26230"
+
+
+def test_강북구_고창군_코드():
+    assert sigungu_code("gangbuk", "kostat") == "11090"
+    assert sigungu_code("gangbuk", "mois") == "11305"
+    assert sigungu_code("gochang", "kostat") == "35570"
+    assert sigungu_code("gochang", "mois") == "52790"
+
+
+def test_강북구는_서울이라_시도2자리가_일치하고_고창군은_아니다():
+    """서울만 우연히 일치하는 함정(11) — 전북은 35 vs 52로 갈린다."""
+    assert sigungu_code("gangbuk", "kostat")[:2] == sigungu_code("gangbuk", "mois")[:2]
+    assert sigungu_code("gochang", "kostat")[:2] != sigungu_code("gochang", "mois")[:2]
 
 
 def test_기장군은_존이_둘이다():
@@ -68,6 +81,8 @@ def test_현행_코드는_통과한다():
     assert assert_current_mois("52750") == "52750"  # 임실군
     assert assert_current_mois("26710") == "26710"  # 기장군
     assert assert_current_mois("26230") == "26230"  # 부산진구
+    assert assert_current_mois("11305") == "11305"  # 강북구
+    assert assert_current_mois("52790") == "52790"  # 고창군
 
 
 @needs_codes
@@ -136,4 +151,20 @@ def test_기장군도_임실군처럼_읍면과_리가_둘다_존재한다():
     leaf = bjdong_codes("gijang")
     both = bjdong_codes("gijang", include_upper=True)
     assert len(leaf) < len(both)
+    assert all(not c.endswith("00") for c, _ in leaf)
+
+
+@needs_codes
+def test_강북구는_리가_없어_동_레벨만_돈다():
+    """도시 자치구는 리 레벨이 없다 — leaf 폴백이 읍면동 레벨을 그대로 돌려줘야 한다."""
+    codes = bjdong_codes("gangbuk")
+    assert len(codes) == 4
+    assert all(len(c) == 5 and c.isdigit() for c, _ in codes)
+
+
+@needs_codes
+def test_고창군은_리_단위까지_내려간다():
+    leaf = bjdong_codes("gochang")
+    both = bjdong_codes("gochang", include_upper=True)
+    assert len(leaf) == 189 and len(both) == 203
     assert all(not c.endswith("00") for c, _ in leaf)

@@ -78,6 +78,22 @@ REGIONS: dict[str, Region] = {
         mois="26230",
         zone=("마라",),
     ),
+    "gangbuk": Region(
+        key="gangbuk",
+        name="서울특별시 강북구",
+        sido="서울",
+        kostat="11090",
+        mois="11305",
+        zone=("다사",),
+    ),
+    "gochang": Region(
+        key="gochang",
+        name="전북특별자치도 고창군",
+        sido="전북",
+        kostat="35570",
+        mois="52790",
+        zone=("다마",),
+    ),
 }
 
 _SYSTEMS = ("kostat", "mois", "zone")
