@@ -46,6 +46,21 @@ import type { BuildingQueueItem, UnitItem } from "@/api/types";
 /** 주소 검색은 서버가 한다 — 타자마다 보내지 않도록 잠깐 묵힌다 */
 const SEARCH_DEBOUNCE_MS = 300;
 
+/**
+ * 큐 제목은 **정렬 기준을 말한다** — 도농이 서로 다른 축으로 정렬되기 때문이다.
+ *
+ * 농촌은 랭킹을 포기하고 절대 필터로 대상을 확정한 뒤 **오래된 집부터** 간다
+ * (`pipeline/daullim_data/scoring.py` 블록 0). 그래서 화면에 점수가 뒤섞여 보이는 것이
+ * 정상인데, 제목이 "위험순"이면 점검원 눈에는 정렬이 깨진 것으로 읽힌다.
+ *
+ * ⚠️ 농촌 큐의 꼬리(절대 필터 미통과 = 블록 2)는 도시와 같은 점수순이다. 실측상 앞쪽
+ * 70~80%가 블록 0이라 제목은 그쪽을 가리킨다 — 전량이 준공일순이라는 뜻은 아니다.
+ */
+const QUEUE_TITLE = {
+  urban: "방문 큐 (위험순)",
+  rural: "방문 큐 (준공일순)",
+} as const;
+
 const queueRowId = (buildingId: number) => `visit-queue-building-${buildingId}`;
 
 /**
@@ -215,7 +230,6 @@ export default function FieldUnitsPage() {
             center={mapCenter}
             zoom={16}
             onMapReady={setMap}
-            className="min-w-0"
           >
             {/* 범례는 우상단 — 하단은 줌(좌)·현재 위치(중앙) 차지 (B1과 동일 배치) */}
             <Legend className="absolute top-3 right-3" />
@@ -245,10 +259,10 @@ export default function FieldUnitsPage() {
           )}
         </div>
 
-        {/* 방문 큐 (위험순, 완료 흐리게) */}
+        {/* 방문 큐 — 정렬 기준이 도농에 따라 다르다(아래 QUEUE_TITLE). 완료는 흐리게 */}
         <MapSidePanel ariaLabel="방문 큐 패널">
           <div className="flex h-12 shrink-0 items-center justify-between border-b border-hairline px-3">
-            <h2 className="text-title-sm text-ink">방문 큐 (위험순)</h2>
+            <h2 className="text-title-sm text-ink">{rural ? QUEUE_TITLE.rural : QUEUE_TITLE.urban}</h2>
             <span className="flex items-center gap-3">
               {/* 진행률은 검색 필터와 무관하게 전체 기준 */}
               <span className="text-caption text-subtle">

@@ -23,8 +23,8 @@
 | **API 서버** | https://daullim-production.up.railway.app               |
 | **API 문서** | [`docs/openapi.yaml`](docs/openapi.yaml) (계약 정본) · 로컬 Swagger UI |
 | **개발 기간** | 2026.07 ~ 2026.08 (약 3주)                                                            |
-| **시연 대상 지역** | 서울 관악구·부산 부산진구(도시형) · 전북 임실군·부산 기장군(농촌형)            |
-| **적재 데이터** | 건물 61,803행 · 세대 152,202행 (실데이터)                                                      |
+| **시연 대상 지역** | **6곳** — 도시: 서울 관악구·강북구, 부산 부산진구 / 농촌: 전북 임실군·고창군, 부산 기장군 |
+| **적재 데이터** | 건물 94,240행 · 세대 243,846행 (실데이터)                                                      |
 
 ### 두 개의 모드
 
@@ -70,7 +70,7 @@ raw_score = λ̂ × (1 + αV⊥) × exp(Σβx)
 
 #### ④ 지도·현장 UX
 
-- **Naver Maps** 위에 행정동 경계 GeoJSON(33개 행정동)을 그리고, **폴리곤 클릭 ↔ 동 선택이 양방향으로 연동**됩니다.
+- **Naver Maps** 위에 행정동 경계 GeoJSON(85개 행정동)을 그리고, **폴리곤 클릭 ↔ 동 선택이 양방향으로 연동**됩니다.
 - 격자 위험도는 500m 격자로 저장하되 응답은 1km 격자로 유도해 내립니다(그대로 조인하면 0건).
 - **네이버 지도 딥링크 길찾기**, 일자별 점검 기록 달력, 진행률 화면 등 현장 흐름(동 선택 → 격자 → 세대 → 점검 폼)을 4단계로 고정했습니다.
 
@@ -143,7 +143,7 @@ cd backend && ./gradlew bootRun
 ```
 
 ```bash
-psql "$DEMO_DB_URL" --single-transaction -v ON_ERROR_STOP=1 -f seed/demo-snapshot.sql
+gunzip -c seed/demo-snapshot.sql.gz | psql "$DEMO_DB_URL" --single-transaction -v ON_ERROR_STOP=1 -f -
 ```
 
 **2) 프론트엔드**
@@ -212,7 +212,7 @@ cd backend && ./gradlew spotlessApply build
 ├── seed/                      # 동결된 산출물
 │   ├── buildings.csv · units.csv
 │   ├── grids.geojson · admin-dong-boundaries.geojson · regions.csv
-│   ├── demo-snapshot.sql      # pg_dump --data-only (약 19MB)
+│   ├── demo-snapshot.sql.gz   # pg_dump --data-only + gzip (약 5.7MB)
 │   └── score_params.json      # 점수 재현 파라미터
 │
 ├── data/                      # 원본 공공데이터 배치 (화재·119신고·SGIS·건축물대장 캐시)

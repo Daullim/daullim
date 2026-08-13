@@ -27,12 +27,13 @@ class RegionApiIT extends QueryApiSupport {
   @Test
   @DisplayName("시군구 regionTypeCd는 BUFFER를 뺀 URBAN·RURAL 다수값이다")
   void sigungus() throws Exception {
+    // 위치가 아니라 코드로 짚는다 — 사전 순서는 regions.csv를 따르므로 시연 지역이 늘면 바뀐다.
     mvc.perform(get("/api/v1/regions/sigungus").param("sidoCd", SIDO).with(officer()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.data[0].sigunguCd").value(SIGUNGU))
-        .andExpect(jsonPath("$.data[0].sigunguNm").value("관악구"))
+        .andExpect(jsonPath("$.data[?(@.sigunguCd=='" + SIGUNGU + "')].sigunguNm").value("관악구"))
         // URBAN 2(B1·B2) vs RURAL 1(B3), BUFFER인 B4는 세지 않는다.
-        .andExpect(jsonPath("$.data[0].regionTypeCd").value("URBAN"));
+        .andExpect(
+            jsonPath("$.data[?(@.sigunguCd=='" + SIGUNGU + "')].regionTypeCd").value("URBAN"));
   }
 
   @Test

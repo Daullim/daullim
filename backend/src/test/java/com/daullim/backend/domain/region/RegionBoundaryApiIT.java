@@ -14,13 +14,13 @@ import org.junit.jupiter.api.Test;
 class RegionBoundaryApiIT extends QueryApiSupport {
 
   @Test
-  @DisplayName("시연 지역 58개 행정동 경계를 geo+json으로 내린다")
+  @DisplayName("시연 지역 85개 행정동 경계를 geo+json으로 내린다")
   void servesFeatureCollection() throws Exception {
     mvc.perform(get("/api/v1/regions/boundaries").with(officer()))
         .andExpect(status().isOk())
         .andExpect(content().contentTypeCompatibleWith("application/geo+json"))
         .andExpect(jsonPath("$.type").value("FeatureCollection"))
-        .andExpect(jsonPath("$.features.length()").value(58));
+        .andExpect(jsonPath("$.features.length()").value(85));
   }
 
   // admdongkor 수동 재절단 파일이라 시연 지역 추가 시 조용히 뒤처짐 — 사전과 대조해 못 박음
@@ -30,7 +30,9 @@ class RegionBoundaryApiIT extends QueryApiSupport {
     mvc.perform(get("/api/v1/regions/boundaries").with(officer()))
         .andExpect(
             jsonPath("$.features[*].properties.sigungu_cd")
-                .value(org.hamcrest.Matchers.hasItems("11620", "26230", "26710", "52750")));
+                .value(
+                    org.hamcrest.Matchers.hasItems(
+                        "11305", "11620", "26230", "26710", "52750", "52790")));
   }
 
   @Test

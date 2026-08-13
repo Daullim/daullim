@@ -98,15 +98,27 @@ class JsonlCache:
 class ApiClient:
     """호출 간격·재시도·캐시 통합 관리."""
 
-    def __init__(self, cache: JsonlCache, *, min_interval: float = 0.05, retries: int = 5):
+    # 재시도 8회 = 백오프 합 약 71초(0.5·1·2·4·8·16·20·20). 5회(15.5초)로는 짧은 먹통을 못 넘긴다 —
+    # 고창군 수집이 `Remote end closed connection without response`로 5회를 소진하고 죽었는데
+    # 곧바로 재시도하니 0.1초에 정상 응답했다(2026-08-12 실측). 무인 장시간 수집에서
+    # 몇십 초짜리 장애로 통째로 멈추면 그때까지의 시간이 날아간다.
+    def __init__(self, cache: JsonlCache, *, min_interval: float = 0.05, retries: int = 8):
         self.cache = cache
         self.min_interval = min_interval
         self.retries = retries
         self._last = 0.0
         self.calls = 0
         self.hits = 0
+        self.uncached = 0  # 캐시를 거부한 응답 수 — 한도 초과 감지 신호
 
-    def get_json(self, base: str, params: dict[str, str], *, cache_key: str):
+    def get_json(self, base: str, params: dict[str, str], *, cache_key: str, cacheable=None):
+        """응답 JSON. `cacheable(payload)`가 False면 **캐시하지 않고 그대로 돌려준다.**
+
+        ⚠️ 한도 초과는 HTTP 200으로 온다 — 공공 API가 오류를 본문에 실어 보내기 때문이다.
+        그대로 캐시하면 그 주소는 **영원히 실패로 굳는다**: 다음 실행이 캐시 히트로 넘어가
+        API를 다시 부르지 않고, 호출부는 '주소를 못 찾음'으로 읽어 건물을 버린다.
+        하루 한도를 넘겨 이튿날 재개하는 수집에서 조용한 데이터 손실이 된다.
+        """
         if cache_key in self.cache:
             self.hits += 1
             return self.cache.get(cache_key)
@@ -122,7 +134,10 @@ class ApiClient:
                     payload = json.loads(resp.read().decode("utf-8"))
                 self._last = time.monotonic()
                 self.calls += 1
-                self.cache.put(cache_key, payload)
+                if cacheable is None or cacheable(payload):
+                    self.cache.put(cache_key, payload)
+                else:
+                    self.uncached += 1
                 return payload
             except RETRYABLE as exc:
                 last_err = exc

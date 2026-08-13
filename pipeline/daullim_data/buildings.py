@@ -163,6 +163,19 @@ class GeoResult:
     estimated: bool = False
 
 
+#: 영구 캐시해도 되는 VWorld 응답 상태. `OK`는 성공이고 `NOT_FOUND`는 **그 주소가 없다**는
+#: 확정 답이라 다시 물어도 같다. 나머지(`ERROR` — 한도 초과·키 오류·서버 장애)는 **일시적**이라
+#: 캐시하면 그 주소가 영원히 실패로 굳는다. HTTP 200으로 오기 때문에 본문을 봐야만 구분된다.
+GEOCODE_CACHEABLE_STATUS = frozenset({"OK", "NOT_FOUND"})
+
+
+def _geocode_cacheable(payload: object) -> bool:
+    try:
+        return payload["response"]["status"] in GEOCODE_CACHEABLE_STATUS  # type: ignore[index]
+    except (KeyError, TypeError):
+        return False  # 모양이 다른 응답도 캐시하지 않는다 — 정상 경로가 아니다
+
+
 def geocode(address: str, *, kind: str = "road", client: ApiClient | None = None) -> GeoResult:
     """VWorld 지오코딩 — 도로명 검색만 행정동코드(`level4AC`) 제공(실측 확인).
 
@@ -178,6 +191,7 @@ def geocode(address: str, *, kind: str = "road", client: ApiClient | None = None
             "format": "json", "type": kind, "key": key,
         },
         cache_key=f"vworld:{kind}:{address}",
+        cacheable=_geocode_cacheable,
     )
     try:
         resp = payload["response"]

@@ -72,21 +72,25 @@ BE 주소는 시연에 노출하지 않는다 — 화면은 Vercel 도메인 하
 
 ## DB 적재 — 스냅샷 (ADR-006 §3)
 
-**Flyway는 테이블 12개(+ 자기 이력 테이블)와 lookup seed만 만든다.** `buildings` 61,803행 · `units` 152,202행은 따로 넣어야 한다.
+**Flyway는 테이블 12개(+ 자기 이력 테이블)와 lookup seed만 만든다.** `buildings` 94,240행 · `units` 243,846행은 따로 넣어야 한다.
 파이프라인을 운영 DB에 직접 돌리지 않고 **스냅샷을 복원**한다 — seed 동결 결정에 따른 것이다.
 
 | 파일 | 내용 |
 |---|---|
-| `seed/demo-snapshot.sql` | `pg_dump --data-only`. `buildings`·`units` COPY 2블록 + 시퀀스 `setval` 2줄 (19MB). `address_norm`은 GENERATED라 제외된다 |
+| `seed/demo-snapshot.sql.gz` | `pg_dump --data-only`를 gzip한 것. `buildings`·`units` COPY 2블록 + 시퀀스 `setval` 2줄. `address_norm`은 GENERATED라 제외된다 |
 | `seed/reset-demo.sh` | 업무 데이터를 비우고 스냅샷을 재적재. `users`·lookup 6종은 **보존**한다 |
 
-현재 스냅샷은 **4지역 · buildings 61,803 · units 152,202** (2026-08-11 재생성, 35MB).
+현재 스냅샷은 **6지역 · buildings 94,240 · units 243,846** (2026-08-13 재생성).
+
+**gzip으로 둔다 — 압축 전 54.7MB는 GitHub 경고선(50MB)을 넘었다.** SQL 텍스트라 9.2배가
+줄어(→ 5.7MB) 여유가 생겼다. 압축 전에는 지역당 ~9MB씩 늘어 **네 곳만 더하면 차단선(100MB)**에
+닿는 상태였다. 압축 해제본이 원본과 바이트 단위로 같음을 확인했다.
 
 접속 URL은 Railway → Postgres 서비스 → Variables의 **`DATABASE_PUBLIC_URL`**이다(내부용 `DATABASE_URL`이 아니다).
 
 ```bash
 # 최초 적재 (빈 DB에 데이터만 얹는다)
-psql "$DEMO_DB_URL" --single-transaction -v ON_ERROR_STOP=1 -f seed/demo-snapshot.sql
+gunzip -c seed/demo-snapshot.sql.gz | psql "$DEMO_DB_URL" --single-transaction -v ON_ERROR_STOP=1 -f -
 
 # 리허설·본시연 초기화
 DEMO_DB_URL='postgresql://...' ./seed/reset-demo.sh
@@ -104,7 +108,8 @@ docker compose exec -T postgres psql -U daullim -d daullim -c \
 
 # ② 덤프
 docker exec backend-postgres-1 pg_dump -U daullim -d daullim \
-  --data-only --no-owner --no-privileges -t public.buildings -t public.units > seed/demo-snapshot.sql
+  --data-only --no-owner --no-privileges -t public.buildings -t public.units \
+  | gzip -9 > seed/demo-snapshot.sql.gz
 ```
 
 > ⚠️ **덤프 전에 `units`의 업무 상태를 비워야 한다 — 안 그러면 리셋 후 앞뒤가 안 맞는다.**
@@ -115,14 +120,14 @@ docker exec backend-postgres-1 pg_dump -U daullim -d daullim \
 > 확인은 덤프 후 이 한 줄로 한다 — `pending` 하나만 나와야 한다:
 >
 > ```bash
-> grep -c $'\tpending\t' seed/demo-snapshot.sql   # units 행수와 같아야 한다
+> gunzip -c seed/demo-snapshot.sql.gz | grep -c $'\tpending\t'   # units 행수와 같아야 한다
 > ```
 
 덤프 후 **행수·구조를 확인**한다. `COPY` 2블록 + `setval` 2줄이 아니면 대상 테이블이 바뀐 것이다:
 
 ```bash
-grep -c "^COPY public\." seed/demo-snapshot.sql          # 2
-grep -c "^SELECT pg_catalog.setval" seed/demo-snapshot.sql  # 2
+gunzip -c seed/demo-snapshot.sql.gz | grep -c "^COPY public\."             # 2
+gunzip -c seed/demo-snapshot.sql.gz | grep -c "^SELECT pg_catalog.setval"  # 2
 ```
 
 ## 시연 당일 절차
