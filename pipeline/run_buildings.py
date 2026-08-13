@@ -99,6 +99,7 @@ def main() -> int:
     geo_client = ApiClient(JsonlCache(GEOCODE_CACHE))
 
     all_b, all_u, failures = [], [], []
+    quota_hit: list[tuple[str, int]] = []
     for key in args.region:
         print("=" * 72)
         print(f"건물 마스터 — {REGIONS[key].name}")
@@ -116,6 +117,13 @@ def main() -> int:
         print(rep.render())
         print(f"  지오코딩 API {geo_client.calls:,}회 · 캐시 {geo_client.hits:,}회 "
               f"| 전유부 API {expos_client.calls:,}회 · 캐시 {expos_client.hits:,}회")
+
+        # 캐시를 거부한 응답 = 한도 초과·키 오류 계열. 무인 수집에서 조용히 지나가면
+        # 그 지역이 통째로 덜 수집된 채 산출까지 흘러간다 — 게이트로 세운다.
+        if geo_client.uncached:
+            quota_hit.append((key, geo_client.uncached))
+            print(f"  ⚠️ 지오코딩 응답 {geo_client.uncached:,}건이 캐시 불가(한도 초과 추정) — "
+                  f"이 지역은 재수집이 필요하다")
 
         errs = validate(buildings, units)
         if errs:
@@ -141,6 +149,14 @@ def main() -> int:
           f"({100 * b['use_apr_day'].isna().mean():.1f}%)")
     print(f"  지오코딩 추정(is_estimated) {int(b['is_estimated'].sum()):,}행")
 
+    if quota_hit:
+        # DDL은 통과할 수 있다 — 수집이 덜 된 것뿐이라 남은 행은 정상이기 때문이다.
+        # 그래서 검증과 별개로 막는다. 이 상태로 seed를 만들면 건물이 조용히 빈다.
+        print("\n⚠️ API 한도 초과로 덜 수집된 지역이 있다 — 한도가 회복되면 다시 실행하라:")
+        for key, n in quota_hit:
+            print(f"  · {key}: 캐시 불가 응답 {n:,}건")
+        print("  (캐시는 호출마다 저장되므로 재실행은 받아둔 것을 건너뛴다)")
+        return 1
     if failures:
         print("\nDDL 검증 미달 — 적재 불가:")
         for f in failures:
