@@ -72,7 +72,7 @@ BE 주소는 시연에 노출하지 않는다 — 화면은 Vercel 도메인 하
 
 ## DB 적재 — 스냅샷 (ADR-006 §3)
 
-**Flyway는 테이블 12개(+ 자기 이력 테이블)와 lookup seed만 만든다.** `buildings` 61,803행 · `units` 152,202행은 따로 넣어야 한다.
+**Flyway는 테이블 12개(+ 자기 이력 테이블)와 lookup seed만 만든다.** `buildings` 94,240행 · `units` 243,846행은 따로 넣어야 한다.
 파이프라인을 운영 DB에 직접 돌리지 않고 **스냅샷을 복원**한다 — seed 동결 결정에 따른 것이다.
 
 | 파일 | 내용 |
@@ -80,7 +80,7 @@ BE 주소는 시연에 노출하지 않는다 — 화면은 Vercel 도메인 하
 | `seed/demo-snapshot.sql` | `pg_dump --data-only`. `buildings`·`units` COPY 2블록 + 시퀀스 `setval` 2줄 (19MB). `address_norm`은 GENERATED라 제외된다 |
 | `seed/reset-demo.sh` | 업무 데이터를 비우고 스냅샷을 재적재. `users`·lookup 6종은 **보존**한다 |
 
-현재 스냅샷은 **4지역 · buildings 61,803 · units 152,202** (2026-08-11 재생성, 35MB).
+현재 스냅샷은 **6지역 · buildings 94,240 · units 243,846** (2026-08-13 재생성, 55MB).
 
 접속 URL은 Railway → Postgres 서비스 → Variables의 **`DATABASE_PUBLIC_URL`**이다(내부용 `DATABASE_URL`이 아니다).
 
