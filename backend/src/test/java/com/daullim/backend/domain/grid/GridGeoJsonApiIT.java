@@ -14,13 +14,13 @@ import org.junit.jupiter.api.Test;
 class GridGeoJsonApiIT extends QueryApiSupport {
 
   @Test
-  @DisplayName("704격자 GeoJSON을 geo+json으로 내린다")
+  @DisplayName("1,287격자 GeoJSON을 geo+json으로 내린다")
   void servesFeatureCollection() throws Exception {
     mvc.perform(get("/api/v1/grids").with(officer()))
         .andExpect(status().isOk())
         .andExpect(content().contentTypeCompatibleWith("application/geo+json"))
         .andExpect(jsonPath("$.type").value("FeatureCollection"))
-        .andExpect(jsonPath("$.features.length()").value(704));
+        .andExpect(jsonPath("$.features.length()").value(1287));
   }
 
   @Test
