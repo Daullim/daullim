@@ -1,5 +1,6 @@
 package com.daullim.backend.domain.region;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -49,13 +50,32 @@ class RegionBoundaryApiIT extends QueryApiSupport {
                 .value(org.hamcrest.Matchers.hasLength(5)));
   }
 
+  // 재절단해도 브라우저가 만료 전까지 서버에 묻지 않아 새 지역 경계가 안 뜬 사고(2026-08-13)의 회귀 방지
   @Test
-  @DisplayName("정적 자산이라 캐시 가능하게 내린다")
-  void isCacheable() throws Exception {
+  @DisplayName("캐시하되 매번 검증하게 내린다 — 재절단이 즉시 반영돼야 한다")
+  void revalidatesInsteadOfExpiring() throws Exception {
     mvc.perform(get("/api/v1/regions/boundaries").with(officer()))
         .andExpect(
+            header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-cache")))
+        .andExpect(
             header()
-                .string("Cache-Control", org.hamcrest.Matchers.containsString("max-age=86400")));
+                .string(
+                    "Cache-Control", org.hamcrest.Matchers.not(containsString("max-age=86400"))))
+        .andExpect(header().exists("ETag"));
+  }
+
+  @Test
+  @DisplayName("내용이 그대로면 304로 본문을 안 내린다")
+  void skipsBodyWhenUnchanged() throws Exception {
+    String etag =
+        mvc.perform(get("/api/v1/regions/boundaries").with(officer()))
+            .andReturn()
+            .getResponse()
+            .getHeader("ETag");
+
+    mvc.perform(get("/api/v1/regions/boundaries").header("If-None-Match", etag).with(officer()))
+        .andExpect(status().isNotModified())
+        .andExpect(content().string(""));
   }
 
   @Test
