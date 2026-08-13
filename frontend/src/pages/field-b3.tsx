@@ -230,7 +230,6 @@ export default function FieldUnitsPage() {
             center={mapCenter}
             zoom={16}
             onMapReady={setMap}
-            className="min-w-0"
           >
             {/* 범례는 우상단 — 하단은 줌(좌)·현재 위치(중앙) 차지 (B1과 동일 배치) */}
             <Legend className="absolute top-3 right-3" />

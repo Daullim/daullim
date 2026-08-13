@@ -159,8 +159,15 @@ export function MapCanvas({
   return (
     <div
       ref={wrapperRef}
+      /*
+        `min-w-0`은 기본값이어야 한다 — flex 아이템의 `min-width: auto`가 **내용물**의 최소
+        크기를 바닥으로 잡는데, SDK가 `setSize()`로 지도 DOM에 픽셀 너비를 직접 박기 때문이다.
+        그러면 창을 **줄일 때** 지도가 마지막에 렌더된 폭 아래로 안 줄고, 옆에 놓인 표가
+        컨테이너 밖으로 밀려난다(늘릴 때는 충돌이 없어 멀쩡하다 — 이 비대칭이 증상이었다).
+        같은 이유로 이미 `min-h-0`이 여기 있다. 세로만 막아 두면 가로에서 같은 사고가 난다.
+      */
       className={cn(
-        "relative min-h-0 flex-1 rounded-md border border-hairline bg-surface",
+        "relative min-h-0 min-w-0 flex-1 rounded-md border border-hairline bg-surface",
         className,
       )}
     >
