@@ -19,7 +19,7 @@
 - 운영 규칙 4종:
   1. **시크릿**: 실값은 Railway/Vercel 환경변수에만. `.env.example`(키 이름만) 커밋, `.env*` gitignore. API 키·비밀번호 커밋 금지(D7 컨벤션 명문화).
   2. **CORS**: `ALLOWED_ORIGIN` 환경변수 주입 — 로컬/프로덕션 전환 무수정.
-  3. **seed 동결(D13)**: pipeline 재실행 금지 선언 → `git tag demo-freeze` → `pg_dump` 스냅샷 `seed/demo-snapshot.sql` 커밋 → `reset-demo` 스크립트(visits truncate 후 재적재)로 리허설·본시연 매회 초기화.
+  3. **seed 동결(D13)**: pipeline 재실행 금지 선언 → `git tag demo-freeze` → `pg_dump` 스냅샷 `seed/demo-snapshot.sql.gz` 커밋 → `reset-demo` 스크립트(visits truncate 후 재적재)로 리허설·본시연 매회 초기화.
   4. **헬스체크**: `/actuator/health` + Railway 헬스체크 — 시연 당일 아침 1분 점검 절차.
 
 ## 근거
@@ -41,6 +41,6 @@
 2. **배포 트리거는 Railway 네이티브 GitHub 연동.** Actions에서 CLI로 배포하지 않는다 —
    리포에 Railway 토큰을 두지 않아도 되고, CI를 PR 필수 체크로 걸면 main에는 검증된 커밋만 들어온다.
    그 전제인 **브랜치 보호는 아직 켜지 않았다**(체크 이름 `backend`·`frontend`).
-3. **§3의 `git tag demo-freeze`는 하지 않았다.** 스냅샷(`seed/demo-snapshot.sql`)과
+3. **§3의 `git tag demo-freeze`는 하지 않았다.** 스냅샷(`seed/demo-snapshot.sql.gz`)과
    `reset-demo` 스크립트는 만들어 배포 DB에서 검증했다. 태그는 seed를 재산출할 일이 생기면 그때 붙인다.
 4. **CI를 세웠다** — ADR 작성 시점에 없던 것이다. 워크플로 2종과 경로 판정 규칙은 DEPLOY.md § CI 참조.

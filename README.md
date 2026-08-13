@@ -143,7 +143,7 @@ cd backend && ./gradlew bootRun
 ```
 
 ```bash
-psql "$DEMO_DB_URL" --single-transaction -v ON_ERROR_STOP=1 -f seed/demo-snapshot.sql
+gunzip -c seed/demo-snapshot.sql.gz | psql "$DEMO_DB_URL" --single-transaction -v ON_ERROR_STOP=1 -f -
 ```
 
 **2) 프론트엔드**
@@ -212,7 +212,7 @@ cd backend && ./gradlew spotlessApply build
 ├── seed/                      # 동결된 산출물
 │   ├── buildings.csv · units.csv
 │   ├── grids.geojson · admin-dong-boundaries.geojson · regions.csv
-│   ├── demo-snapshot.sql      # pg_dump --data-only (약 19MB)
+│   ├── demo-snapshot.sql.gz   # pg_dump --data-only + gzip (약 5.7MB)
 │   └── score_params.json      # 점수 재현 파라미터
 │
 ├── data/                      # 원본 공공데이터 배치 (화재·119신고·SGIS·건축물대장 캐시)
