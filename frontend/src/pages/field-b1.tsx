@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { TopBar } from "@/components/layout/top-bar";
 import { Legend } from "@/components/layout/legend";
@@ -9,7 +9,7 @@ import { RiskBadge } from "@/components/core/risk-badge";
 import { RegionSelector, type RegionValue } from "@/components/core/region-selector";
 import { EmptyState, ErrorInline, RowSkeleton } from "@/components/core/system-states";
 import { getAdminDongBoundaries, getDongs, getSigungus } from "@/api/queries";
-import { REGION_CENTER } from "@/lib/naver-maps";
+import { REGION_CENTER, fitBoundsWithin, type MapInset } from "@/lib/naver-maps";
 import { useApiQuery } from "@/api/use-api-query";
 import {
   adminBoundaryStyles,
@@ -34,6 +34,24 @@ export default function FieldDongPage() {
   const [map, setMap] = useState<naver.maps.Map | null>(null);
   const cardRefs = useRef<Map<string, HTMLElement>>(new Map());
   const stripRef = useRef<HTMLDivElement>(null);
+  const topOverlayRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * 지도는 플로팅 오버레이 **뒤까지** 그려진다 — 그대로 맞추면 경계 아래쪽이 동 카드에 가려 잘린다.
+   * 오버레이가 먹는 두께를 재 그만큼 비우면 경계가 그 사이 띠에 꽉 차게 들어온다.
+   *
+   * 두께는 맞출 때마다 실측한다 — 카드는 내용에 따라, 셀렉터 줄은 좁은 폭에서 줄바꿈으로 변한다.
+   * 상태가 아니라 ref로 읽는 건 의도다: 두께가 바뀔 때마다 다시 맞추면 점검원이 끌어 둔 시점이 튄다.
+   */
+  const mapInset = useCallback((): MapInset => {
+    const gap = 12; // 경계선이 카드에 닿지 않게 남기는 틈 — 오버레이의 top-3·inset-x-3과 같은 값
+    return {
+      top: (topOverlayRef.current?.offsetHeight ?? 0) + gap * 2, // 띄운 간격 + 높이 + 틈
+      right: gap,
+      bottom: (stripRef.current?.offsetHeight ?? 0) + gap, // 카드 줄은 bottom-0에 붙어 있다
+      left: gap,
+    };
+  }, []);
 
   const sigungus = useApiQuery(region.sido ? `sigungus:${region.sido}` : null, (s) =>
     getSigungus(region.sido!, s),
@@ -101,10 +119,10 @@ export default function FieldDongPage() {
     map.data.addGeoJson(sigunguBoundaries, false);
 
     const bounds = boundsOfAdminBoundary(sigunguBoundaries);
-    if (bounds) map.fitBounds(bounds);
+    if (bounds) fitBoundsWithin(map, bounds, mapInset());
 
     return () => map.data.removeGeoJson(sigunguBoundaries);
-  }, [map, sigunguBoundaries]);
+  }, [map, sigunguBoundaries, mapInset]);
 
   /* 지도 → 카드/셀렉터: 경계 폴리곤을 누르면 그 동이 선택된다 */
   useEffect(() => {
@@ -133,8 +151,8 @@ export default function FieldDongPage() {
     if (!region.dong || !selectedBoundary?.features.length) return;
 
     const bounds = boundsOfAdminBoundary(selectedBoundary);
-    if (bounds) map.fitBounds(bounds);
-  }, [map, region.dong, selectedBoundary, sigunguBoundaries]);
+    if (bounds) fitBoundsWithin(map, bounds, mapInset());
+  }, [map, region.dong, selectedBoundary, sigunguBoundaries, mapInset]);
 
   /* 다음 화면은 URL의 dongCd만으로 지역을 복원한다 — 코드가 접두사 관계라 상위가 따라온다 */
   const enterDong = (dongCd: string) => {
@@ -159,7 +177,10 @@ export default function FieldDongPage() {
         />
 
         {/* 상단 플로팅 줄 — 지역 셀렉터 + 범례 (모바일은 줄바꿈) */}
-        <div className="pointer-events-none absolute inset-x-3 top-3 flex flex-wrap items-start justify-between gap-2">
+        <div
+          ref={topOverlayRef}
+          className="pointer-events-none absolute inset-x-3 top-3 flex flex-wrap items-start justify-between gap-2"
+        >
           <div className="pointer-events-auto rounded-md border border-hairline bg-surface p-2 shadow-e1">
             <RegionSelector value={region} onChange={setRegion} density="field" />
           </div>

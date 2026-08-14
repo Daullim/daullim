@@ -85,6 +85,45 @@ export const REGION_CENTER: Record<string, { lat: number; lng: number }> = {
 
 export const DEFAULT_CENTER = REGION_CENTER["11620"];
 
+/** 지도 위 플로팅 오버레이가 가리는 가장자리 두께(px). */
+export interface MapInset {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export function fitBoundsWithin(
+  map: naver.maps.Map,
+  bounds: naver.maps.LatLngBounds,
+  inset: MapInset,
+): void {
+  const size = map.getSize();
+  const bandWidth = size.width - inset.left - inset.right;
+  const bandHeight = size.height - inset.top - inset.bottom;
+
+  // 오버레이가 지도를 다 덮을 만큼 좁으면 띠가 성립하지 않는다 — 가림을 감수하고 전체에 맞춘다
+  if (bandWidth <= 0 || bandHeight <= 0) {
+    map.fitBounds(bounds);
+    return;
+  }
+
+  /* 지금 줌에서의 픽셀 크기를 재고 배율만큼 줌을 올린다(한 단계 = 2배).
+     시작 줌과 무관하게 같은 결과가 나오는 걸 확인했다(줌 9·16에서 동일). */
+  const projection = map.getProjection();
+  const sw = projection.fromCoordToOffset(bounds.getSW());
+  const ne = projection.fromCoordToOffset(bounds.getNE());
+  const width = Math.abs(ne.x - sw.x) || 1;
+  const height = Math.abs(sw.y - ne.y) || 1;
+
+  map.setZoom(
+    Math.floor(map.getZoom() + Math.log2(Math.min(bandWidth / width, bandHeight / height))),
+  );
+  map.setCenter(bounds.getCenter());
+  // 뷰포트 중앙에 놓인 경계를 띠 중앙으로 올린다. 세 호출 모두 즉시 반영된다(대기 불필요).
+  map.panBy(new naver.maps.Point(0, size.height / 2 - (inset.top + bandHeight / 2)));
+}
+
 /**
  * 화면 설정값(`MAP_TYPE`) → SDK `mapTypeId`.
  *
