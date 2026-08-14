@@ -127,9 +127,17 @@ export async function apiDelete(path: string, signal?: AbortSignal): Promise<voi
   if (!res.ok) throw await toError(res);
 }
 
-/** GeoJSON은 봉투로 감싸지 않는다 — 표준 문서 형식 그대로 온다. */
+/**
+ * GeoJSON은 봉투로 감싸지 않는다 — 표준 문서 형식 그대로 온다.
+ *
+ * `cache: "no-cache"`는 **캐시 금지가 아니라 매번 검증**이다(서버가 안 바뀌었다고 하면 304 + 본문 0바이트).
+ * 이 두 파일(동 경계·격자)은 시연 지역이 늘 때마다 다시 잘리는데, 브라우저에 만료 캐시가 한 번
+ * 박히면 새 지역 지도가 **조용히 빈 채로** 남는다 — 오류도 안 나서 아무도 못 알아챈다(2026-08-13 실제).
+ * 서버가 `no-cache`로 내리게 고쳤지만 그 전에 만들어진 캐시 항목은 만료까지 서버에 묻지도 않으므로,
+ * 받는 쪽에서도 못을 박는다.
+ */
 export async function apiGetRaw<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const res = await send(path, { headers: authHeaders(), signal });
+  const res = await send(path, { headers: authHeaders(), signal, cache: "no-cache" });
   if (!res.ok) throw await toError(res);
   return (await res.json()) as T;
 }
