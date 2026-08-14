@@ -36,13 +36,34 @@ class GridGeoJsonApiIT extends QueryApiSupport {
             jsonPath("$.features[0].properties.grid_id").value(org.hamcrest.Matchers.hasLength(6)));
   }
 
+  // 경계 GeoJSON과 같은 사고(2026-08-13)의 회귀 방지 — 만료 캐시면 재산출이 하루 늦게 보인다
   @Test
-  @DisplayName("정적 자산이라 캐시 가능하게 내린다")
-  void isCacheable() throws Exception {
+  @DisplayName("캐시하되 매번 검증하게 내린다 — 재산출이 즉시 반영돼야 한다")
+  void revalidatesInsteadOfExpiring() throws Exception {
     mvc.perform(get("/api/v1/grids").with(officer()))
         .andExpect(
+            header().string("Cache-Control", org.hamcrest.Matchers.containsString("no-cache")))
+        .andExpect(
             header()
-                .string("Cache-Control", org.hamcrest.Matchers.containsString("max-age=86400")));
+                .string(
+                    "Cache-Control",
+                    org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("max-age=86400"))))
+        .andExpect(header().exists("ETag"));
+  }
+
+  @Test
+  @DisplayName("내용이 그대로면 304로 본문을 안 내린다")
+  void skipsBodyWhenUnchanged() throws Exception {
+    String etag =
+        mvc.perform(get("/api/v1/grids").with(officer()))
+            .andReturn()
+            .getResponse()
+            .getHeader("ETag");
+
+    mvc.perform(get("/api/v1/grids").header("If-None-Match", etag).with(officer()))
+        .andExpect(status().isNotModified())
+        .andExpect(content().string(""));
   }
 
   @Test
